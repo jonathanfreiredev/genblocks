@@ -3,7 +3,6 @@ import { Bricolage_Grotesque, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toast";
 import { Footer } from "@/components/footer";
-import { DemoWakeProvider } from "@/components/demo/wake-provider";
 
 // Voice: headings, body, UI. Variable font — no weight list needed.
 const bricolageGrotesque = Bricolage_Grotesque({
@@ -29,7 +28,7 @@ export const metadata: Metadata = {
     template: "%s | GenBlocks",
   },
   description:
-    "The production-ready foundation for agent-native SaaS: identity, permissions and the MCP server your agents talk to, already wired.",
+    "A public registry of UI blocks and stock images generated from a prompt, each carrying the scores of an independent judge and the attempts that came before it.",
   // Declaring this group replaces the icons Next wires up on its own from the files in
   // this directory, so every size in the set is listed here and the browser picks the
   // one it wants. The manifest is still the file next to this one; Next links it alone.
@@ -51,7 +50,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "GenBlocks",
-    description: "The production-ready foundation for agent-native SaaS.",
+    description: "Every block and image, with the judge's scores.",
   },
 };
 
@@ -76,15 +75,11 @@ export default function RootLayout({
             __html: `(function(){try{var s=localStorage.getItem("genblocks-theme");var d=s?s==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d)}catch(e){}})();`,
           }}
         />
-        {/* Around everything on purpose: the pages that need the demo's services are
-            the landing, the playground and the sign-in pages, and they all sit under
-            this layout. Mounting it here means one place wakes them, and one place
-            knows what they are doing. */}
-        <DemoWakeProvider>
-          {children}
-          <Footer />
-          <Toaster />
-        </DemoWakeProvider>
+        {/* Around everything on purpose: the theme has to be applied before the
+            first paint, and this is the only script the app ships. */}
+        {children}
+        <Footer />
+        <Toaster />
       </body>
     </html>
   );

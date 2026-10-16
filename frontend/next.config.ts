@@ -4,8 +4,8 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
-        // The hero diagram lives on Cloudinary so the repository does not carry
-        // a 1.3 MB PNG. See components/landing/hero.tsx.
+        // The vault's stock images live on Cloudinary, so the repository and the
+        // database carry a public id instead of bytes.
         protocol: "https",
         hostname: "res.cloudinary.com",
       },

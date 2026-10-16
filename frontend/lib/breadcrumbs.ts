@@ -11,12 +11,32 @@ const SEGMENT_LABELS: Record<string, string> = {
   profile: "Profile",
 };
 
+/** A uuid as it appears in a URL. */
+const UUID_SEGMENT =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function humanize(segment: string): string {
   return segment
     .split("-")
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+/**
+ * The readable label for one segment.
+ *
+ * A resource addressed by its id (a task, an item) has no name of its own in
+ * the URL, and humanising thirty-six hex characters gives a crumb that pushes
+ * everything else off a phone. The first eight characters are enough to tell two
+ * of them apart and short enough to sit in a trail.
+ */
+function segmentLabel(segment: string): string {
+  if (SEGMENT_LABELS[segment]) {
+    return SEGMENT_LABELS[segment];
+  }
+
+  return UUID_SEGMENT.test(segment) ? segment.slice(0, 8) : humanize(segment);
 }
 
 /**
@@ -27,7 +47,8 @@ function humanize(segment: string): string {
  * trail back to, and callers use that to hide the breadcrumb.
  *
  * Note: dynamic segments (`[id]`) come out as their literal name; add them to
- * `SEGMENT_LABELS` when you introduce one.
+ * `SEGMENT_LABELS` when they are a word, or leave them to the short-id rule when
+ * they are an id.
  */
 export function buildBreadcrumbs(pathname: string): Breadcrumb[] {
   const segments = pathname.split("/").filter(Boolean);
@@ -41,7 +62,7 @@ export function buildBreadcrumbs(pathname: string): Breadcrumb[] {
 
   for (const segment of segments) {
     href += `/${segment}`;
-    trail.push({ label: SEGMENT_LABELS[segment] ?? humanize(segment), href });
+    trail.push({ label: segmentLabel(segment), href });
   }
 
   return trail;

@@ -28,6 +28,10 @@ export const env = createEnv({
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
     // Comma-separated list of enabled login methods: "email", "google".
     NEXT_PUBLIC_AUTH_PROVIDERS: z.string().default("email"),
+    // Cloudinary cloud name the stock images are delivered from. Optional: the
+    // backend uploads there, and without it an image view falls back to the
+    // recipe its row was generated from instead of pretending to show a picture.
+    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: z.string().optional(),
   },
 
   /**
@@ -42,6 +46,8 @@ export const env = createEnv({
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_AUTH_PROVIDERS: process.env.NEXT_PUBLIC_AUTH_PROVIDERS,
+    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME:
+      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

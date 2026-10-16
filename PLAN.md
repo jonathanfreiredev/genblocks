@@ -90,6 +90,24 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     recordar en cada consulta— y un intento rechazado sigue existiendo aunque no
     llegue a componente. Al publicar, el componente se estampa en todos los
     intentos de la tarea, para poder mostrar el historial completo.
+22. **Las tareas también se leen por la API**: `GET /v1/tasks` (solo las del
+    llamante), `GET /v1/tasks/{id}` (checklist + intentos) y
+    `GET /v1/components/{id}/generations` (historial público de la pieza). La
+    Fase 2 las dejó fuera porque su API eran los catálogos; la vista de tarea de
+    la Fase 3 las necesita **por la puerta de la web**, no solo por MCP, y la
+    propiedad la comprueba el servicio, no el router.
+23. **El espécimen de un bloque es su código; el de una imagen, su receta.** No hay
+    screenshots todavía (los produce la Fase 7, los sube la Fase 9) y las imágenes
+    sembradas tienen `path` pero no asset. Ni la celda ni el panel del item lo
+    disimulan: enseñan la receta y un `AWAITING ASSET` mono con el modelo y las
+    dimensiones. Cuando el asset exista y `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` esté
+    puesto, la misma pieza enseña la foto sin tocar código.
+24. **El conjunto de datos de desarrollo es un seed, no fixtures**:
+    `python -m app.seed.vault`, idempotente, con ids derivados de `uuid5` y un
+    `--owner EMAIL` para colgar las tareas de una cuenta que ya haya entrado una
+    vez. El código de los bloques sembrados usa **Tailwind genérico**: una pieza
+    del vault se copia a cualquier proyecto, y con nuestros tokens
+    (`bg-paper`, `bg-spot-primary`) solo renderizaría aquí.
 
 ---
 
@@ -347,30 +365,40 @@ aparecen en la base.
 **Verificación**: consultar desde **opencode** (MCP) y con `curl`; tests de
 integración de endpoints.
 
-**Fuera**: escritura y tareas.
+**Fuera**: escritura. Las **lecturas de tareas** se aplazaron aquí y llegaron en la
+Fase 3, que las necesita por la puerta de la web (ver decisión 22).
 
 ### Fase 3 — Frontend: galería, item y tarea (datos sembrados)
 
 **Objetivo**: la cara pública, contra datos de ejemplo.
 
 **Cambios**
-- Reconstruir la landing según `DESIGN.md` → **galería** de componentes.
-- Dialog del item: izquierda la pieza (screenshot del componente, o la imagen);
-  derecha el panel de generación (scores + trace). Pestañas de código y prompt de
-  entrega en un componente, y la receta (prompt, modelo, dimensiones) en una
-  imagen. Placeholder hasta que el juez exista.
-- Vista de tarea con **checklist** (contra datos sembrados a mano).
-- Navegación lateral con el botón **"Generar con IA"** (abre el dialog; todavía sin
-  agente).
-- Quitar el **playground** de la landing (la UI del demo).
-- Tests de componente + actualizar el smoke e2e.
+- La **galería** es la portada: rail lateral con la taxonomía (los dos kinds y sus
+  tipos) y el botón **"Generar con IA"**, buscador, y una **hoja** de celdas que
+  comparten las reglas — marca de registro, tipo, título, una línea de meta. Misma
+  rejilla para bloques e imágenes.
+- **Dialog del item**, con la dirección como estado (`?item=`): a la izquierda el
+  espécimen (código + prompt de entrega en un bloque; la imagen + su receta en una
+  imagen), a la derecha la evidencia (veredicto, score por dimensión, trace y el
+  **ledger de intentos**, que se puede recorrer para leer el intento rechazado).
+- **Vistas de tarea** (`/tasks` y `/tasks/[id]`) con la **checklist** que escribe el
+  worker; solo el dueño las ve.
+- **Fuera de la web** el playground y toda la landing heredada del template
+  (`mcp-stack`), que contaba otro producto: el relato propio se escribirá desde
+  cero cuando toque.
+- Endpoints que faltaban para que esto fuera real (decisión 22) y el **seed** de
+  desarrollo (decisión 24).
+- Tests de componente, de lib y e2e del vault.
 
-**Verificación**: `pnpm dev` y navegar; `pnpm test:run`; `pnpm test:e2e`.
+**Verificación**: `pnpm dev` y navegar; `pnpm test:run`; `pnpm test:e2e`
+(la suite e2e del vault necesita el stack arriba y el seed corrido).
 
 **Notas**: aplicar skills de diseño y shadcn. El demo **de frontend** (playground) se
 retira aquí; el de **backend** (`app/demo/`) se retira en la Fase 6.
 
-**Fuera**: no hay creación real.
+**Fuera**: no hay creación real. Las tareas sembradas se cuelgan de una cuenta con
+`python -m app.seed.vault --owner <email>` después de entrar una vez: hasta
+entonces no las ve nadie, que es justo lo que promete el aislamiento.
 
 ### Fase 4 — Runner de tareas + pipeline fake
 
@@ -542,7 +570,10 @@ funciona igual cuando no lo está.
 
 ## 13. Variables de entorno
 
-Todas en **`backend/.env`** (server-only). Nada en el frontend; nada en Modal.
+Todas en **`backend/.env`** (server-only), salvo el nombre del cloud de Cloudinary:
+el navegador lo necesita para **leer** las imágenes del stock, y va en
+`frontend/.env` como `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`. El backend sube; el
+frontend solo pinta.
 
 | Variable | Para qué |
 |---|---|
@@ -550,7 +581,7 @@ Todas en **`backend/.env`** (server-only). Nada en el frontend; nada en Modal.
 | `BFL_API_KEY` | imágenes del stock (`flux-2-pro`) |
 | `GROQ_API_KEY` | moderación (Safety GPT OSS 20B) |
 | `VOYAGE_API_KEY` | embeddings (`voyage-multimodal-3`) |
-| `CLOUDINARY_CLOUD_NAME` | storage |
+| `CLOUDINARY_CLOUD_NAME` | storage (y `NEXT_PUBLIC_...` en el frontend, para leer) |
 | `CLOUDINARY_API_KEY` | storage |
 | `CLOUDINARY_API_SECRET` | storage |
 | `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` | invocar el sandbox |

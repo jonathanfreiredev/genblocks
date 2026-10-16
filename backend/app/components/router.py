@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.components.schemas import ComponentListQuery, ComponentRead, ComponentSummary
 from app.components.service import get_component, get_component_by_slug, list_components
 from app.db.session import get_async_db_session
+from app.generations.schemas import GenerationRead
+from app.generations.service import list_generations
 from app.pagination import OffsetPage
 
 components_router = APIRouter(prefix="/components", tags=["components"])
@@ -64,3 +66,23 @@ async def read_component(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found.")
 
     return ComponentRead.model_validate(component)
+
+
+@components_router.get("/{component_id}/generations", response_model=list[GenerationRead])
+async def read_component_generations(
+    component_id: uuid.UUID,
+    session: Annotated[AsyncSession, Depends(get_async_db_session)],
+) -> list[GenerationRead]:
+    """Return a block's whole attempt history, oldest first.
+
+    Public like the rest of the vault. Not paginated: the list is bounded by the
+    attempts of the tasks that produced this block, which is a handful by
+    construction, so a page envelope would only get in the way.
+    """
+    component = await get_component(session, component_id=component_id)
+    if component is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found.")
+
+    attempts = await list_generations(session, component_id=component.id)
+
+    return [GenerationRead.model_validate(attempt) for attempt in attempts]

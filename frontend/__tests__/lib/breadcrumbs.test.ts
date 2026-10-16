@@ -32,4 +32,17 @@ describe("buildBreadcrumbs", () => {
   test("ignores a trailing slash", () => {
     expect(buildBreadcrumbs("/profile/")).toEqual(buildBreadcrumbs("/profile"));
   });
+
+  test("shortens an id, which has no name of its own", () => {
+    expect(
+      buildBreadcrumbs("/tasks/0199f1ab-2c3d-4e5f-8a9b-0c1d2e3f4a5b"),
+    ).toEqual([
+      { label: "Home", href: "/" },
+      { label: "Tasks", href: "/tasks" },
+      {
+        label: "0199f1ab",
+        href: "/tasks/0199f1ab-2c3d-4e5f-8a9b-0c1d2e3f4a5b",
+      },
+    ]);
+  });
 });

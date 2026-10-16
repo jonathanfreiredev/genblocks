@@ -28,7 +28,7 @@ export const DropdownAvatarMenu = ({ user }: DropdownAvatarMenuProps) => {
         render={
           <Button variant="outline" size="icon-lg" className="rounded-full">
             <Avatar className="cursor-pointer" size="lg">
-              <AvatarFallback className="bg-slate-100">
+              <AvatarFallback className="bg-muted">
                 {user.name
                   .split(" ")
                   .map((n) => n[0])
@@ -40,6 +40,7 @@ export const DropdownAvatarMenu = ({ user }: DropdownAvatarMenuProps) => {
       />
       <DropdownMenuContent>
         <DropdownMenuItem render={<Link href="/profile">Profile</Link>} />
+        <DropdownMenuItem render={<Link href="/tasks">Your tasks</Link>} />
 
         <DropdownMenuSeparator />
 

@@ -8,6 +8,7 @@ import uuid
 
 import pytest
 
+from app.generations.models import Generation
 from tests.helpers import create_category, create_component, create_image
 
 pytestmark = pytest.mark.anyio
@@ -22,6 +23,7 @@ async def test_the_vault_reads_are_public(client, db_session):
         "/v1/categories",
         "/v1/components",
         f"/v1/components/{component.id}",
+        f"/v1/components/{component.id}/generations",
         "/v1/components/by-slug/alpha",
         "/v1/images",
         f"/v1/images/{image.id}",
@@ -109,6 +111,32 @@ async def test_a_component_is_read_in_full_by_slug(client, db_session):
 async def test_an_unknown_component_is_not_found(client):
     assert (await client.get(f"/v1/components/{uuid.uuid4()}")).status_code == 404
     assert (await client.get("/v1/components/by-slug/nope")).status_code == 404
+
+
+async def test_a_components_attempt_history_is_public_and_oldest_first(client, db_session):
+    category = await create_category(db_session, slug="hero")
+    component = await create_component(db_session, category_id=category.id, slug="alpha")
+    db_session.add_all(
+        [
+            Generation(component_id=component.id, attempt_no=2, code="b", verdict="published"),
+            Generation(component_id=component.id, attempt_no=1, code="a", verdict="rejected"),
+        ]
+    )
+    await db_session.commit()
+
+    body = (await client.get(f"/v1/components/{component.id}/generations")).json()
+
+    # The history is the product's argument, so it reads in the order it was made.
+    assert [attempt["attempt_no"] for attempt in body] == [1, 2]
+    assert [attempt["verdict"] for attempt in body] == ["rejected", "published"]
+    assert body[1]["langfuse_trace_id"] is None
+
+
+async def test_an_unknown_components_attempt_history_is_not_found(client):
+    response = await client.get(f"/v1/components/{uuid.uuid4()}/generations")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Component not found."
 
 
 async def test_a_typo_in_a_query_parameter_is_rejected(client):
