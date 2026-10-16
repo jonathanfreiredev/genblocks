@@ -1,6 +1,9 @@
 from fastapi import APIRouter
 
+from app.categories.router import categories_router
+from app.components.router import components_router
 from app.demo.router import demo_router
+from app.images.router import images_router
 from app.organizations.router import organizations_router
 from app.users.router import users_router
 
@@ -10,4 +13,7 @@ from app.users.router import users_router
 api_v1_router = APIRouter(prefix="/v1")
 api_v1_router.include_router(users_router)
 api_v1_router.include_router(organizations_router)
+api_v1_router.include_router(categories_router)
+api_v1_router.include_router(components_router)
+api_v1_router.include_router(images_router)
 api_v1_router.include_router(demo_router)

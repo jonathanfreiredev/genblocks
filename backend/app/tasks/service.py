@@ -15,14 +15,29 @@ from app.pagination import ListParams
 from app.tasks.models import Task
 
 
-async def get_task(session: AsyncSession, *, task_id: uuid.UUID) -> Task | None:
+async def get_task(
+    session: AsyncSession,
+    *,
+    task_id: uuid.UUID,
+    created_by: uuid.UUID | None = None,
+) -> Task | None:
     """Return one task with its steps, which the checklist needs and lazy
-    loading could not fetch outside the event loop."""
-    return await session.scalar(
+    loading could not fetch outside the event loop.
+
+    ``created_by`` is the ownership check, done here rather than at each door: a
+    caller who is not the task's owner reads nothing, and cannot tell a task that
+    is not theirs from one that does not exist.
+    """
+    statement = (
         select(Task)
         .options(selectinload(Task.steps))
         .where(Task.id == task_id, Task.deleted_at.is_(None))
     )
+
+    if created_by is not None:
+        statement = statement.where(Task.created_by == created_by)
+
+    return await session.scalar(statement)
 
 
 async def list_tasks(

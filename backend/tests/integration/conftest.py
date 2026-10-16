@@ -17,9 +17,8 @@ from app.settings import settings
 from app.tasks import models as tasks_models  # noqa: F401  (register tables)
 from tests.auth_stub import install_fake_jwks
 
-# The domain modules are imported above only so ``Base.metadata`` is complete:
-# the fixtures below build the schema from it, and the app does not import them
-# yet (their routers arrive with the API phase).
+# The domain modules are imported so ``Base.metadata`` is complete before the
+# fixtures below build the schema from it.
 
 
 def _test_database_url() -> str:

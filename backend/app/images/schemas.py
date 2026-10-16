@@ -3,6 +3,19 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.pagination import ListParams
+
+
+class ImageListQuery(ListParams):
+    """Everything the image list accepts as query parameters, in one model.
+
+    Filters live here rather than as separate parameters: FastAPI stops expanding
+    a query model as soon as a sibling query parameter exists.
+    """
+
+    category_id: uuid.UUID | None = None
+    search: str | None = None
+
 
 class ImageRead(BaseModel):
     """A stock image and its generation panel.

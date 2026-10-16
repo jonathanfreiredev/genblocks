@@ -3,6 +3,20 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.pagination import ListParams
+
+
+class ComponentListQuery(ListParams):
+    """Everything the block list accepts as query parameters, in one model.
+
+    The filters live here rather than as separate parameters because FastAPI
+    stops expanding a query model the moment a sibling query parameter appears,
+    and would then ask for the model itself as a single ``params`` field.
+    """
+
+    category_id: uuid.UUID | None = None
+    search: str | None = None
+
 
 class ComponentSummary(BaseModel):
     """What a gallery card needs: no code, no spec, just enough to browse."""
