@@ -4,7 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 import { CommandBlock } from "@/components/landing/command-block";
 import { WakeNotice } from "@/components/demo/wake-notice";
 
-const REPO = "https://github.com/jonathanfreiredev/mcp-stack";
+const REPO = "https://github.com/jonathanfreiredev/genblocks";
 
 /**
  * The offer, stated in one pass, with the action in the form a developer
@@ -15,7 +15,7 @@ export function Hero({ isSignedIn }: { isSignedIn: boolean }) {
     <section className="px-4 pt-[calc(var(--header-height)+4.5rem)] pb-24 sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-5xl">
         <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-          MCPStack
+          GenBlocks
         </h1>
 
         <p className="text-muted-foreground mt-6 max-w-[62ch] text-lg text-pretty">

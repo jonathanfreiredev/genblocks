@@ -4,11 +4,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * GenBlocks — "Overprint".
+ *
+ * The repository `DESIGN.md` is the source of truth; this file only holds the
+ * token values. Change a color there first, re-run the linter, then re-export.
+ * Light-only for now: dark mode is authored separately, later.
+ */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -39,13 +47,42 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* GenBlocks primitives: the paper stock, the black plate and the spot inks. */
+  --color-paper: var(--paper);
+  --color-panel: var(--panel);
+  --color-panel-sunken: var(--panel-sunken);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-on-ink: var(--on-ink);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-spot-primary: var(--spot-primary);
+  --color-spot-primary-hover: var(--spot-primary-hover);
+  --color-on-spot: var(--on-spot);
+  --color-spot-secondary: var(--spot-secondary);
+  --color-spot-accent: var(--spot-accent);
+  --color-on-accent: var(--on-accent);
+  --color-verdict-pass: var(--verdict-pass);
+  --color-verdict-pass-soft: var(--verdict-pass-soft);
+  --color-verdict-retry: var(--verdict-retry);
+  --color-verdict-retry-soft: var(--verdict-retry-soft);
+  --color-verdict-fail: var(--verdict-fail);
+  --color-verdict-fail-soft: var(--verdict-fail-soft);
+
+  /* Radius — pinned from the DESIGN.md scale, by the class base-nova gives each
+     component, not by the shadcn name. The calc() multipliers are gone on
+     purpose: the system caps at 6px.
+       sm → accents/stamps · md → menu items · lg → buttons, inputs, items, popovers
+       xl → cards, dialogs · 2xl → toasts · 4xl → badges (kept sharp: no pills) */
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+  --radius-3xl: 6px;
+  --radius-4xl: 2px;
 
   /* The sleeping robot's "z", drifting up and fading while the demo wakes. */
   --animate-wake-z: wake-z 2.4s ease-out infinite;
@@ -65,75 +102,207 @@
   }
 }
 
+/* Elevation — hairline first. Only overlays lift, and only via the DESIGN.md's
+   single shadow token. `--shadow-xs` is transparent so inputs and outline
+   buttons stay flat instead of carrying a default drop shadow. */
+@theme {
+  --shadow-2xs: 0 0 #0000;
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 1px 0 var(--rule);
+  --shadow-md: 0 1px 0 var(--rule);
+  --shadow-lg: 0 1px 0 var(--rule), 0 8px 24px rgb(23 21 15 / 0.12);
+  --shadow-xl: 0 1px 0 var(--rule), 0 12px 32px rgb(23 21 15 / 0.14);
+  --shadow-2xl: 0 1px 0 var(--rule), 0 16px 40px rgb(23 21 15 / 0.16);
+}
+
 :root {
   /* Height of the fixed header; content below it offsets by this much. */
   --header-height: 6rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Paper stock and the black plate. */
+  --paper: #f1ecdf;
+  --panel: #faf6ec;
+  --panel-sunken: #e3dbc8;
+  --ink: #17150f;
+  --ink-soft: #4c4739;
+  --ink-faint: #5f5a4c;
+  --on-ink: #faf6ec;
+  --rule: #cfc7b4;
+  --rule-strong: #a79e88;
+
+  /* Spot inks. One belongs to each surface — see DESIGN.md. */
+  --spot-primary: #ce2b6b;
+  --spot-primary-hover: #b0245c;
+  --on-spot: #ffffff;
+  --spot-secondary: #16695b;
+  --spot-accent: #d9a020;
+  --on-accent: #17150f;
+
+  /* Verdict triad — functional, never brand. */
+  --verdict-pass: #2c6a3a;
+  --verdict-pass-soft: #dee7d8;
+  --verdict-retry: #8a5a0c;
+  --verdict-retry-soft: #ede3cb;
+  --verdict-fail: #a03028;
+  --verdict-fail-soft: #eedad4;
+
+  /* shadcn semantic layer, mapped from the tokens above. */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--panel);
+  --card-foreground: var(--ink);
+  --popover: var(--panel);
+  --popover-foreground: var(--ink);
+  --primary: var(--spot-primary);
+  --primary-foreground: var(--on-spot);
+  --secondary: var(--panel);
+  --secondary-foreground: var(--ink);
+  --muted: var(--panel-sunken);
+  --muted-foreground: var(--ink-soft);
+  --accent: var(--panel-sunken);
+  --accent-foreground: var(--ink);
+  --destructive: var(--verdict-fail);
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--ink);
+  --chart-1: var(--spot-primary);
+  --chart-2: var(--spot-secondary);
+  --chart-3: var(--spot-accent);
+  --chart-4: var(--ink-soft);
+  --chart-5: var(--rule-strong);
+  --sidebar: var(--panel);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--spot-primary);
+  --sidebar-primary-foreground: var(--on-spot);
+  --sidebar-accent: var(--panel-sunken);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--rule);
+  --sidebar-ring: var(--ink);
 }
 
+/* Dark — a tonal inversion, not a second palette. The ink becomes the paper and
+   the paper becomes the ink; the spot inks lift only enough to stay legible on
+   the dark ground, and the verdict triad lifts with them. Derived from the
+   black plate, so it is not authored in DESIGN.md's tokens. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --paper: #17150f;
+  --panel: #201d15;
+  --panel-sunken: #100e09;
+  --ink: #f2ede1;
+  --ink-soft: #c6bfa9;
+  --ink-faint: #9a927e;
+  --on-ink: #17150f;
+  --rule: #38342b;
+  --rule-strong: #554f42;
+
+  --spot-primary: #ce2b6b;
+  --spot-primary-hover: #e0447d;
+  --on-spot: #ffffff;
+  --spot-secondary: #369c82;
+  --spot-accent: #d9a020;
+  --on-accent: #17150f;
+
+  --verdict-pass: #4eaf6b;
+  --verdict-pass-soft: #1b2c20;
+  --verdict-retry: #c77a2a;
+  --verdict-retry-soft: #2d2113;
+  --verdict-fail: #e05c50;
+  --verdict-fail-soft: #2e1a18;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--panel);
+  --card-foreground: var(--ink);
+  --popover: var(--panel);
+  --popover-foreground: var(--ink);
+  --primary: var(--spot-primary);
+  --primary-foreground: var(--on-spot);
+  --secondary: var(--panel);
+  --secondary-foreground: var(--ink);
+  --muted: var(--panel-sunken);
+  --muted-foreground: var(--ink-soft);
+  --accent: var(--panel-sunken);
+  --accent-foreground: var(--ink);
+  --destructive: var(--verdict-fail);
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--ink);
+  --chart-1: var(--spot-primary);
+  --chart-2: var(--spot-secondary);
+  --chart-3: var(--spot-accent);
+  --chart-4: var(--ink-soft);
+  --chart-5: var(--rule-strong);
+  --sidebar: var(--panel);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--spot-primary);
+  --sidebar-primary-foreground: var(--on-spot);
+  --sidebar-accent: var(--panel-sunken);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--rule);
+  --sidebar-ring: var(--ink);
+}
+
+/* Type scale. These are `type-*` utilities rather than `--text-*` theme keys:
+   inside `cn()` a `--text-*` key is treated as a color and silently dropped
+   when it sits next to `text-muted-foreground`. */
+@utility type-display {
+  font-family: var(--font-sans);
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+@utility type-title {
+  font-family: var(--font-sans);
+  font-size: 1.375rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+@utility type-body {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+@utility type-body-sm {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+@utility type-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@utility type-meta {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+@utility type-code {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+@utility type-score {
+  font-family: var(--font-mono);
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 @layer base {
@@ -150,7 +319,50 @@
     scrollbar-color: var(--border) transparent;
   }
   ::selection {
-    background-color: var(--foreground);
-    color: var(--background);
+    background-color: var(--spot-accent);
+    color: var(--on-accent);
   }
+}
+
+/* Focus — one treatment everywhere: a 2px ink outline at 2px offset. Unlayered
+   so it beats the `outline-none` that components set on themselves. Covers
+   actions and field controls, because the system makes no distinction. */
+:is(
+  button,
+  a[href],
+  [role="button"],
+  [role="tab"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"],
+  [role="slider"],
+  [role="combobox"],
+  input,
+  textarea,
+  select
+):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  --tw-ring-shadow: 0 0 #0000;
+}
+
+/* Design system page only: lets interaction states be pinned side by side
+   without interaction. `data-preview="hover focus active"` on the element. */
+@custom-variant hover {
+  @media (hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+  &[data-preview~="hover"] {
+    @slot;
+  }
+}
+@custom-variant focus-visible (&:focus-visible, &[data-preview~="focus"]);
+@custom-variant active (&:active, &[data-preview~="active"]);
+
+/* The same focus outline as above, pinned for the showroom. */
+[data-preview~="focus"] {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }

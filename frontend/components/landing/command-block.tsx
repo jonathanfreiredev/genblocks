@@ -11,7 +11,7 @@ import { CopyButton } from "@/components/landing/copy-button";
  * copying only the stack's own leaves `docker compose up` failing on a fresh clone.
  */
 const COMMAND = [
-  "git clone https://github.com/jonathanfreiredev/mcp-stack && cd mcp-stack",
+  "git clone https://github.com/jonathanfreiredev/genblocks && cd genblocks",
   "cp .env.example .env && cp backend/.env.example backend/.env",
   "cp frontend/.env.example frontend/.env && docker compose up",
 ].join("\n");

@@ -5,7 +5,7 @@ import { ArrowUpRight } from "lucide-react";
 import { Section, SectionHeading } from "@/components/landing/section";
 
 const BACKEND_README =
-  "https://github.com/jonathanfreiredev/mcp-stack/blob/main/backend/README.md";
+  "https://github.com/jonathanfreiredev/genblocks/blob/main/backend/README.md";
 
 /**
  * Cloudinary resizes before the request leaves it, so the image optimizer

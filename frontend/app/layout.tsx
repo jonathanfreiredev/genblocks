@@ -1,28 +1,32 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toast";
 import { Footer } from "@/components/footer";
 import { DemoWakeProvider } from "@/components/demo/wake-provider";
 
-const geistSans = Geist({
+// Voice: headings, body, UI. Variable font — no weight list needed.
+const bricolageGrotesque = Bricolage_Grotesque({
   variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Data: uppercase labels, metadata, scores, code. Not a variable font, so the
+// two weights the type scale uses are declared explicitly.
+const spaceMono = Space_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
+  weight: ["400", "700"],
 });
 
 export const metadata: Metadata = {
   // The canonical address of the site. Everything relative in the metadata below — the
   // social card above all — is resolved against it, so this is the one line to change
   // if the domain ever does.
-  metadataBase: new URL("https://mcpstack.jonathanfreire.com"),
+  metadataBase: new URL("https://genblocks.jonathanfreire.com"),
   title: {
-    default: "MCPStack",
-    template: "%s | MCPStack",
+    default: "GenBlocks",
+    template: "%s | GenBlocks",
   },
   description:
     "The production-ready foundation for agent-native SaaS: identity, permissions and the MCP server your agents talk to, already wired.",
@@ -42,11 +46,11 @@ export const metadata: Metadata = {
   // picked up and wired in by Next, so the picture can change without touching code.
   openGraph: {
     type: "website",
-    siteName: "MCPStack",
+    siteName: "GenBlocks",
   },
   twitter: {
     card: "summary_large_image",
-    title: "MCPStack",
+    title: "GenBlocks",
     description: "The production-ready foundation for agent-native SaaS.",
   },
 };
@@ -59,9 +63,19 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${bricolageGrotesque.variable} ${spaceMono.variable} h-full antialiased`}
+      // The theme script adds `dark` before hydration, so the class differs from
+      // the server output on purpose. This suppresses only that one warning.
+      suppressHydrationWarning
     >
       <body className="flex min-h-svh flex-col">
+        {/* Applies the stored theme before paint, so there is no flash. Keep the
+            storage key and the media query in sync with theme-toggle.tsx. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem("genblocks-theme");var d=s?s==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d)}catch(e){}})();`,
+          }}
+        />
         {/* Around everything on purpose: the pages that need the demo's services are
             the landing, the playground and the sign-in pages, and they all sit under
             this layout. Mounting it here means one place wakes them, and one place

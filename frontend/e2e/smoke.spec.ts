@@ -4,7 +4,7 @@ test("home page renders", async ({ page }) => {
   await page.goto("/");
 
   await expect(
-    page.getByRole("main").getByRole("heading", { name: "MCPStack" }),
+    page.getByRole("main").getByRole("heading", { name: "GenBlocks" }),
   ).toBeVisible();
 });
 

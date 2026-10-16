@@ -23,7 +23,7 @@ auth = SupabaseProvider(
     token_verifier=SupabaseTokenVerifier(),
 )
 
-mcp = FastMCP(name="mcp-stack", auth=auth)
+mcp = FastMCP(name="genblocks", auth=auth)
 
 
 @mcp.custom_route("/health", methods=["GET"])

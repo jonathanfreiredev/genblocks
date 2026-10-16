@@ -5,6 +5,8 @@
  * year and the license it ships under. Deliberately plain so it can be restyled
  * without untangling it from the pages it wraps.
  */
+import { ThemeToggle } from "./theme-toggle";
+
 export function Footer() {
   const year = new Date().getFullYear();
 
@@ -22,17 +24,20 @@ export function Footer() {
             Jonathan Freire
           </a>
         </p>
-        <p>
-          Released under the{" "}
-          <a
-            href="https://github.com/jonathanfreiredev/mcp-stack/blob/main/LICENSE"
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-foreground underline underline-offset-4"
-          >
-            MIT License
-          </a>
-        </p>
+        <div className="flex items-center gap-3">
+          <p>
+            Released under the{" "}
+            <a
+              href="https://github.com/jonathanfreiredev/genblocks/blob/main/LICENSE"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-foreground underline underline-offset-4"
+            >
+              MIT License
+            </a>
+          </p>
+          <ThemeToggle />
+        </div>
       </div>
     </footer>
   );

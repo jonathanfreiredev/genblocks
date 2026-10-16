@@ -1,4 +1,4 @@
-name: mcp-stack
+name: genblocks
 
 # Local development stack: PostgreSQL plus the API and the web app, with the
 # source mounted and the dev servers running with reload.
@@ -24,7 +24,7 @@ services:
       # No default on purpose: a silent fallback is how a container and
       # backend/.env end up with different passwords.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required, see .env.example}
-      POSTGRES_DB: ${POSTGRES_DB:-mcpstack}
+      POSTGRES_DB: ${POSTGRES_DB:-genblocks}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -46,7 +46,7 @@ services:
     env_file: &backend-env-file
       - ./backend/.env
     environment: &backend-env
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?required, see .env.example}@postgres:5432/${POSTGRES_DB:-mcpstack}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?required, see .env.example}@postgres:5432/${POSTGRES_DB:-genblocks}
       ENV: development
       FRONTEND_URL: http://localhost:3000
       # Inside the network the MCP server answers to its service name. The

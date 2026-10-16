@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SidebarSheetAuth } from "./auth/sidebar-sheet-auth";
 import { Button } from "./ui/button";
 import { Item, ItemContent, ItemMedia, ItemTitle } from "./ui/item";
+import { ThemeToggle } from "./theme-toggle";
 import {
   Sheet,
   SheetClose,
@@ -71,6 +72,11 @@ export function SidebarSheet({ isLoggedIn }: SidebarSheetProps) {
           ) : null}
 
           <SidebarSheetAuth isLoggedIn={isLoggedIn} />
+
+          <div className="border-border mt-2 flex items-center justify-between border-t pt-3">
+            <span className="text-muted-foreground text-sm">Theme</span>
+            <ThemeToggle />
+          </div>
         </div>
       </SheetContent>
     </Sheet>

@@ -26,16 +26,16 @@ export const MCP_CLIENTS: McpClient[] = [
   {
     id: "opencode",
     name: "opencode",
-    snippet: "opencode mcp add mcp-stack --global --url http://localhost:8001/mcp",
+    snippet: "opencode mcp add genblocks --global --url http://localhost:8001/mcp",
     copyLabel: "Copy the command",
     where: "Run it in your terminal. Drop --global to register the server for this project only.",
-    next: "Run /mcps, pick mcp-stack and sign in. opencode keeps the token from there on.",
+    next: "Run /mcps, pick genblocks and sign in. opencode keeps the token from there on.",
     docs: "https://opencode.ai/v2/docs/mcp-servers",
   },
   {
     id: "claude-code",
     name: "Claude Code",
-    snippet: "claude mcp add --transport http mcp-stack http://localhost:8001/mcp",
+    snippet: "claude mcp add --transport http genblocks http://localhost:8001/mcp",
     copyLabel: "Copy the command",
     where: "Run it in your terminal, before you start Claude Code.",
     next: "Start Claude Code and run /mcp to sign in.",
@@ -47,7 +47,7 @@ export const MCP_CLIENTS: McpClient[] = [
     snippet: [
       "{",
       '  "mcpServers": {',
-      '    "mcp-stack": {',
+      '    "genblocks": {',
       '      "url": "http://localhost:8001/mcp"',
       "    }",
       "  }",
@@ -55,7 +55,7 @@ export const MCP_CLIENTS: McpClient[] = [
     ].join("\n"),
     copyLabel: "Copy the configuration",
     where: "Save it as .cursor/mcp.json in the project, or ~/.cursor/mcp.json to have it everywhere.",
-    next: "Turn mcp-stack on in Cursor's MCP settings. It opens the browser to sign in.",
+    next: "Turn genblocks on in Cursor's MCP settings. It opens the browser to sign in.",
     docs: "https://cursor.com/en-US/docs/mcp",
   },
   {

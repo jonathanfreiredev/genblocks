@@ -18,7 +18,7 @@ export async function Header({ session }: HeaderProps) {
         <Link href="/" passHref className="flex h-full items-center">
           {/* A wordmark, not a heading: each page owns its single h1. */}
           <span className="relative font-semibold text-gray-800">
-            MCPStack
+            GenBlocks
           </span>
         </Link>
 
