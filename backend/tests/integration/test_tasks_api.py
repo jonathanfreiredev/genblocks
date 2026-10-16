@@ -33,6 +33,7 @@ async def _sign_in(client, db_session, email: str) -> tuple[str, User]:
 async def test_tasks_require_authentication(client):
     assert (await client.get("/v1/tasks")).status_code == 401
     assert (await client.get(f"/v1/tasks/{uuid.uuid4()}")).status_code == 401
+    assert (await client.post("/v1/tasks", json={"brief": "A pricing page"})).status_code == 401
 
 
 async def test_a_caller_only_sees_their_own_tasks(client, db_session):
@@ -151,3 +152,48 @@ async def test_the_task_page_envelope_is_honest(client, db_session):
     assert len(first["items"]) == 2
     assert second["total"] == 3
     assert len(second["items"]) == 1
+
+
+async def test_posting_a_brief_queues_a_task_for_the_caller(client, db_session):
+    token, user = await _sign_in(client, db_session, "maker@example.com")
+
+    response = await client.post(
+        "/v1/tasks",
+        json={"brief": "  A pricing page for a developer tool  "},
+        headers=auth_header(token),
+    )
+
+    # 202: the caller has a queued task, not a block.
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert body["brief"] == "A pricing page for a developer tool"
+    assert body["kind"] == "generate_component"
+    assert body["status"] == "pending"
+    assert body["component_id"] is None
+    assert body["finished_at"] is None
+    assert body["steps"] == []
+
+    queued = await db_session.scalar(select(Task).where(Task.id == body["id"]))
+    assert queued is not None
+    assert queued.created_by == user.id
+
+
+async def test_a_brief_that_says_nothing_is_rejected(client, db_session):
+    token, _ = await _sign_in(client, db_session, "terse@example.com")
+
+    for brief in ("", "   ", "hero"):
+        response = await client.post("/v1/tasks", json={"brief": brief}, headers=auth_header(token))
+        assert response.status_code == 422, f"{brief!r} was accepted"
+
+    # Nothing was queued behind the rejections.
+    assert (await client.get("/v1/tasks", headers=auth_header(token))).json()["total"] == 0
+
+
+async def test_a_brief_of_a_thousand_pages_is_rejected(client, db_session):
+    token, _ = await _sign_in(client, db_session, "longwinded@example.com")
+
+    response = await client.post(
+        "/v1/tasks", json={"brief": "a" * 2001}, headers=auth_header(token)
+    )
+
+    assert response.status_code == 422

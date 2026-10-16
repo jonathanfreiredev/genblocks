@@ -22,6 +22,7 @@ const STEPS = [
   "Retrieving references",
   "Generating the block",
   "Judging the attempt",
+  "Publishing the block",
 ];
 
 /**

@@ -32,7 +32,7 @@ from app.mcp.server import mcp
 from app.pagination import DEFAULT_LIMIT, ListParams, OffsetPage
 from app.tasks import service as tasks_service
 from app.tasks.models import TaskStatus
-from app.tasks.schemas import TaskRead
+from app.tasks.schemas import Brief, TaskCreate, TaskRead
 from app.users.models import User
 from app.users.service import get_or_create_user
 
@@ -216,5 +216,30 @@ async def get_task(task_id: uuid.UUID) -> TaskRead:
 
     if task is None:
         raise ValueError("No task of yours matches that id.")
+
+    return TaskRead.model_validate(task)
+
+
+# Write tools. A write is queued, never waited on: building a block takes
+# minutes, and a tool call that blocks for them is a tool call that times out.
+@mcp.tool
+async def create_component(brief: Brief) -> TaskRead:
+    """Start building a new UI block from a brief.
+
+    Returns as soon as the work is queued, with the task that carries it. Follow
+    it with ``get_task``: the checklist fills in as the pipeline runs, and the
+    task ends holding the block it published.
+
+    The brief is what the caller wants built, in their own words: it becomes the
+    block's delivery prompt, so it is worth writing as the request you would make
+    of a designer rather than as a title.
+    """
+    # Validated through the shared type rather than trusted from the argument:
+    # the tool's own schema tells a model what a brief looks like, and this is
+    # what makes the rule hold when it is called anyway.
+    payload = TaskCreate(brief=brief)
+    async with async_session_maker() as session:
+        caller = await _caller(session)
+        task = await tasks_service.create_task(session, brief=payload.brief, created_by=caller.id)
 
     return TaskRead.model_validate(task)

@@ -1,4 +1,4 @@
-"""Read side of background tasks.
+"""Both sides of background tasks: queueing them and reading them back.
 
 A task belongs to the user who started it, so callers scope by ``created_by``;
 the service does not assume a public audience the way the vault does.
@@ -11,8 +11,66 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.db.models import utcnow
 from app.pagination import ListParams
-from app.tasks.models import Task
+from app.tasks.models import StepStatus, Task, TaskStatus
+
+# What the UI is told about a task a restart cut in half. Worded for a reader,
+# because that is where it ends up.
+INTERRUPTED_ERROR = "The worker restarted while this task was running, so it stopped."
+
+
+async def create_task(session: AsyncSession, *, brief: str, created_by: uuid.UUID) -> Task:
+    """Queue a task and return it.
+
+    Queueing is the whole of it: the row is the queue. Whatever picks it up
+    claims it (``app.tasks.runner``), so this writes and commits nothing else.
+    """
+    task = Task(brief=brief, created_by=created_by)
+    session.add(task)
+    await session.commit()
+
+    # Read the empty checklist off the table before handing the task back: a
+    # relationship nobody has loaded cannot be loaded later, outside the event
+    # loop, and the response carries it.
+    await session.refresh(task, ["steps"])
+    return task
+
+
+async def interrupt_orphaned_tasks(session: AsyncSession) -> int:
+    """Close the tasks a previous process left running, and say how many.
+
+    Only a boot can tell "still running" from "orphaned": this is called from the
+    process that owns the worker, before it starts claiming, so a task found
+    running here belongs to a worker that no longer exists.
+
+    The steps that were mid-flight are failed with it. Leaving one ``running``
+    would have the checklist claim work is still happening on a task that has
+    already stopped.
+    """
+    tasks = (
+        await session.scalars(
+            select(Task)
+            .options(selectinload(Task.steps))
+            .where(Task.status == TaskStatus.RUNNING, Task.deleted_at.is_(None))
+        )
+    ).all()
+    if not tasks:
+        return 0
+
+    now = utcnow()
+    for task in tasks:
+        task.status = TaskStatus.INTERRUPTED
+        task.finished_at = now
+        task.error = INTERRUPTED_ERROR
+
+        for step in task.steps:
+            if step.status == StepStatus.RUNNING:
+                step.status = StepStatus.FAILED
+                step.finished_at = now
+
+    await session.commit()
+    return len(tasks)
 
 
 async def get_task(

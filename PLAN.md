@@ -71,8 +71,14 @@ Supabase Auth, Postgres, multi-tenancy por organización).
 12. **Chroma**: dev con `PersistentClient` local; **prod Chroma Cloud**.
 13. **Datos**: Postgres es la fuente de verdad de scores y estado; Langfuse es una
     copia/trace **opcional** en v1 (`trace_id` nullable), en fire-and-forget.
-14. **Tareas**: background con steps persistidos en Postgres (fuente de verdad para
-    la UI); **Redis** para durabilidad y reconciliación al arrancar.
+14. **Tareas**: background con steps persistidos en Postgres, que es además la
+    **cola**. El worker reclama con `FOR UPDATE SKIP LOCKED` en la misma
+    transacción que cambia el estado: no hay broker con el que desincronizarse ni
+    ventana entre "crear la tarea" y "encolarla" en la que el trabajo se pierda, y
+    la durabilidad la da la fila, no un segundo sistema. Una tarea en `running` que
+    encuentra un arranque es de un worker que ya no existe → se reconcilia a
+    `interrupted`. **Redis queda fuera de v1**: si algún día hay más de una
+    instancia, entra detrás de la misma interfaz de encolado.
 15. **Progreso de la tarea**: checklist por **polling**. **Streaming solo en la
     conversación**.
 16. **Seguridad de render en vivo**: v1 muestra el **screenshot**; el render en
@@ -406,18 +412,33 @@ entonces no las ve nadie, que es justo lo que promete el aislamiento.
 Modal.
 
 **Cambios**
-- Servicio de tareas: crear, estado, `task_steps` persistidos, y **reconciliación al
-  arrancar** (tarea en `running` huérfana → interrumpida).
-- Runner en el **dominio** (`app/tasks/runner.py`), no en FastMCP. Un endpoint de API
-  y la tool MCP `create_component` llaman al servicio, que encola.
-- Pipeline **fake** determinista (spec→harness→judge→commit) que emite steps y
-  produce un componente "canned" con screenshot placeholder.
-- Redis como backend de cola (durabilidad).
+- Escritura en el servicio de tareas: crear (la tarea nace `pending`) y
+  **reconciliación al arrancar** (tarea en `running` huérfana → `interrupted`, con
+  sus steps abiertos cerrados, para que la checklist no siga diciendo que se
+  trabaja).
+- Runner en el **dominio** (`app/tasks/runner.py`): reclamar, abrir la checklist
+  entera como `pending` y cerrar cada step con su detalle conforme avanza. El bucle
+  del worker vive en el mismo módulo y lo arranca el lifespan de la API.
+- Las dos puertas: `POST /v1/tasks` (202) y la tool MCP `create_component`. Ninguna
+  espera: las dos escriben la misma fila y devuelven la tarea para seguirla.
+- Pipeline **canned** (`app/tasks/canned.py`): spec, bloque y scores fijos. El
+  intento se queda **sin `model`** y con `rubric_version = canned-v1`, para que una
+  pieza canned no se pueda confundir con una juzgada.
 
-**Verificación**: crear una tarea; ver los steps progresar en la base; tarea termina
-con un componente. Tests del runner.
+**Verificación**: crear una tarea; ver los steps progresar en la base; la tarea
+termina con un componente. Tests del runner (reclamo, reconciliación, fallo por
+taxonomía ausente, bucle completo) y de la copia canned.
 
-**Fuera**: sin LLM, sin Modal, sin UI nueva (se usa la de la Fase 3).
+**Notas**: la tool de escritura **valida el brief con el mismo tipo que la API**
+(`TaskCreate`): el esquema que publica al modelo describe el brief, pero no impide
+que le manden otra cosa. El **screenshot placeholder no se escribe**: hasta que
+haya render (Fase 7), `screenshot_path` se queda nulo, que es lo que la UI ya sabe
+leer (decisión 23). La checklist usa los mismos nombres que las tareas sembradas,
+más la línea de moderación, que llega con la moderación (Fase 11).
+
+**Fuera**: sin LLM, sin Modal, sin UI nueva (se usa la de la Fase 3). Sin reintento:
+el juez canned publica siempre, y el bucle de 2 intentos llega con el juez real
+(Fase 8).
 
 ### Fase 5 — Frontend: dialog de generación (conversación fake) y tarea en vivo
 

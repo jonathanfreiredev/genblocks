@@ -16,11 +16,26 @@ from app.db.session import get_async_db_session
 from app.generations.schemas import GenerationRead
 from app.generations.service import list_generations
 from app.pagination import OffsetPage
-from app.tasks.schemas import TaskDetailRead, TaskListQuery, TaskRead
-from app.tasks.service import get_task, list_tasks
+from app.tasks.schemas import TaskCreate, TaskDetailRead, TaskListQuery, TaskRead
+from app.tasks.service import create_task, get_task, list_tasks
 from app.users.models import User
 
 tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+@tasks_router.post("", response_model=TaskRead, status_code=status.HTTP_202_ACCEPTED)
+async def queue_task(
+    payload: TaskCreate,
+    user: Annotated[User, Depends(get_first_party_user)],
+    session: Annotated[AsyncSession, Depends(get_async_db_session)],
+) -> TaskRead:
+    """Queue a component for generation and return the task to follow.
+
+    202, not 201: the caller has been handed a queued task, not a finished block.
+    The task's own endpoint is where its checklist fills in.
+    """
+    task = await create_task(session, brief=payload.brief, created_by=user.id)
+    return TaskRead.model_validate(task)
 
 
 @tasks_router.get("", response_model=OffsetPage[TaskRead])

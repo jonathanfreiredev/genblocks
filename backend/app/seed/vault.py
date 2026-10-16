@@ -809,6 +809,10 @@ IMAGES: tuple[ImageSpec, ...] = (
 # can never disagree with the attempt it is describing.
 COMPONENTS_BY_SLUG = {spec.slug: spec for spec in COMPONENTS}
 
+# The checklists below mirror the one the runner writes (``app.tasks.runner``):
+# the same step names, in the same order, so a seeded task and a task that
+# actually ran read the same way. The moderation line is the one step no runner
+# writes yet; it arrives with moderation (Fase 11).
 TASKS: tuple[TaskSpec, ...] = (
     TaskSpec(
         key="pricing-page-brief",
@@ -850,6 +854,13 @@ TASKS: tuple[TaskSpec, ...] = (
                     "score": _headline_score(COMPONENTS_BY_SLUG["tiered-pricing"].published_scores),
                 },
                 starts_at=41,
+                ends_at=45,
+            ),
+            StepSpec(
+                name="Publishing the block",
+                status=StepStatus.SUCCEEDED,
+                detail={"slug": "tiered-pricing"},
+                starts_at=45,
                 ends_at=47,
             ),
         ),
