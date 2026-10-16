@@ -59,6 +59,9 @@ code. `frontend/CLAUDE.md` just redirects there.
 
 ```
 .
+├── AGENTS.md     # Agent guidance (this file)
+├── DESIGN.md     # Visual system ("Overprint") — source of truth for the UI
+├── PLAN.md       # Execution plan: phases, decisions and model roster
 ├── backend/      # FastAPI application (resource server) + MCP server
 ├── frontend/     # Next.js web app (product UI + OAuth consent screen)
 ├── docker-compose.yml   # Local stack: postgres, migrate, backend, mcp, frontend
