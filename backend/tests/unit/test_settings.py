@@ -16,6 +16,8 @@ _PROVIDER_ENV_VARS = (
     "MODAL_TOKEN_SECRET",
     "CHROMA_HOST",
     "CHROMA_API_KEY",
+    "CHROMA_TENANT",
+    "CHROMA_DATABASE",
 )
 
 
@@ -54,6 +56,8 @@ def test_provider_credentials_are_optional(monkeypatch):
     assert settings.cloudinary_api_secret is None
     assert settings.modal_token_id is None
     assert settings.chroma_host is None
+    assert settings.chroma_tenant is None
+    assert settings.chroma_database is None
 
 
 def test_provider_credentials_come_from_the_environment(monkeypatch):

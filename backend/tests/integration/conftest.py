@@ -6,11 +6,20 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.categories import models as categories_models  # noqa: F401  (register tables)
+from app.components import models as components_models  # noqa: F401  (register tables)
 from app.db.models import Base
 from app.db.session import get_async_db_session
+from app.generations import models as generations_models  # noqa: F401  (register tables)
+from app.images import models as images_models  # noqa: F401  (register tables)
 from app.main import app
 from app.settings import settings
+from app.tasks import models as tasks_models  # noqa: F401  (register tables)
 from tests.auth_stub import install_fake_jwks
+
+# The domain modules are imported above only so ``Base.metadata`` is complete:
+# the fixtures below build the schema from it, and the app does not import them
+# yet (their routers arrive with the API phase).
 
 
 def _test_database_url() -> str:

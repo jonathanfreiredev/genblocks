@@ -6,9 +6,14 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+from app.categories import models as categories_models  # noqa: F401  (register tables)
+from app.components import models as components_models  # noqa: F401  (register tables)
 from app.db.models import Base
+from app.generations import models as generations_models  # noqa: F401  (register tables)
+from app.images import models as images_models  # noqa: F401  (register tables)
 from app.organizations import models as organizations_models  # noqa: F401  (register tables)
 from app.settings import settings
+from app.tasks import models as tasks_models  # noqa: F401  (register tables)
 from app.users import models as users_models  # noqa: F401  (register tables)
 
 # this is the Alembic Config object, which provides

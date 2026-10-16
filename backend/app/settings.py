@@ -69,9 +69,11 @@ class Settings(BaseSettings):
 
     # Chroma stores the retrieval vectors. Left blank in development it falls
     # back to a local persistent client; in production it points at Chroma
-    # Cloud.
+    # Cloud, which needs all four.
     chroma_host: str | None = None
     chroma_api_key: str | None = None
+    chroma_tenant: str | None = None
+    chroma_database: str | None = None
 
     # --- Generation loop -----------------------------------------------------
     # A component is published from the best of at most this many attempts.

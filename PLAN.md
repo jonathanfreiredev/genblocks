@@ -81,6 +81,15 @@ Supabase Auth, Postgres, multi-tenancy por organización).
 18. **Taxonomía**: **dos niveles** ahora (Componentes/Imágenes → tipo). El nivel 3
     no se usa ni se documenta; si algún día hace falta, `parent_id` ya lo soporta.
 19. **Despliegue**: se decide al final (probablemente un servicio barato).
+20. **Panel de generación uniforme**: al abrir un componente o una imagen se ven,
+    a la derecha, los scores de su generación y el enlace a su trace. Las imágenes
+    también se puntúan, con su propia rúbrica corta (ver sección 7).
+21. **Los intentos son de la tarea, no del componente**: `generations` cuelga de
+    `tasks`, y el `Component` nace en el `commit`. Así `components` contiene **solo
+    piezas publicadas** — un invariante de la tabla, no una regla que haya que
+    recordar en cada consulta— y un intento rechazado sigue existiendo aunque no
+    llegue a componente. Al publicar, el componente se estampa en todos los
+    intentos de la tarea, para poder mostrar el historial completo.
 
 ---
 
@@ -113,8 +122,8 @@ brief → [conversación] → create_component → tarea (background)
   (TypeScript, lint, compilación, render en 3 viewports, accesibilidad, seguridad).
   Un solo step visible, de minutos, con latido de progreso.
 - **judge**: puntúa sobre los artefactos del harness. Decide reintentar o pasar.
-- **commit**: persiste componente, sube el screenshot, lo embebe, fija taxonomía y
-  publica.
+- **commit**: crea el componente y lo estampa en todos los intentos de la tarea,
+  sube el screenshot, lo embebe, fija taxonomía y publica.
 
 Los **steps visibles** son los nodos del grafo (harness intento 2, judge intento 2…).
 El DeepAgent es **un** step.
@@ -125,8 +134,8 @@ El DeepAgent es **un** step.
 |---|---|
 | `categories` | id, parent_id, kind(component\|image), slug, name, level |
 | `components` | id, slug, title, description, category_id, code, delivery_prompt, spec, winning_generation_id, created_by, license, created_at |
-| `generations` | id, component_id, attempt_no, code, screenshot_path, scores jsonb, verdict, rubric_version, model, langfuse_trace_id |
-| `images` | id, prompt, path, width, height, category_id, created_by, license |
+| `generations` | id, task_id, component_id, attempt_no, code, screenshot_path, scores jsonb, verdict, rubric_version, model, langfuse_trace_id |
+| `images` | id, prompt, path, width, height, category_id, created_by, license, model, scores jsonb, rubric_version, langfuse_trace_id |
 | `component_assets` | component_id, image_id, slot |
 | `tasks` | id, kind, status, brief, component_id, created_by, created_at, finished_at, error, langfuse_trace_id |
 | `task_steps` | id, task_id, index, name, status, detail jsonb, started_at, finished_at |
@@ -223,8 +232,15 @@ Dimensiones 0–100, cada una con su umbral (no basta la media):
 
 - **Independencia**: el agente del sandbox puede autorevisarse el render; puntúa
   otro. El juez es un agente separado con su propia skill.
-- La **rúbrica es una sola**, vive como skill, y la lee el juez.
+- La **rúbrica vive como skill** y la lee el juez: una para componentes, otra más
+  corta para imágenes.
 - Los umbrales se **calibran** con 5–10 generaciones de prueba, no a ojo.
+
+**Imágenes.** Las dimensiones de arriba son de un componente: una imagen no se
+renderiza ni lleva copy. Su rúbrica es corta —**Calidad visual**, **Ajuste al
+prompt**, **Cumplimiento**— y pasa por el mismo juez antes de entrar en la
+biblioteca. Así el panel del item es idéntico en las dos vistas: a la derecha, los
+scores de la generación y el enlace a su trace.
 
 ---
 
@@ -339,8 +355,10 @@ integración de endpoints.
 
 **Cambios**
 - Reconstruir la landing según `DESIGN.md` → **galería** de componentes.
-- Dialog del item: izquierda screenshot; pestañas de código y prompt de entrega;
-  placeholder para trace/scores/intentos.
+- Dialog del item: izquierda la pieza (screenshot del componente, o la imagen);
+  derecha el panel de generación (scores + trace). Pestañas de código y prompt de
+  entrega en un componente, y la receta (prompt, modelo, dimensiones) en una
+  imagen. Placeholder hasta que el juez exista.
 - Vista de tarea con **checklist** (contra datos sembrados a mano).
 - Navegación lateral con el botón **"Generar con IA"** (abre el dialog; todavía sin
   agente).
@@ -425,9 +443,11 @@ streaming.
 **Objetivo**: introducir el juicio y el bucle de reintento.
 
 **Cambios**
-- Rúbrica como **skill** (una sola fuente).
+- Rúbrica como **skill** (una fuente): una para componentes, otra corta para imágenes.
 - **Agente juez** separado con `gpt-6-luna`, puntúa desde los artefactos del harness.
 - Umbrales en settings; veredicto; **reintento máximo 1** (2 intentos totales).
+- La **rúbrica de imágenes** puntúa cada imagen al entrar en la biblioteca y escribe
+  `scores`, `rubric_version` y `langfuse_trace_id` en `images`.
 
 **Verificación**: el juez puntúa un candidato; el reintento se dispara y se respeta
 el tope. Calibrar umbrales con varias generaciones.
@@ -534,7 +554,7 @@ Todas en **`backend/.env`** (server-only). Nada en el frontend; nada en Modal.
 | `CLOUDINARY_API_KEY` | storage |
 | `CLOUDINARY_API_SECRET` | storage |
 | `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` | invocar el sandbox |
-| `CHROMA_*` | endpoint y token (prod Chroma Cloud) |
+| `CHROMA_HOST` / `CHROMA_API_KEY` / `CHROMA_TENANT` / `CHROMA_DATABASE` | vectores (Chroma Cloud en prod) |
 
 Los servicios `backend` y `mcp` del compose ya leen el mismo `backend/.env`.
 
