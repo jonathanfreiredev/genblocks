@@ -1,0 +1,158 @@
+name: mcp-stack
+
+# Local development stack: PostgreSQL plus the API and the web app, with the
+# source mounted and the dev servers running with reload.
+#
+#   cp .env.example .env
+#   cp backend/.env.example backend/.env
+#   cp frontend/.env.example frontend/.env
+#   docker compose up
+#
+# The Postgres credentials come from the root `.env` (see `.env.example`), which
+# Compose reads for variable substitution. That file is the source of truth: the
+# containers build their DATABASE_URL from it, so host runs (`uv run alembic` or
+# `uv run pytest` inside backend/) need backend/.env to carry the same password.
+#
+# Deployment is not handled here: the frontend is meant for Vercel and the
+# backend for its own service. The backend Dockerfile also has a production
+# stage if you deploy it as a container.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      # No default on purpose: a silent fallback is how a container and
+      # backend/.env end up with different passwords.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required, see .env.example}
+      POSTGRES_DB: ${POSTGRES_DB:-mcpstack}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # One-shot service: applies migrations before the API starts.
+  migrate:
+    build:
+      context: ./backend
+      target: dev
+    command: ["alembic", "upgrade", "head"]
+    # Values come from backend/.env; only what differs inside Docker is
+    # overridden below (the database host and credentials).
+    env_file: &backend-env-file
+      - ./backend/.env
+    environment: &backend-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?required, see .env.example}@postgres:5432/${POSTGRES_DB:-mcpstack}
+      ENV: development
+      FRONTEND_URL: http://localhost:3000
+      # Inside the network the MCP server answers to its service name. The
+      # playground calls it from here, so this is not the public MCP_BASE_URL.
+      MCP_INTERNAL_URL: http://mcp:8001
+    # Mount the source, but keep the image's Linux virtualenv untouched. The
+    # one-shot service needs it as much as the API does: without the mount it
+    # runs the migrations baked into the image at build time, so a new migration
+    # is silently skipped ("already up to date") while the service exits 0.
+    volumes: &backend-mounts
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini
+      - ./backend/pyproject.toml:/app/pyproject.toml
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    command: ["fastapi", "dev", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: *backend-env-file
+    environment:
+      <<: *backend-env
+    volumes: *backend-mounts
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    healthcheck:
+      # The slim image has no curl, so probe with the bundled Python.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status == 200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # The MCP server: a second door into the same domain, this one for AI agents.
+  # It runs as its own service so agent traffic, scaling and restarts stay out of
+  # the API's way; the two share the code, the domain and the token verification.
+  mcp:
+    build:
+      context: ./backend
+      target: dev
+    command: ["uvicorn", "app.mcp.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    env_file: *backend-env-file
+    environment:
+      <<: *backend-env
+    volumes: *backend-mounts
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8001:8001"
+    healthcheck:
+      # The slim image has no curl, so probe with the bundled Python.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health').status == 200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+    command: ["pnpm", "dev"]
+    # Values come from frontend/.env; inside the compose network the backend is
+    # reachable by service name, so its URL is overridden here.
+    env_file:
+      - ./frontend/.env
+    environment:
+      BACKEND_URL: http://backend:8000
+    volumes:
+      # Mount the source, but keep the image's node_modules untouched.
+      - ./frontend/app:/app/app
+      - ./frontend/components:/app/components
+      - ./frontend/lib:/app/lib
+      - ./frontend/server:/app/server
+      - ./frontend/public:/app/public
+      - ./frontend/proxy.ts:/app/proxy.ts
+      - ./frontend/next.config.ts:/app/next.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/postcss.config.mjs:/app/postcss.config.mjs
+      - ./frontend/components.json:/app/components.json
+      - ./frontend/eslint.config.mjs:/app/eslint.config.mjs
+      - ./frontend/prettier.config.js:/app/prettier.config.js
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
