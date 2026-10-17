@@ -44,17 +44,17 @@ function AttemptLedger({
   return (
     <table
       data-slot="attempt-ledger"
-      className={cn("type-meta w-full border-collapse text-left", className)}
+      className={cn("type-mono w-full border-collapse text-left", className)}
       {...props}
     >
       <thead>
-        <tr className="border-rule-strong border-b">
-          <th className="type-label text-ink-faint py-2 pr-4">№</th>
-          <th className="type-label text-ink-faint py-2 pr-4">Attempted</th>
-          <th className="type-label text-ink-faint py-2 pr-4 text-right">
+        <tr className="border-hairline border-b">
+          <th className="type-label text-ink-muted py-4 pr-4">№</th>
+          <th className="type-label text-ink-muted py-4 pr-4">Attempted</th>
+          <th className="type-label text-ink-muted py-4 pr-4 text-right">
             {scoreHeading}
           </th>
-          <th className="type-label text-ink-faint py-2">Verdict</th>
+          <th className="type-label text-ink-muted py-4">Verdict</th>
         </tr>
       </thead>
       <tbody>
@@ -66,17 +66,17 @@ function AttemptLedger({
               key={row.attempt}
               data-selected={selected ? true : undefined}
               className={cn(
-                "border-rule border-b",
-                selected || index % 2 === 1 ? "bg-panel-sunken" : "bg-panel",
+                "border-hairline border-b",
+                selected || index % 2 === 1 ? "bg-stone-soft" : "bg-canvas",
               )}
             >
-              <td className="text-ink-faint py-2 pr-4 tabular-nums">
+              <td className="text-ink-muted py-4 pr-4 tabular-nums">
                 {onSelectAttempt ? (
                   <button
                     type="button"
                     onClick={() => onSelectAttempt(row.attempt)}
                     aria-current={selected ? "true" : undefined}
-                    className="text-ink-faint hover:text-ink aria-[current]:text-ink underline-offset-4 hover:underline aria-[current]:font-bold"
+                    className="text-ink-muted hover:text-ink aria-[current]:text-ink underline-offset-4 hover:underline aria-[current]:font-bold"
                   >
                     {row.attempt}
                     <span className="sr-only">
@@ -87,25 +87,25 @@ function AttemptLedger({
                   row.attempt
                 )}
               </td>
-              <td className="text-ink-soft py-2 pr-4 tabular-nums">
+              <td className="text-ink-muted py-4 pr-4 tabular-nums">
                 {row.timestamp}
               </td>
               <td
                 className={cn(
-                  "py-2 pr-4 text-right tabular-nums",
-                  row.score === null ? "text-ink-faint" : "text-ink",
+                  "py-4 pr-4 text-right tabular-nums",
+                  row.score === null ? "text-ink-muted" : "text-ink",
                 )}
               >
                 {row.score ?? "—"}
                 {row.scoreNote ? (
-                  <span className="text-ink-faint ml-2">{row.scoreNote}</span>
+                  <span className="text-ink-muted ml-2">{row.scoreNote}</span>
                 ) : null}
               </td>
-              <td className="py-2">
+              <td className="py-4">
                 {row.verdict ? (
                   <VerdictStamp verdict={row.verdict} />
                 ) : (
-                  <span className="type-label text-ink-faint">Not judged</span>
+                  <span className="type-label text-ink-muted">Not judged</span>
                 )}
               </td>
             </tr>

@@ -1,63 +1,80 @@
 ---
 version: "alpha"
 name: "GenBlocks"
-description: "Overprint — a risograph-proof design system for a public registry of prompt-generated UI components and the verdicts of the judge that scored them."
+description: "Editorial command center — a white editorial canvas, monumental display type, deep green and navy evidence bands, coral taxonomy and rule-driven lists, for a public registry of prompt-generated UI components and the verdicts of the judge that scored them."
 colors:
-  paper: "#F1ECDF"
-  panel: "#FAF6EC"
-  panel-sunken: "#E3DBC8"
-  ink: "#17150F"
-  on-ink: "#FAF6EC"
-  ink-soft: "#4C4739"
-  ink-faint: "#5F5A4C"
-  rule: "#CFC7B4"
-  rule-strong: "#A79E88"
-  primary: "#CE2B6B"
-  primary-hover: "#B0245C"
-  on-primary: "#FFFFFF"
-  secondary: "#16695B"
-  accent: "#D9A020"
-  focus: "#17150F"
-  pass: "#2C6A3A"
-  pass-soft: "#DEE7D8"
-  retry: "#8A5A0C"
-  retry-soft: "#EDE3CB"
-  fail: "#A03028"
-  fail-soft: "#EEDAD4"
+  canvas: "#ffffff"
+  stone: "#eeece7"
+  stone-soft: "#f7f6f2"
+  wash-green: "#edfce9"
+  wash-blue: "#f1f5ff"
+  ink: "#212121"
+  ink-strong: "#17171c"
+  ink-muted: "#6b6b7a"
+  hairline: "#d9d9dd"
+  hairline-soft: "#e5e7eb"
+  primary: "#17171c"
+  primary-foreground: "#ffffff"
+  coral: "#ff7759"
+  coral-soft: "#ffad9b"
+  on-coral: "#17171c"
+  link: "#1863dc"
+  band: "#003c33"
+  band-alt: "#071829"
+  band-foreground: "#ffffff"
+  focus: "#4c6ee6"
+  verdict-pass: "#12684f"
+  verdict-pass-soft: "#e2f1ea"
+  verdict-retry: "#8a5c14"
+  verdict-retry-soft: "#f6ecd6"
+  verdict-fail: "#b30000"
+  verdict-fail-soft: "#f8e3e3"
 
 typography:
   display:
-    fontFamily: Bricolage Grotesque
+    fontFamily: Space Grotesk
+    fontSize: 4.5rem
+    fontWeight: 400
+    lineHeight: 1
+    letterSpacing: "-0.03em"
+  display-sm:
+    fontFamily: Space Grotesk
     fontSize: 2.5rem
-    fontWeight: 600
+    fontWeight: 400
     lineHeight: 1.05
     letterSpacing: "-0.02em"
   title:
-    fontFamily: Bricolage Grotesque
-    fontSize: 1.375rem
-    fontWeight: 600
+    fontFamily: Hanken Grotesk
+    fontSize: 1.5rem
+    fontWeight: 500
     lineHeight: 1.25
-  body:
-    fontFamily: Bricolage Grotesque
-    fontSize: 1rem
-    fontWeight: 400
-    lineHeight: 1.55
-  body-sm:
-    fontFamily: Bricolage Grotesque
-    fontSize: 0.875rem
-    fontWeight: 400
-    lineHeight: 1.5
-  label:
-    fontFamily: Space Mono
-    fontSize: 0.75rem
-    fontWeight: 700
-    lineHeight: 1.2
-    letterSpacing: "0.06em"
-  meta:
-    fontFamily: Space Mono
-    fontSize: 0.8125rem
+    letterSpacing: "-0.01em"
+  subtitle:
+    fontFamily: Hanken Grotesk
+    fontSize: 1.125rem
     fontWeight: 400
     lineHeight: 1.4
+  body:
+    fontFamily: Hanken Grotesk
+    fontSize: 1rem
+    fontWeight: 400
+    lineHeight: 1.5
+  body-sm:
+    fontFamily: Hanken Grotesk
+    fontSize: 0.875rem
+    fontWeight: 400
+    lineHeight: 1.4
+  micro:
+    fontFamily: Hanken Grotesk
+    fontSize: 0.75rem
+    fontWeight: 400
+    lineHeight: 1.4
+  label:
+    fontFamily: Space Mono
+    fontSize: 0.875rem
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: "0.02em"
   code:
     fontFamily: Space Mono
     fontSize: 0.8125rem
@@ -66,16 +83,18 @@ typography:
   score:
     fontFamily: Space Mono
     fontSize: 1.75rem
-    fontWeight: 700
+    fontWeight: 500
     lineHeight: 1
     fontFeature: "tnum"
 
 rounded:
   none: "0px"
-  sm: "2px"
-  md: "4px"
-  lg: "6px"
-  full: "9999px"
+  xs: "4px"
+  sm: "8px"
+  md: "16px"
+  lg: "22px"
+  xl: "30px"
+  pill: "9999px"
 
 spacing:
   xs: "4px"
@@ -89,15 +108,15 @@ spacing:
 
 components:
   nav-bar:
-    backgroundColor: "{colors.paper}"
+    backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
     rounded: "{rounded.none}"
-    height: 56px
+    height: 68px
   hairline:
-    backgroundColor: "{colors.rule}"
+    backgroundColor: "{colors.hairline}"
     height: 1px
-  divider-strong:
-    backgroundColor: "{colors.rule-strong}"
+  divider-soft:
+    backgroundColor: "{colors.hairline-soft}"
     height: 1px
   focus-outline:
     backgroundColor: "{colors.focus}"
@@ -105,96 +124,129 @@ components:
     width: 2px
   button-primary:
     backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+    textColor: "{colors.primary-foreground}"
     typography: "{typography.body-sm}"
-    rounded: "{rounded.sm}"
-    padding: 10px
-    height: 40px
+    rounded: "{rounded.pill}"
+    padding: 24px
+    height: 44px
   button-primary-hover:
-    backgroundColor: "{colors.primary-hover}"
-    textColor: "{colors.on-primary}"
-  button-secondary:
-    backgroundColor: "{colors.panel}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.primary-foreground}"
+  button-outline:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink-strong}"
     typography: "{typography.body-sm}"
-    rounded: "{rounded.sm}"
-    padding: 10px
-    height: 40px
+    rounded: "{rounded.pill}"
+    padding: 24px
+    height: 44px
   field:
-    backgroundColor: "{colors.panel}"
+    backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
     typography: "{typography.body-sm}"
     rounded: "{rounded.sm}"
-    padding: 10px
-    height: 40px
-  index-card:
-    backgroundColor: "{colors.panel}"
+    padding: 12px
+    height: 44px
+  card:
+    backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
     rounded: "{rounded.md}"
-    padding: 16px
-  ink-block:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.on-ink}"
+    padding: 24px
+  card-stone:
+    backgroundColor: "{colors.stone}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
+    padding: 24px
+  dark-band:
+    backgroundColor: "{colors.band}"
+    textColor: "{colors.band-foreground}"
+    rounded: "{rounded.none}"
+    padding: 64px
+  dark-band-navy:
+    backgroundColor: "{colors.band-alt}"
+    textColor: "{colors.band-foreground}"
+    rounded: "{rounded.none}"
+    padding: 64px
+  wash-band:
+    backgroundColor: "{colors.wash-green}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: 64px
+  wash-band-alt:
+    backgroundColor: "{colors.wash-blue}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: 64px
+  console-panel:
+    backgroundColor: "{colors.ink-strong}"
+    textColor: "{colors.band-foreground}"
+    typography: "{typography.code}"
     rounded: "{rounded.md}"
     padding: 16px
   code-block:
-    backgroundColor: "{colors.panel-sunken}"
+    backgroundColor: "{colors.stone-soft}"
     textColor: "{colors.ink}"
     typography: "{typography.code}"
     rounded: "{rounded.sm}"
     padding: 16px
+  category-chip:
+    backgroundColor: "{colors.coral}"
+    textColor: "{colors.on-coral}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.pill}"
+    padding: 8px
+  category-chip-quiet:
+    backgroundColor: "{colors.stone-soft}"
+    textColor: "{colors.ink-strong}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.pill}"
+    padding: 8px
   highlight:
-    backgroundColor: "{colors.accent}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.coral-soft}"
+    textColor: "{colors.on-coral}"
     typography: "{typography.body-sm}"
     padding: 2px
-  ledger-row:
-    backgroundColor: "{colors.panel}"
-    textColor: "{colors.ink}"
-    typography: "{typography.meta}"
-    rounded: "{rounded.none}"
-    padding: 12px
-  ledger-row-alt:
-    backgroundColor: "{colors.panel-sunken}"
-    textColor: "{colors.ink}"
-    typography: "{typography.meta}"
-    rounded: "{rounded.none}"
-    padding: 12px
   link:
-    backgroundColor: "{colors.panel}"
-    textColor: "{colors.secondary}"
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.link}"
     typography: "{typography.body-sm}"
     padding: 2px
-  stamp-pass:
-    backgroundColor: "{colors.pass-soft}"
-    textColor: "{colors.pass}"
+  verdict-stamp:
+    backgroundColor: "{colors.verdict-pass-soft}"
+    textColor: "{colors.verdict-pass}"
     typography: "{typography.label}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.xs}"
     padding: 4px
   stamp-retry:
-    backgroundColor: "{colors.retry-soft}"
-    textColor: "{colors.retry}"
+    backgroundColor: "{colors.verdict-retry-soft}"
+    textColor: "{colors.verdict-retry}"
     typography: "{typography.label}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.xs}"
     padding: 4px
   stamp-fail:
-    backgroundColor: "{colors.fail-soft}"
-    textColor: "{colors.fail}"
+    backgroundColor: "{colors.verdict-fail-soft}"
+    textColor: "{colors.verdict-fail}"
     typography: "{typography.label}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.xs}"
     padding: 4px
+  ledger-row:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: 16px
+  ledger-row-alt:
+    backgroundColor: "{colors.stone-soft}"
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: 16px
   caption-text:
-    backgroundColor: "{colors.panel}"
-    textColor: "{colors.ink-soft}"
-    typography: "{typography.meta}"
-    padding: 4px
-  meta-text:
-    backgroundColor: "{colors.panel}"
-    textColor: "{colors.ink-faint}"
-    typography: "{typography.meta}"
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink-muted}"
+    typography: "{typography.micro}"
     padding: 4px
   dialog:
-    backgroundColor: "{colors.panel}"
+    backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
     rounded: "{rounded.md}"
     padding: 24px
@@ -202,128 +254,145 @@ components:
 
 ## Overview
 
-A risograph proof sheet, not a landing page. The product shows *attempts* and the verdict a judge gave each one — which is exactly what a print proof is: flat spot inks laid down one pass at a time, and the registration between them deciding whether the sheet is good. The published component is the overprint.
+An editorial command center for a registry. The page opens on white, states its case in monumental display type, then steps back into restrained UI: thin rules, coral taxonomy, and lists that read like a research index rather than a wall of cards. Where the system needs weight, it does not add a shadow — it changes the surface to deep green or navy and lets the content go white.
 
-So the interface borrows the register of a print studio and a museum accession record: bone paper, flat ink, visible rules, tabular figures, and a strict typographic hierarchy. Nothing glows, nothing blurs, nothing gradients. Where a lesser system reaches for a gradient, this one reaches for a second ink pass.
+GenBlocks is a public record of prompt-generated UI components and the verdicts a judge gave each attempt. The design borrows the register of a research publication: **taxonomy you can filter**, **evidence you can read**, and **numbers that line up**. It is a system with a point of view — monumental type, flat surfaces, one warm accent — not a neutral UI kit.
 
-Color behaves like ink: opaque, countable, one pass at a time. It is not decoration. Each spot ink has exactly one surface where it belongs.
-
-- Density: 7/10 — Compact, catalogued
-- Variance: 2/10 — Columns, rules and index rails, not free composition
-- Motion: 2/10 — Functional only; a proof does not perform
+- Density: 4/10 — Airy in the marketing shell, dense only where the data is
+- Variance: 5/10 — Centered statements alternating with full-width bands and rule-driven lists
+- Motion: 3/10 — Quiet and functional; nothing bounces
 
 ## Colors
 
-Paper stock and one black plate carry the whole surface. Three spot inks carry the identity. A separate functional triad carries the verdict.
+A white canvas, one near-black, and color that arrives with intent.
 
-**Stock**
+**Surfaces**
 
-- **Paper (#F1ECDF):** the page ground — warm bone, never pure white.
-- **Panel (#FAF6EC):** content surfaces and cards. The step from paper to panel replaces shadow as the way to lift a surface.
-- **Panel Sunken (#E3DBC8):** wells, code blocks, alternate ledger rows. The only permitted depth cue besides rules.
-- **Rule (#CFC7B4) / Rule Strong (#A79E88):** the workhorses. 1px rules are the system's edges, dividers and grid.
-- **Ink (#17150F):** the black plate — all body text, and the fill of the primary *structural* elements. It also fills isolated **ink blocks** (the code and preview panes), where text is `on-ink`. It is also the source of the dark theme: dark mode is a *derived tonal inversion* of these tokens, kept in `frontend/app/globals.css`, not a second authored set. There the ink becomes the paper and the paper the ink, and the spot inks and verdict triad lift just enough to stay legible on the dark ground.
-- **Ink Soft (#4C4739) / Ink Faint (#5F5A4C):** secondary and tertiary text. Both clear WCAG AA on paper and panel.
+- **Canvas (#ffffff):** the default page. Most of the product lives here.
+- **Stone (#eeece7):** warm secondary surface for product cards, quiet blocks and forms sitting on dark bands.
+- **Stone Soft (#f7f6f2):** inset wells, alternate table rows, code backgrounds.
+- **Wash Green (#edfce9) / Wash Blue (#f1f5ff):** pale section backdrops behind dark panels and media. They are the only place a large field of tint is allowed.
 
-**Spot inks — each belongs to one surface**
+**Text and rules**
 
-- **Primary (#CE2B6B), magenta:** the action ink. Fills buttons, links, active states. It is a *fill*: magenta text on paper is only AA at large sizes, so on light surfaces it appears as a block of ink with `on-primary` (white) text — 5.0:1 — never as small body text.
-- **Secondary (#16695B), verdigris:** the *on-paper* ink. It is the one spot that works as text on the light ground (5.6:1), so it carries links, inline references and quiet emphasis.
-- **Accent (#D9A020), ochre:** the *on-dark* ink, and the highlighter. On the light ground it fails as text (2.0:1) and is used only as a marker behind ink text (7.8:1). On an ink block it becomes a first-class accent (7.8:1).
+- **Ink (#212121):** default body text.
+- **Ink Strong (#17171c):** headlines, the primary pill, the footer. The near-black is the brand anchor.
+- **Ink Muted (#6b6b7a):** secondary text, metadata, captions. Measured AA on canvas. _(The upstream reference used a lighter grey that fails AA — this value is deliberately darker.)_
+- **Hairline (#d9d9dd) / Hairline Soft (#e5e7eb):** rules and borders. Rules are structure in this system, not decoration.
 
-**Verdict triad — functional, never brand**
+**Accents**
 
-- **Pass (#2C6A3A) / Retry (#8A5A0C) / Fail (#A03028)**, each with a soft tint for stamped backgrounds. These are separate from the brand inks on purpose: a rejected component must never look like the magenta of the primary action. If a screen has no verdict, that screen has no triad color.
+- **Accent — Coral (#ff7759):** taxonomy only. Category chips, active filters and small warm markers. **Never text on canvas** (2.6:1). As a fill it takes `accent-foreground`, which is near-black, at 7:1.
+- **Accent Soft (#ffad9b):** chip borders and pale warm fills.
+- **Link (#1863dc):** editorial links and secondary emphasis. 5.4:1 on canvas.
+- **Focus (#4c6ee6):** the keyboard ring, and nothing else.
 
-The rule of allocation: **one spot ink per screen.** Paper is the field; ink is the text; a single spot supplies the tension. Two spots on the same screen is a signal that the layout is doing two jobs.
+**Bands**
+
+- **Band Green (#003c33) / Band Alt Navy (#071829):** full-width evidence sections. The only dark surfaces besides the footer. Text inverts to `band-foreground`. Cards inside a band use translucent white surfaces, never stone.
+
+**Verdict — functional, never brand**
+
+- **Pass (#12684f) / Retry (#96651a) / Fail (#b30000)**, each with a soft tint for stamped backgrounds. These stay separate from the coral and the blue on purpose: a rejected component must never look like a filter chip or a link.
+
+Rules of use: coral is taxonomy, blue is navigation, and neither is ever a surface. The verdict triad appears only where a verdict exists. If a screen has no verdict, that screen has no triad color.
+
+**Dark mode** is a derived tonal inversion kept in `frontend/app/globals.css`: canvas becomes near-black, stone becomes `#17171c`, ink inverts, hairlines become translucent, and the primary pill inverts to white-on-dark. The bands stay green and navy; the accents lift one step to hold AA. It is derived from these tokens, not authored here.
 
 ## Typography
 
-Two families. No third, ever.
+Three roles, and the split is the point — collapsing them into one sans is the fastest way to make this system look generic.
 
-- **Bricolage Grotesque** carries voice and reading: display, titles, body. A contemporary grotesque with real character and an optical-size axis — it reads as *designed*, never as a default system font, and it gives the proof a print-studio accent.
-- **Space Mono** carries everything that is *data*: uppercase labels, metadata, scores, accession marks, code. Its typewriter lineage sits perfectly inside the print metaphor.
+- **Space Grotesk** — display only, and sparingly. It carries the one monumental declaration a page is allowed. Tight, slightly mechanical, almost monospaced in spirit.
+- **Hanken Grotesk** — body, UI and every heading that is not the display. Neutral, quiet, not the default system face.
+- **Space Mono** — technical labels, metadata, scores, code. Uppercase for category and system markers.
 
 Discipline:
 
-- **Uppercase Space Mono labels** (12px, 0.06em tracking) sit above every section and metadata group. They are the system's eyebrows and its clearest signature.
-- **Tabular numerals everywhere a figure appears** — scores, attempt counts, dates, dimensions. `font-feature-settings: "tnum"`. Figures must align in columns or the ledger reads as prose.
-- **Two weights per screen, maximum.** Bricolage runs 400 and 600; Space Mono has only 400 and 700. Hierarchy comes from size, tracking and position.
-- Use Bricolage's optical size deliberately: large display settings tighter, small body settings open. Never fake it with tracking alone.
-- Headlines cap at weight 600 and are never all caps. All caps is reserved for mono labels.
-- Line length caps at ~72ch. Long-form reading is 16px/1.55.
-- Fallbacks: Bricolage Grotesque → a neutral grotesque (Public Sans), then system sans. Space Mono → ui-monospace, Menlo.
+- **Avoid heavy weights.** Display and body sit at 400, buttons and titles at 500. Hierarchy comes from size, tracking and surface contrast. If something needs to shout, make it bigger, not bolder.
+- **Keep display type tight.** Negative tracking (−0.02 to −0.03em) and a line height of 1.0; hero copy should feel carved, not airy.
+- **One oversized headline per page.** After the display, settle into 14–24px UI copy.
+- **Uppercase mono labels** (14px, 0.02em) mark category and system states.
+- **Tabular numerals everywhere a figure appears.** Scores, counts, dates.
+- Headlines are never all caps. All caps belongs to mono labels.
+- Line length caps at ~72ch.
+- Fallbacks if the webfonts are unavailable: Space Grotesk → system grotesque; Hanken Grotesk → Inter, Arial; Space Mono → ui-monospace, Menlo.
 
 ## Layout
 
-A 12-column grid with a visible structure, not a hidden one.
+- **8px base.** Practical steps run 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 / 96.
+- **Max width 1200px**, centered, 24px side padding.
+- **Two shells.** The marketing shell is centered and airy: statement, proof, product, CTA, separated by large intervals of empty space. The registry shell is a ruled index: a filter row, then rows or a 3-column grid.
+- **Three-zone navigation:** mark left, links centered, action right.
+- **Rows over cards.** For lists of components, attempts and research, use rule-separated rows with columns for category, score and date. Reach for a card only when an item is genuinely a self-contained object.
+- **Whitespace is a trust signal.** Big empty intervals separate the claim, the proof and the action. Dense content appears only where the information architecture demands it.
+- **Sections alternate surfaces**, not shadows: canvas → wash → band → canvas.
 
-- **Max width 1280px**, centered, 24px side padding. On wide screens the record stays a document rather than stretching to fill.
-- **The index rail.** List and gallery surfaces reserve a left column for accession marks (sequence numbers, slugs). The rail is structure, not decoration: it makes the registry scannable and gives every item a fixed address.
-- **Rules over boxes.** Sections are separated by a 1px rule and major breaks by a double rule (1px, 8px gap, 1px). Cards are cells inside that structure, not floating tiles.
-- **Density is deliberate.** Metadata rows run at 12px padding; a list of forty items should read as a ledger, not as forty hero cards.
-- **Asymmetry over centering.** The item view is a two-pane split — specimen and evidence. The gallery leads with a filter rail, not a centered hero.
-- Spacing follows the 4px scale: section rhythm 48–96px, within a component 4–16px.
-
-Responsive: below 1024px the index rail collapses to an inline prefix; below 768px every multi-column region stacks, the metadata table becomes label/value pairs, and nothing may produce horizontal overflow.
+Responsive: nav collapses to the sheet below 768px; hero media stacks; grids go 3 → 2 → 1; form rows stack; research rows keep the rule but push metadata below the title; nothing overflows horizontally.
 
 ## Elevation & Depth
 
-Depth is expressed with **tone and rules**, not with shadow.
+Flat, on purpose. Depth is surface alternation, contrast and thin borders — not shadow.
 
-- Flat by default. A surface sits above another because its tone is lighter (panel over paper), separated by a 1px hairline.
-- Exactly **one shadow token** exists, reserved for transient overlays (dialogs, menus, the task drawer): `0 1px 0 {rule}, 0 8px 24px rgba(23,21,15,0.12)`. A document lifting off a desk, once — not a motif.
-- **No glow, no blur, no glass.** Nothing is translucent. An ink block is solid ink, not a frosted panel.
-- Motion is mechanical and brief: 120–200ms, standard ease-out, opacity and transform only. State changes transition; content does not float in on scroll.
-- A running operation is shown by an animated 1px rule or a mono caret — never a spinner with a halo.
+- **Flat:** canvas and band sections. No shadow, ever.
+- **Bordered:** 1px hairline (or translucent white inside a band) for cards, forms, rows and wells.
+- **Media lift:** a rounded media card over a contrasting section is the only "raised" object in the marketing shell. Its radius is 16–22px.
+- Exactly **one shadow token** exists, for transient overlays (dialogs, menus, sheets, toasts): `0 8px 24px rgb(23 23 28 / 0.10)`. Nothing else casts.
+- **No glow, no blur, no glass.** Nothing is translucent except white-on-band surfaces.
+- Motion is functional and brief: 120–200ms, ease-out, opacity and transform only. No entrance animations, no hover lift, no scroll reveals.
 
 ## Shapes
 
-Right angles, mostly.
+Rounded, but not cute.
 
-- Base corner radius is **2px** (`sm`) on buttons, inputs and stamps. Cards use 4px (`md`). The largest is 6px (`lg`).
-- **Full radius (9999px) is reserved** for status dots and avatars — never buttons, never badges.
-- The primary separator is a **1px hairline**. If a boundary can be drawn with a rule, it is not drawn with a corner or a shadow.
-- The shape language should read as cut paper and ruled ledger stock: precise, flat, a little institutional.
+- **Radius scale:** 4px (utility, thumbnails) · 8px (inputs, small cards, chips-outline) · 16px (cards, dialogs) · 22px (signature media cards, toasts) · 30px (filters) · **pill** (primary and outline buttons, category chips).
+- **Buttons are pills.** The primary CTA is a near-black pill; the secondary is either an outlined pill or an underlined text link. A squared button is wrong here.
+- Media and major cards never go below 8px, and the signature media radius is 22px.
+- Rules are 1px and visible. A boundary drawn with a rule beats a corner or a shadow.
 
 ## Components
 
-- **Primary button.** Magenta fill, white text, 2px radius, 40px tall, sentence case. Hover steps the ink darker; no lift, no shadow, no glow. One primary action per view.
-- **Secondary button.** Panel fill, ink text, 1px rule border, same geometry. Ghost variant is text with a rule underline.
-- **Link.** Verdigris text on the panel ground — the one spot ink safe as text on light. Underline on hover.
-- **Input.** Panel fill, 1px rule border, 2px radius. Uppercase mono label above; helper and error text below in mono. Focus is a 2px ink outline at 2px offset — identical on every focusable element.
-- **Index card.** A bordered cell (1px rule) on panel, 4px radius, with an accession mark in mono at the top, the specimen title, and a one-line meta row. Cards align to the grid and share baselines; they do not float or stagger.
-- **Ink block.** Solid ink surface with `on-ink` text — the code and preview panes, and dark callouts. Ordered, never a full section band unless it is the only dark object on the screen.
-- **Verdict stamp.** Uppercase mono, 1px border in the verdict color, soft tint fill, 2px radius. `PASS` / `RETRY` / `REJECTED`. A rubber stamp, not a pill, and it never carries an icon.
-- **Attempt ledger.** A ruled table, one row per attempt: `№`, timestamp (mono), score (tabular), verdict stamp. Alternate rows use panel-sunken. This table is a first-class surface — it is the product's argument.
-- **Score readout.** The judge's number in `score` (Space Mono, tabular, 1.75rem), right-aligned, with a thin hairline bar under it showing the value on the 0–100 track. Data — not a donut, not a ring, not a gauge.
-- **Highlight.** An ochre marker behind ink text, used to flag the winning attempt or a key figure. Inline, never a full-width band.
-- **Code block.** Panel-sunken, Space Mono, 1px rule, no window chrome, no rainbow syntax — a single muted keyword tint at most.
-- **Tabs.** Underline tabs carried by the hairline: active is ink with a 2px ink underline; inactive is ink-soft with no chrome.
-- **Navigation.** Paper background, 1px rule beneath, mono labels for utility items. Active state is an ink underline, never a filled pill.
-- **Dialog.** Panel surface, 4px radius, the single shadow token.
+- **Primary button.** Near-black pill (or white on a dark band), 14px label at weight 500, 24px horizontal padding, 44px tall. Hover darkens or lightens by one step; no shadow, no lift.
+- **Secondary button.** Outlined pill: canvas fill, 1px hairline, near-black text. Ghost is text with a rule underline. One primary action per view.
+- **Link.** `link` blue, underlined on hover. Never coral.
+- **Input.** Canvas fill, 1px hairline, 8px radius, 44px tall. Label above is an uppercase mono label; helper and error text are mono. Focus is the `focus` ring — one treatment on every focusable element.
+- **Category chip.** Pill. Active: coral fill with near-black text. Quiet: stone fill or a coral hairline with near-black text. Coral is for taxonomy, so a chip is the only place a large coral area is allowed.
+- **Index card.** Canvas surface, 1px hairline, 16px radius, generous padding. Carries a mono accession mark, a title and a metadata row. In a grid these are 3-up on desktop.
+- **Stone card.** Same geometry on the warm stone surface, for product and model summaries. Never used on a band.
+- **Dark band.** Full-width green or navy section with white text. Cards inside it use translucent white surfaces and hairline borders. Used for evidence: the trace, the scores, the attempt history.
+- **Console panel.** Near-black panel with mono text and small status chips — the running task, the trace, the code. This is the "agent console" of the product.
+- **Verdict stamp.** Small 4px-radius chip, uppercase mono, hairline border in the verdict color over its soft tint. `PASS` / `RETRY` / `REJECTED`. Not a pill, not an icon.
+- **Attempt ledger.** Rule-separated table: `№`, timestamp, score (tabular), verdict stamp. Rows are tall and open; alternate rows use stone-soft. This table is a first-class surface — it is the product's argument.
+- **Score readout.** The judge's number in mono, tabular, right-aligned, over a thin hairline bar showing the value on the track. Data, not a donut.
+- **Highlight.** Coral-soft marker behind near-black text, inline only. Flags the winning attempt or a key figure.
+- **Research row.** The list form: title left, category chips centered, date right, separated by hairlines. No boxing.
+- **Navigation / footer.** Canvas nav with a hairline beneath; near-black footer with white labels and muted links.
+
+**States:** hover darkens or lightens one step; focus is the shared ring; pressed nudges 1px; disabled drops to 45% opacity with a not-allowed cursor. Every component defines all four.
 
 ## Do's and Don'ts
 
 Do:
 
-- Do let each spot ink belong to its surface: magenta as fill, verdigris as on-paper text, ochre as marker and on-ink accent.
-- Do keep one spot ink per screen. Paper and ink carry everything else.
-- Do use white text on magenta and on verdigris fills; use ink text on ochre.
-- Do set every number in tabular Space Mono, aligned in columns.
-- Do surface the score and the attempt history on the item itself — the ledger is the point.
-- Do keep radii at 2–6px and edges hairline-thin.
-- Do verify WCAG AA on every text/background pair, including the verdict tints.
+- Do start from the white canvas; introduce green or navy only as full-width bands.
+- Do keep primary CTAs pill-shaped and near-black.
+- Do use 16–22px radius on cards and media; keep inputs at 8px.
+- Do use coral for taxonomy and small warm accents, never as the CTA system.
+- Do let one monumental display line carry a page, then settle down.
+- Do use rules and open rows instead of wrapping every item in a card.
+- Do set every figure in tabular mono.
+- Do check WCAG AA on every text/background pair, including coral and the verdict tints.
 
 Don't:
 
-- Don't put magenta or ochre as small text on the paper ground — they fail AA there.
-- Don't reuse a brand ink for a verdict. Pass/retry/fail stay functional.
-- Don't show magenta, verdigris and ochre together on one screen.
-- Don't use gradients, glassmorphism, backdrop blur, or glow. Anywhere.
-- Don't use drop shadows for depth that a rule or a tone step can do.
-- Don't use pill shapes for buttons or badges — full radius belongs to status dots and avatars only.
-- Don't center a hero, don't stagger cards, don't float content in on scroll.
-- Don't use more than two typefaces or more than two weights per screen.
-- Don't use emoji as icons, and don't ship an icon set that carries its own color.
-- Don't write "Elevate", "Seamless", "Unleash", "Next-Gen", or lorem ipsum — including in empty states and demos.
+- Don't put coral or blue text on the canvas — use near-black or `link` blue only.
+- Don't turn coral or blue into broad decorative surfaces.
+- Don't add drop shadows to cards. Depth is surface and rule.
+- Don't use saturated gradients or glow as a UI background.
+- Don't make every section card-based; unframed rows and open space are the default.
+- Don't use squared buttons or radii below 4px.
+- Don't replace the display / body / mono split with one generic sans.
+- Don't reuse a brand accent for a verdict — pass, retry and fail stay functional.
+- Don't use emoji as icons, or an icon set that carries its own color.
+- Don't write "Elevate", "Seamless", "Unleash", "Next-Gen", or lorem ipsum — including in empty states.
+- Don't fake depth, motion or polish to make an empty collection feel full.

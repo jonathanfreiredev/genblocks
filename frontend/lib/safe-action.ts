@@ -20,9 +20,7 @@ const simulateDelay = async () => {
  * is the one failure a client is expected to retry instead of reporting.
  */
 export type ActionErrorReason =
-  | "email_not_confirmed"
-  | "rate_limited"
-  | "service_waking";
+  "email_not_confirmed" | "rate_limited" | "service_waking";
 
 /**
  * Base client with global middleware for logging and delay

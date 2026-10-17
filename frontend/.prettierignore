@@ -1,0 +1,6 @@
+# Not source, so not formatted: the build output, the installed packages and the
+# lockfile (which pnpm owns — rewriting it makes 7000 lines of noise and can
+# disagree with what was actually resolved).
+.next/
+node_modules/
+pnpm-lock.yaml

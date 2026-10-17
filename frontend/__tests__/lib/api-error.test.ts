@@ -15,7 +15,10 @@ describe("backendErrorMessage", () => {
 
   test("joins the messages of a FastAPI validation error list", () => {
     expect(
-      backendErrorMessage([{ msg: "too short" }, { msg: "invalid email" }], FALLBACK),
+      backendErrorMessage(
+        [{ msg: "too short" }, { msg: "invalid email" }],
+        FALLBACK,
+      ),
     ).toBe("too short invalid email");
   });
 

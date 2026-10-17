@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 
 import structlog
@@ -25,7 +25,7 @@ logger = structlog.get_logger("app.main")
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     """Own the task worker for this process: reconcile, then consume.
 
     The worker runs beside the API rather than in a service of its own because

@@ -36,7 +36,9 @@ beforeEach(() => {
 
 function fillAndSubmit(confirmPassword: string) {
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: NAME } });
-  fireEvent.change(screen.getByLabelText("Email"), { target: { value: EMAIL } });
+  fireEvent.change(screen.getByLabelText("Email"), {
+    target: { value: EMAIL },
+  });
   fireEvent.change(screen.getByLabelText("Password"), {
     target: { value: PASSWORD },
   });

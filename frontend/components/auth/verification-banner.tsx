@@ -8,7 +8,7 @@ export const VerificationBanner = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   return (
-    <div className="bg-amber-50 border-amber-200 text-amber-900 flex items-center justify-center gap-1 border-b px-4 py-2 text-sm">
+    <div className="flex items-center justify-center gap-1 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
       <span>Your email is not verified yet.</span>
       <Button
         variant="link"

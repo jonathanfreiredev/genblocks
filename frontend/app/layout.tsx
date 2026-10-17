@@ -1,17 +1,24 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, Space_Mono } from "next/font/google";
+import { Hanken_Grotesk, Space_Grotesk, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toast";
 import { Footer } from "@/components/footer";
 
-// Voice: headings, body, UI. Variable font — no weight list needed.
-const bricolageGrotesque = Bricolage_Grotesque({
+// Display: the one monumental declaration a page gets. Tight, slightly
+// mechanical, almost monospaced in spirit.
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-display",
+  subsets: ["latin"],
+});
+
+// Body and UI, including every heading that is not the display.
+const hankenGrotesk = Hanken_Grotesk({
   variable: "--font-sans",
   subsets: ["latin"],
 });
 
-// Data: uppercase labels, metadata, scores, code. Not a variable font, so the
-// two weights the type scale uses are declared explicitly.
+// Technical labels, metadata, scores, code. Not a variable font, so the two
+// weights the type scale uses are declared explicitly.
 const spaceMono = Space_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
@@ -62,7 +69,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${bricolageGrotesque.variable} ${spaceMono.variable} h-full antialiased`}
+      className={`${spaceGrotesk.variable} ${hankenGrotesk.variable} ${spaceMono.variable} h-full antialiased`}
       // The theme script adds `dark` before hydration, so the class differs from
       // the server output on purpose. This suppresses only that one warning.
       suppressHydrationWarning

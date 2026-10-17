@@ -1,2 +1,6 @@
 # Local environment for Docker Compose
 .env
+
+# Browser sessions left by the Playwright tooling (page snapshots, console logs).
+# They are read once and thrown away; nothing here belongs in the repository.
+.playwright-mcp/

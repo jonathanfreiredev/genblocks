@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { MoonIcon, SunIcon } from "lucide-react"
+import * as React from "react";
+import { MoonIcon, SunIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 
 /**
  * Theme, without a dependency.
@@ -13,33 +13,33 @@ import { Button } from "@/components/ui/button"
  * keeps every mounted toggle in sync through a custom event, so the footer and
  * the mobile sheet never disagree.
  */
-export const THEME_STORAGE_KEY = "genblocks-theme"
+export const THEME_STORAGE_KEY = "genblocks-theme";
 
-const THEME_EVENT = "genblocks-theme-change"
+const THEME_EVENT = "genblocks-theme-change";
 
-export type Theme = "light" | "dark"
+export type Theme = "light" | "dark";
 
 function readTheme(): Theme {
-  return document.documentElement.classList.contains("dark") ? "dark" : "light"
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
 function subscribe(callback: () => void) {
-  window.addEventListener(THEME_EVENT, callback)
-  return () => window.removeEventListener(THEME_EVENT, callback)
+  window.addEventListener(THEME_EVENT, callback);
+  return () => window.removeEventListener(THEME_EVENT, callback);
 }
 
 function writeTheme(theme: Theme, persist: boolean) {
-  document.documentElement.classList.toggle("dark", theme === "dark")
+  document.documentElement.classList.toggle("dark", theme === "dark");
 
   if (persist) {
     try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     } catch {
       // Private mode or a full quota: the class above is still applied.
     }
   }
 
-  window.dispatchEvent(new Event(THEME_EVENT))
+  window.dispatchEvent(new Event(THEME_EVENT));
 }
 
 export function useTheme() {
@@ -48,19 +48,19 @@ export function useTheme() {
     readTheme,
     // Server snapshot: `dark` is applied before paint, and this switches to the
     // real value right after hydration without a mismatch warning.
-    () => "light" as Theme
-  )
+    () => "light" as Theme,
+  );
 
   return {
     theme,
     isDark: theme === "dark",
     setTheme: (next: Theme) => writeTheme(next, true),
     toggle: () => writeTheme(readTheme() === "dark" ? "light" : "dark", true),
-  }
+  };
 }
 
 export function ThemeToggle({ className }: { className?: string }) {
-  const { isDark, toggle } = useTheme()
+  const { isDark, toggle } = useTheme();
 
   return (
     <Button
@@ -72,5 +72,5 @@ export function ThemeToggle({ className }: { className?: string }) {
     >
       {isDark ? <MoonIcon /> : <SunIcon />}
     </Button>
-  )
+  );
 }

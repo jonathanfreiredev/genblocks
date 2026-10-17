@@ -28,7 +28,10 @@ export const updateUserAction = protectedProcedure
       });
 
       if (error) {
-        returnServerError({ code: error.status ?? 400, message: error.message });
+        returnServerError({
+          code: error.status ?? 400,
+          message: error.message,
+        });
       }
     }
 

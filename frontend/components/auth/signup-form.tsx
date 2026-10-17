@@ -219,9 +219,7 @@ export function SignupForm({
             </form>
           ) : null}
 
-          {googleEnabled ? (
-            <GoogleSignInButton className="w-full" />
-          ) : null}
+          {googleEnabled ? <GoogleSignInButton className="w-full" /> : null}
 
           <FieldDescription className="text-center">
             Already have an account?{" "}

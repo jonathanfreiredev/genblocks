@@ -79,7 +79,10 @@ export const ForgotPasswordForm = ({
               </Link>
             </div>
           ) : (
-            <form id="form-forgot-password" onSubmit={form.handleSubmit(onSubmit)}>
+            <form
+              id="form-forgot-password"
+              onSubmit={form.handleSubmit(onSubmit)}
+            >
               <FieldSet className="mb-5 w-full">
                 <FieldGroup>
                   <Controller
@@ -115,8 +118,7 @@ export const ForgotPasswordForm = ({
                 </Button>
 
                 <FieldDescription className="text-center">
-                  Remembered it?{" "}
-                  <Link href="/auth/login">Log in</Link>
+                  Remembered it? <Link href="/auth/login">Log in</Link>
                 </FieldDescription>
               </Field>
             </form>

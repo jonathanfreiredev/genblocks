@@ -5,17 +5,18 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * GenBlocks — "Overprint".
+ * GenBlocks — "Editorial command center".
  *
  * The repository `DESIGN.md` is the source of truth; this file only holds the
  * token values. Change a color there first, re-run the linter, then re-export.
- * Light-only for now: dark mode is authored separately, later.
+ * Dark mode is derived (see the `.dark` block), not authored in DESIGN.md.
  */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
   --font-mono: var(--font-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -48,22 +49,25 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
 
-  /* GenBlocks primitives: the paper stock, the black plate and the spot inks. */
-  --color-paper: var(--paper);
-  --color-panel: var(--panel);
-  --color-panel-sunken: var(--panel-sunken);
+  /* GenBlocks primitives: surfaces, ink, rules, accents and bands. */
+  --color-canvas: var(--canvas);
+  --color-stone: var(--stone);
+  --color-stone-soft: var(--stone-soft);
+  --color-wash-green: var(--wash-green);
+  --color-wash-blue: var(--wash-blue);
   --color-ink: var(--ink);
-  --color-ink-soft: var(--ink-soft);
-  --color-ink-faint: var(--ink-faint);
-  --color-on-ink: var(--on-ink);
-  --color-rule: var(--rule);
-  --color-rule-strong: var(--rule-strong);
-  --color-spot-primary: var(--spot-primary);
-  --color-spot-primary-hover: var(--spot-primary-hover);
-  --color-on-spot: var(--on-spot);
-  --color-spot-secondary: var(--spot-secondary);
-  --color-spot-accent: var(--spot-accent);
-  --color-on-accent: var(--on-accent);
+  --color-ink-strong: var(--ink-strong);
+  --color-ink-muted: var(--ink-muted);
+  --color-hairline: var(--hairline);
+  --color-hairline-soft: var(--hairline-soft);
+  --color-coral: var(--coral);
+  --color-coral-soft: var(--coral-soft);
+  --color-on-coral: var(--on-coral);
+  --color-link: var(--link);
+  --color-band: var(--band);
+  --color-band-alt: var(--band-alt);
+  --color-band-foreground: var(--band-foreground);
+  --color-focus: var(--focus);
   --color-verdict-pass: var(--verdict-pass);
   --color-verdict-pass-soft: var(--verdict-pass-soft);
   --color-verdict-retry: var(--verdict-retry);
@@ -71,215 +75,290 @@
   --color-verdict-fail: var(--verdict-fail);
   --color-verdict-fail-soft: var(--verdict-fail-soft);
 
-  /* Radius — pinned from the DESIGN.md scale, by the class base-nova gives each
-     component, not by the shadcn name. The calc() multipliers are gone on
-     purpose: the system caps at 6px.
-       sm → accents/stamps · md → menu items · lg → buttons, inputs, items, popovers
-       xl → cards, dialogs · 2xl → toasts · 4xl → badges (kept sharp: no pills) */
-  --radius-sm: 2px;
-  --radius-md: 2px;
-  --radius-lg: 2px;
-  --radius-xl: 4px;
-  --radius-2xl: 6px;
-  --radius-3xl: 6px;
-  --radius-4xl: 2px;
+  /* Compatibility aliases for screens still written against the previous token
+     names (the vault and tasks surfaces). They resolve to the new palette, so
+     nothing breaks; migrate them to the new names on their next pass. */
+  --color-paper: var(--paper);
+  --color-panel: var(--panel);
+  --color-panel-sunken: var(--panel-sunken);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-on-ink: var(--on-ink);
 
-  /* A step that is running: a mono caret that blinks. The system's only
-     "working" cue — never a spinner with a halo (see DESIGN.md). */
-  --animate-caret: caret 1.1s step-end infinite;
+  /* Radius — pinned by the class base-nova gives each component, not by the
+     shadcn name. Buttons are pills set in the component itself.
+       sm → inputs, small cards · md → menu items · lg → inputs, items
+       xl → cards, dialogs · 2xl → toasts, media cards · 4xl → filters */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 16px;
+  --radius-2xl: 22px;
+  --radius-3xl: 22px;
+  --radius-4xl: 30px;
 
-  @keyframes caret {
-    0%,
-    100% {
+  /* The sleeping robot's "z", drifting up and fading while the demo wakes. */
+  --animate-wake-z: wake-z 2.4s ease-out infinite;
+
+  @keyframes wake-z {
+    0% {
+      opacity: 0;
+      transform: translateY(1px);
+    }
+    25% {
       opacity: 1;
     }
-    50% {
+    100% {
       opacity: 0;
+      transform: translateY(-5px);
     }
   }
 }
 
-/* Elevation — hairline first. Only overlays lift, and only via the DESIGN.md's
-   single shadow token. `--shadow-xs` is transparent so inputs and outline
-   buttons stay flat instead of carrying a default drop shadow. */
+/* Elevation — flat. Only overlays lift, and with one soft shadow.
+   `--shadow-xs` is transparent so inputs and outline buttons stay flat. */
 @theme {
   --shadow-2xs: 0 0 #0000;
   --shadow-xs: 0 0 #0000;
-  --shadow-sm: 0 1px 0 var(--rule);
-  --shadow-md: 0 1px 0 var(--rule);
-  --shadow-lg: 0 1px 0 var(--rule), 0 8px 24px rgb(23 21 15 / 0.12);
-  --shadow-xl: 0 1px 0 var(--rule), 0 12px 32px rgb(23 21 15 / 0.14);
-  --shadow-2xl: 0 1px 0 var(--rule), 0 16px 40px rgb(23 21 15 / 0.16);
+  --shadow-sm: 0 1px 2px rgb(23 23 28 / 0.05);
+  --shadow-md: 0 2px 8px rgb(23 23 28 / 0.06);
+  --shadow-lg: 0 8px 24px rgb(23 23 28 / 0.1);
+  --shadow-xl: 0 16px 40px rgb(23 23 28 / 0.12);
+  --shadow-2xl: 0 24px 56px rgb(23 23 28 / 0.16);
 }
 
 :root {
   /* Height of the fixed header; content below it offsets by this much. */
   --header-height: 6rem;
 
-  /* Paper stock and the black plate. */
-  --paper: #f1ecdf;
-  --panel: #faf6ec;
-  --panel-sunken: #e3dbc8;
-  --ink: #17150f;
-  --ink-soft: #4c4739;
-  --ink-faint: #5f5a4c;
-  --on-ink: #faf6ec;
-  --rule: #cfc7b4;
-  --rule-strong: #a79e88;
+  /* Surfaces. */
+  --canvas: #ffffff;
+  --stone: #eeece7;
+  --stone-soft: #f7f6f2;
+  --wash-green: #edfce9;
+  --wash-blue: #f1f5ff;
 
-  /* Spot inks. One belongs to each surface — see DESIGN.md. */
-  --spot-primary: #ce2b6b;
-  --spot-primary-hover: #b0245c;
-  --on-spot: #ffffff;
-  --spot-secondary: #16695b;
-  --spot-accent: #d9a020;
-  --on-accent: #17150f;
+  /* Text and rules. */
+  --ink: #212121;
+  --ink-strong: #17171c;
+  --ink-muted: #6b6b7a;
+  --hairline: #d9d9dd;
+  --hairline-soft: #e5e7eb;
+
+  /* Accents. Coral is taxonomy; the link blue is navigation. */
+  --coral: #ff7759;
+  --coral-soft: #ffad9b;
+  --on-coral: #17171c;
+  --link: #1863dc;
+  --focus: #4c6ee6;
+
+  /* Bands. */
+  --band: #003c33;
+  --band-alt: #071829;
+  --band-foreground: #ffffff;
 
   /* Verdict triad — functional, never brand. */
-  --verdict-pass: #2c6a3a;
-  --verdict-pass-soft: #dee7d8;
-  --verdict-retry: #8a5a0c;
-  --verdict-retry-soft: #ede3cb;
-  --verdict-fail: #a03028;
-  --verdict-fail-soft: #eedad4;
+  --verdict-pass: #12684f;
+  --verdict-pass-soft: #e2f1ea;
+  --verdict-retry: #8a5c14;
+  --verdict-retry-soft: #f6ecd6;
+  --verdict-fail: #b30000;
+  --verdict-fail-soft: #f8e3e3;
 
   /* shadcn semantic layer, mapped from the tokens above. */
-  --background: var(--paper);
+  --background: var(--canvas);
   --foreground: var(--ink);
-  --card: var(--panel);
+  --card: var(--canvas);
   --card-foreground: var(--ink);
-  --popover: var(--panel);
+  --popover: var(--canvas);
   --popover-foreground: var(--ink);
-  --primary: var(--spot-primary);
-  --primary-foreground: var(--on-spot);
-  --secondary: var(--panel);
-  --secondary-foreground: var(--ink);
-  --muted: var(--panel-sunken);
-  --muted-foreground: var(--ink-soft);
-  --accent: var(--panel-sunken);
-  --accent-foreground: var(--ink);
+  --primary: var(--ink-strong);
+  --primary-foreground: #ffffff;
+  --secondary: var(--stone);
+  --secondary-foreground: var(--ink-strong);
+  --muted: var(--stone-soft);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--stone-soft);
+  --accent-foreground: var(--ink-strong);
   --destructive: var(--verdict-fail);
-  --border: var(--rule);
-  --input: var(--rule);
-  --ring: var(--ink);
-  --chart-1: var(--spot-primary);
-  --chart-2: var(--spot-secondary);
-  --chart-3: var(--spot-accent);
-  --chart-4: var(--ink-soft);
-  --chart-5: var(--rule-strong);
-  --sidebar: var(--panel);
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--focus);
+  --chart-1: var(--coral);
+  --chart-2: var(--link);
+  --chart-3: var(--band);
+  --chart-4: var(--ink-muted);
+  --chart-5: var(--band-alt);
+  --sidebar: var(--canvas);
   --sidebar-foreground: var(--ink);
-  --sidebar-primary: var(--spot-primary);
-  --sidebar-primary-foreground: var(--on-spot);
-  --sidebar-accent: var(--panel-sunken);
-  --sidebar-accent-foreground: var(--ink);
-  --sidebar-border: var(--rule);
-  --sidebar-ring: var(--ink);
+  --sidebar-primary: var(--ink-strong);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--stone-soft);
+  --sidebar-accent-foreground: var(--ink-strong);
+  --sidebar-border: var(--hairline);
+  --sidebar-ring: var(--focus);
+
+  /* Compatibility aliases — see the note on the same block in @theme inline. */
+  --paper: var(--stone);
+  --panel: var(--canvas);
+  --panel-sunken: var(--stone-soft);
+  --ink-soft: var(--ink-muted);
+  --ink-faint: var(--ink-muted);
+  --rule: var(--hairline);
+  --rule-strong: var(--hairline);
+  --on-ink: var(--band-foreground);
 }
 
-/* Dark — a tonal inversion, not a second palette. The ink becomes the paper and
-   the paper becomes the ink; the spot inks lift only enough to stay legible on
-   the dark ground, and the verdict triad lifts with them. Derived from the
-   black plate, so it is not authored in DESIGN.md's tokens. */
+/* Dark — a derived tonal inversion. Canvas becomes near-black, stone steps up,
+   ink inverts, hairlines go translucent, and the primary pill inverts to
+   white-on-dark. The bands stay green and navy; the accents lift one step. */
 .dark {
-  --paper: #17150f;
-  --panel: #201d15;
-  --panel-sunken: #100e09;
-  --ink: #f2ede1;
-  --ink-soft: #c6bfa9;
-  --ink-faint: #9a927e;
-  --on-ink: #17150f;
-  --rule: #38342b;
-  --rule-strong: #554f42;
+  --canvas: #0d0e11;
+  --stone: #17171c;
+  --stone-soft: #131318;
+  --wash-green: #10201c;
+  --wash-blue: #121726;
 
-  --spot-primary: #ce2b6b;
-  --spot-primary-hover: #e0447d;
-  --on-spot: #ffffff;
-  --spot-secondary: #369c82;
-  --spot-accent: #d9a020;
-  --on-accent: #17150f;
+  --ink: #f3f2ef;
+  --ink-strong: #f7f7f5;
+  --ink-muted: #a6a6b2;
+  --hairline: #2a2a31;
+  --hairline-soft: #22222a;
 
-  --verdict-pass: #4eaf6b;
-  --verdict-pass-soft: #1b2c20;
-  --verdict-retry: #c77a2a;
-  --verdict-retry-soft: #2d2113;
-  --verdict-fail: #e05c50;
-  --verdict-fail-soft: #2e1a18;
+  --coral: #ff8b72;
+  --coral-soft: #3b231c;
+  --on-coral: #17171c;
+  --link: #7ba7ff;
+  --focus: #8aa6ff;
 
-  --background: var(--paper);
+  --band: #074238;
+  --band-alt: #0b2033;
+  --band-foreground: #ffffff;
+
+  --verdict-pass: #4fbf95;
+  --verdict-pass-soft: #10241d;
+  --verdict-retry: #d9a441;
+  --verdict-retry-soft: #2a2113;
+  --verdict-fail: #ff6b6b;
+  --verdict-fail-soft: #33140f;
+
+  --background: var(--canvas);
   --foreground: var(--ink);
-  --card: var(--panel);
+  --card: var(--stone);
   --card-foreground: var(--ink);
-  --popover: var(--panel);
+  --popover: var(--stone);
   --popover-foreground: var(--ink);
-  --primary: var(--spot-primary);
-  --primary-foreground: var(--on-spot);
-  --secondary: var(--panel);
+  --primary: var(--ink-strong);
+  --primary-foreground: #17171c;
+  --secondary: var(--stone-soft);
   --secondary-foreground: var(--ink);
-  --muted: var(--panel-sunken);
-  --muted-foreground: var(--ink-soft);
-  --accent: var(--panel-sunken);
+  --muted: var(--stone-soft);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--stone-soft);
   --accent-foreground: var(--ink);
   --destructive: var(--verdict-fail);
-  --border: var(--rule);
-  --input: var(--rule);
-  --ring: var(--ink);
-  --chart-1: var(--spot-primary);
-  --chart-2: var(--spot-secondary);
-  --chart-3: var(--spot-accent);
-  --chart-4: var(--ink-soft);
-  --chart-5: var(--rule-strong);
-  --sidebar: var(--panel);
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--focus);
+  --chart-1: var(--coral);
+  --chart-2: var(--link);
+  --chart-3: var(--verdict-pass);
+  --chart-4: var(--ink-muted);
+  --chart-5: var(--band-alt);
+  --sidebar: var(--stone);
   --sidebar-foreground: var(--ink);
-  --sidebar-primary: var(--spot-primary);
-  --sidebar-primary-foreground: var(--on-spot);
-  --sidebar-accent: var(--panel-sunken);
+  --sidebar-primary: var(--ink-strong);
+  --sidebar-primary-foreground: #17171c;
+  --sidebar-accent: var(--stone-soft);
   --sidebar-accent-foreground: var(--ink);
-  --sidebar-border: var(--rule);
-  --sidebar-ring: var(--ink);
+  --sidebar-border: var(--hairline);
+  --sidebar-ring: var(--focus);
+
+  --paper: var(--stone);
+  --panel: var(--canvas);
+  --panel-sunken: var(--stone-soft);
+  --ink-soft: var(--ink-muted);
+  --ink-faint: var(--ink-muted);
+  --rule: var(--hairline);
+  --rule-strong: var(--hairline);
+  --on-ink: var(--band-foreground);
 }
 
 /* Type scale. These are `type-*` utilities rather than `--text-*` theme keys:
    inside `cn()` a `--text-*` key is treated as a color and silently dropped
-   when it sits next to `text-muted-foreground`. */
+   when it sits next to `text-muted-foreground`. The three-role split
+   (display / body / mono) is the system's voice; do not collapse it. */
 @utility type-display {
-  font-family: var(--font-sans);
-  font-size: 2.5rem;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+@utility type-display-sm {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 400;
   line-height: 1.05;
   letter-spacing: -0.02em;
 }
 
 @utility type-title {
   font-family: var(--font-sans);
-  font-size: 1.375rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 500;
   line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+@utility type-subtitle {
+  font-family: var(--font-sans);
+  font-size: 1.125rem;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 @utility type-body {
   font-family: var(--font-sans);
   font-size: 1rem;
   font-weight: 400;
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
 @utility type-body-sm {
   font-family: var(--font-sans);
   font-size: 0.875rem;
   font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.4;
+}
+
+@utility type-micro {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 @utility type-label {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: 0.06em;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
+@utility type-mono {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* Compatibility alias for screens using the previous token name. */
 @utility type-meta {
   font-family: var(--font-mono);
   font-size: 0.8125rem;
@@ -297,7 +376,7 @@
 @utility type-score {
   font-family: var(--font-mono);
   font-size: 1.75rem;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -316,12 +395,12 @@
     scrollbar-color: var(--border) transparent;
   }
   ::selection {
-    background-color: var(--spot-accent);
-    color: var(--on-accent);
+    background-color: var(--coral);
+    color: var(--on-coral);
   }
 }
 
-/* Focus — one treatment everywhere: a 2px ink outline at 2px offset. Unlayered
+/* Focus — one treatment everywhere: a 2px focus ring at 2px offset. Unlayered
    so it beats the `outline-none` that components set on themselves. Covers
    actions and field controls, because the system makes no distinction. */
 :is(

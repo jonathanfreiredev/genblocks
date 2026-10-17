@@ -1,6 +1,6 @@
-import type { ComponentProps } from "react"
+import type { ComponentProps } from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 // The judge's score: tabular mono numerals, right-aligned, over a hairline bar
 // that reads the value on the track. Data — not a donut, not a ring, not a gauge.
@@ -10,8 +10,8 @@ function ScoreReadout({
   max = 100,
   ...props
 }: Omit<ComponentProps<"div">, "children"> & { value: number; max?: number }) {
-  const clamped = Math.min(Math.max(value, 0), max)
-  const percent = (clamped / max) * 100
+  const clamped = Math.min(Math.max(value, 0), max);
+  const percent = (clamped / max) * 100;
 
   return (
     <div
@@ -26,15 +26,12 @@ function ScoreReadout({
         aria-valuenow={clamped}
         aria-valuemin={0}
         aria-valuemax={max}
-        className="block h-px w-16 bg-rule"
+        className="bg-hairline block h-px w-16"
       >
-        <span
-          className="block h-px bg-ink"
-          style={{ width: `${percent}%` }}
-        />
+        <span className="bg-ink block h-px" style={{ width: `${percent}%` }} />
       </span>
     </div>
-  )
+  );
 }
 
-export { ScoreReadout }
+export { ScoreReadout };

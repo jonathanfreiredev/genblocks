@@ -26,7 +26,9 @@ import { LoginForm } from "@/components/auth/login-form";
 const CREDENTIALS = { email: "user@example.com", password: "password123" };
 
 beforeEach(() => {
-  vi.mocked(loginAction).mockResolvedValue({ data: { success: true } } as never);
+  vi.mocked(loginAction).mockResolvedValue({
+    data: { success: true },
+  } as never);
 });
 
 function submitCredentials() {
