@@ -15,13 +15,15 @@ import type { Category } from "@/lib/vault/types";
 export function VaultRail({
   view,
   types,
+  signedIn,
 }: {
   view: CatalogueView;
   types: Category[];
+  signedIn: boolean;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-6 lg:self-start">
-      <GenerateDialog />
+      <GenerateDialog signedIn={signedIn} />
 
       <KindNav view={view} />
 

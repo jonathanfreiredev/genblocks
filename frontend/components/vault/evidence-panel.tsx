@@ -66,7 +66,9 @@ export function EvidencePanel({
         )}
 
         <p className="type-meta text-ink-faint">
-          {judged.model ?? "Unknown model"}
+          {/* "Unknown" would read as a gap in the record. A null model is not
+              unknown — it is a fact: nothing generated this one. */}
+          {judged.model ?? "No model ran"}
           {judged.rubricVersion ? ` · ${judged.rubricVersion}` : null}
         </p>
       </div>

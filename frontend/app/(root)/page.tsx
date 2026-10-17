@@ -45,6 +45,7 @@ import type {
   Image,
   Kind,
 } from "@/lib/vault/types";
+import { getSession } from "@/server/auth/auth.lib";
 
 export const metadata: Metadata = {
   title: "The vault",
@@ -242,6 +243,8 @@ export default async function VaultPage({
 }) {
   const request = parseCatalogue(await searchParams);
   const copy = COPY[request.kind];
+  // Cached per request, so the layout's own call rides along with this one.
+  const session = await getSession();
 
   let categories: Category[] = [];
   let catalogue: Catalogue | null = null;
@@ -307,7 +310,7 @@ export default async function VaultPage({
   return (
     <div className="mx-auto w-full max-w-[1280px] px-6 pt-[calc(var(--header-height)+2.5rem)] pb-24">
       <div className="grid gap-10 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-12">
-        <VaultRail view={request} types={types} />
+        <VaultRail view={request} types={types} signedIn={session !== null} />
 
         <div className="flex min-w-0 flex-col gap-8">
           <header className="flex flex-col gap-6">

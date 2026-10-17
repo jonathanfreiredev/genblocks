@@ -86,6 +86,14 @@ describe("EvidencePanel", () => {
     expect(screen.getByText("Not recorded")).toBeInTheDocument();
   });
 
+  test("says when no model ran, rather than calling it unknown", () => {
+    render(
+      <EvidencePanel kind="component" judged={{ ...JUDGED, model: null }} />,
+    );
+
+    expect(screen.getByText(/No model ran/)).toBeInTheDocument();
+  });
+
   test("says an attempt has not been judged yet", () => {
     render(
       <EvidencePanel
