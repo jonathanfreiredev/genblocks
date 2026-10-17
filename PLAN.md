@@ -114,6 +114,20 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     vez. El código de los bloques sembrados usa **Tailwind genérico**: una pieza
     del vault se copia a cualquier proyecto, y con nuestros tokens
     (`bg-paper`, `bg-spot-primary`) solo renderizaría aquí.
+25. **Las tools del agente son las de la puerta MCP, sin el transporte**: el
+    agente conversacional vive en el backend (decisión 4) y llama a los **mismos
+    servicios** con los **mismos nombres** (`search_components`,
+    `create_component`), pero **in-process**, no como cliente de nuestro propio
+    servidor MCP. La decisión 2 ya dice que una tool es un adaptador delgado
+    sobre el servicio: un salto de red a casa añadiría un hop, un token de más y
+    el esquema en un segundo sitio, sin cambiar qué se ejecuta. El MCP se queda
+    como la puerta de los agentes externos. El llamante se ata **al construir**
+    las tools, una vez por conversación, así que ningún argumento puede cambiar
+    de dueño.
+26. **La conversación se pinta con los primitivos de shadcn** (`Message`,
+    `Bubble`) y el scroll-follow se escribe aquí. `message-scroller` arrastra
+    `@shadcn/react` y un import del repo de shadcn, y lo que aporta —seguir el
+    final mientras llega el stream— son unas líneas propias.
 
 ---
 
