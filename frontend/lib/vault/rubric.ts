@@ -50,40 +50,17 @@ export function scoresFor(
 }
 
 /**
- * The dimension that decided the verdict.
+ * The stamp a verdict wears; `null` while nobody has judged the run.
  *
- * Every dimension has its own threshold, so the mean hides the number that
- * mattered; the weakest one is what the ledger row is worth reading.
+ * A rejection is a failure rather than a "retry": there is no second attempt to
+ * offer, so the two states are the two outcomes.
  */
-export function weakestDimension(
-  scores: Record<string, number> | null,
-): ScoredDimension | null {
-  if (!scores) {
-    return null;
-  }
-
-  const entries = [...COMPONENT_RUBRIC, ...IMAGE_RUBRIC].filter(
-    (dimension) => typeof scores[dimension.key] === "number",
-  );
-
-  if (entries.length === 0) {
-    return null;
-  }
-
-  const lowest = entries.reduce((worst, dimension) =>
-    scores[dimension.key] < scores[worst.key] ? dimension : worst,
-  );
-
-  return { dimension: lowest, value: scores[lowest.key] };
-}
-
-/** The stamp a verdict wears; `null` while nobody has judged the attempt. */
-const STAMPS: Record<Verdict, "pass" | "retry" | "fail" | null> = {
+const STAMPS: Record<Verdict, "pass" | "fail" | null> = {
   published: "pass",
   rejected: "fail",
   candidate: null,
 };
 
-export function stampFor(verdict: Verdict): "pass" | "retry" | "fail" | null {
+export function stampFor(verdict: Verdict): "pass" | "fail" | null {
   return STAMPS[verdict];
 }

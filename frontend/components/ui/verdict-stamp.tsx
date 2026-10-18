@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 
 const VERDICT_LABELS = {
   pass: "PASS",
-  retry: "RETRY",
   fail: "REJECTED",
 } as const;
 
@@ -15,8 +14,6 @@ const verdictStampVariants = cva(
     variants: {
       verdict: {
         pass: "border-verdict-pass/40 bg-verdict-pass-soft text-verdict-pass",
-        retry:
-          "border-verdict-retry/40 bg-verdict-retry-soft text-verdict-retry",
         fail: "border-verdict-fail/40 bg-verdict-fail-soft text-verdict-fail",
       },
     },
@@ -28,7 +25,8 @@ const verdictStampVariants = cva(
 
 // The judge's verdict as a rubber stamp: uppercase mono, hairline border, soft
 // tint. Never a pill, never an icon, and never one of the brand spot inks — the
-// triad is functional, so a rejection can't be mistaken for an action.
+// pair is functional, so a rejection can't be mistaken for an action. There is no
+// third stamp: a block is published or it is not, and there is no retry to draw.
 function VerdictStamp({
   className,
   verdict,

@@ -51,24 +51,9 @@ test("an item opens with its code and its evidence", async ({ page }) => {
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
   await expect(dialog.getByRole("tab", { name: "Code" })).toBeVisible();
-  await expect(dialog.getByText(/Attempt № \d+ of \d+/)).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(page).not.toHaveURL(/item=/);
-});
-
-test("the ledger walks the attempt history", async ({ page }) => {
-  // Found by searching rather than by being first: the seeded block is nobody's
-  // newest any more, and the attempt history it carries is what this walks. The
-  // query goes in the URL, since typing waits on a debounce that a test should
-  // not have to race.
-  await page.goto("/?q=Tiered%20pricing");
-  await page.locator('[data-slot="item-cell"] a').first().click();
-
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: /show attempt 1/ }).click();
-
-  await expect(dialog.getByText("Attempt № 1 of 2")).toBeVisible();
 });
 
 test("images wait for their asset rather than breaking", async ({ page }) => {

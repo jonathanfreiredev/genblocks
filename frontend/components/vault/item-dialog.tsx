@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 
 import { CopyButton } from "@/components/copy-button";
 import { AssetPlate } from "@/components/vault/asset-plate";
-import { EvidencePanel, type Judged } from "@/components/vault/evidence-panel";
+import { EvidencePanel } from "@/components/vault/evidence-panel";
 import {
   Dialog,
   DialogContent,
@@ -14,15 +14,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { dimensions, formatDate, formatTime } from "@/lib/vault/format";
-import type { Component, Generation, Image } from "@/lib/vault/types";
 import { cn } from "@/lib/utils";
+import { dimensions, formatDate } from "@/lib/vault/format";
+import { judgedFrom } from "@/lib/vault/judged";
+import type { Component, Generation, Image } from "@/lib/vault/types";
 
 /**
  * The item view: the specimen on the left, the evidence on the right.
  *
  * The dialog is not local state — it is a query parameter, so a link to an item
  * exists, Back closes it, and the page around it is server-rendered either way.
+ *
+ * The evidence column is a third of the dialog and not half of it: a task makes
+ * one artifact now, so there is no history to walk beside the numbers, and the
+ * specimen is where the room should go.
  */
 function Shell({
   title,
@@ -61,7 +66,7 @@ function Shell({
           ) : null}
         </DialogHeader>
 
-        <div className="grid max-h-[72svh] overflow-y-auto lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <div className="grid max-h-[72svh] overflow-y-auto lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="border-rule bg-paper flex min-w-0 flex-col border-b lg:border-r lg:border-b-0">
             {specimen}
           </div>
@@ -69,29 +74,6 @@ function Shell({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function AttemptCaption({
-  attemptNo,
-  total,
-  createdAt,
-}: {
-  attemptNo: number | null;
-  total: number;
-  createdAt: string;
-}) {
-  return (
-    <div className="type-label text-ink-faint flex items-baseline justify-between gap-4 px-5 py-3">
-      <span>
-        {attemptNo === null
-          ? "Published"
-          : `Attempt № ${attemptNo} of ${total}`}
-      </span>
-      <span className="tabular-nums">
-        {formatDate(createdAt)} {formatTime(createdAt)}
-      </span>
-    </div>
   );
 }
 
@@ -104,8 +86,8 @@ function AttemptCaption({
  */
 const IMPLIED_INSTALLS = new Set(["react", "react-dom"]);
 
-/** The files of a project, as a strip a reader can walk file by file. */
-function FileStrip({
+/** The files of a project, as a rail a reader can walk file by file. */
+function FileRail({
   paths,
   chosen,
   onChoose,
@@ -115,16 +97,17 @@ function FileStrip({
   onChoose: (path: string) => void;
 }) {
   return (
-    <div className="border-rule bg-panel-sunken flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b px-5 py-2">
-      <span className="type-label text-ink-faint">Files</span>
+    <div className="border-rule bg-panel-sunken flex shrink-0 flex-wrap gap-x-4 gap-y-1 border-b px-4 py-3 lg:w-52 lg:flex-col lg:flex-nowrap lg:gap-y-1.5 lg:border-r lg:border-b-0">
+      <span className="type-label text-ink-faint lg:mb-1">Files</span>
       {paths.map((path) => (
         <button
           key={path}
           type="button"
           onClick={() => onChoose(path)}
           aria-pressed={path === chosen}
+          title={path}
           className={cn(
-            "type-code cursor-pointer",
+            "type-code max-w-full cursor-pointer truncate text-left",
             path === chosen ? "text-ink" : "text-ink-faint hover:text-ink",
           )}
         >
@@ -164,12 +147,11 @@ function InstallLine({
 }
 
 /**
- * A block, with its whole attempt history.
+ * A block, and the run that made it.
  *
- * The code on screen belongs to the attempt selected in the ledger, so the
- * rejected first pass is readable beside the number that rejected it. That
- * contrast is the product's argument; hiding it behind a filter would be a
- * decision against the thing being sold.
+ * A task produces one artifact, so there is no history to walk: the code pane
+ * reads the project that run left, file by file, and the panel beside it carries
+ * the numbers that run earned.
  */
 export function ComponentDialog({
   component,
@@ -182,34 +164,25 @@ export function ComponentDialog({
   typeName: string;
   closeHref: string;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(
-    component.winning_generation_id ?? generations.at(-1)?.id ?? null,
-  );
   const [tab, setTab] = useState("code");
   const [file, setFile] = useState<string | null>(null);
 
-  const selected =
-    generations.find((generation) => generation.id === selectedId) ?? null;
+  // One artifact per task: the one the block was published from, and the newest
+  // if a run ever makes more than one.
+  const generation =
+    generations.find((one) => one.id === component.winning_generation_id) ??
+    generations.at(-1) ??
+    null;
 
-  // The project the attempt produced, when there is one. A block is a project
-  // now, so the pane reads one file of it at a time and says which; an attempt
-  // (or a seeded block) with no files is still one file, and still readable.
-  const files = selected?.files ?? component.files;
+  // A block is a project, so the pane reads one file of it at a time and says
+  // which; a seeded block, which has no files, is still one file and still reads.
+  const files = generation?.files ?? component.files;
   const paths = files ? Object.keys(files).sort() : [];
   const shown = file !== null && paths.includes(file) ? file : paths[0];
   const code =
     shown !== undefined
       ? (files?.[shown] ?? "")
-      : (selected?.code ?? component.code);
-
-  const judged: Judged = {
-    scores: selected?.scores ?? null,
-    verdict: selected?.verdict ?? "candidate",
-    rubricVersion: selected?.rubric_version ?? null,
-    model: selected?.model ?? null,
-    traceId: selected?.langfuse_trace_id ?? null,
-    checks: selected?.checks ?? null,
-  };
+      : (generation?.code ?? component.code);
 
   return (
     <Shell
@@ -230,46 +203,45 @@ export function ComponentDialog({
               <TabsTrigger value="prompt">Delivery prompt</TabsTrigger>
             </TabsList>
 
-            <CopyButton
-              text={tab === "prompt" ? component.delivery_prompt : code}
-              idleLabel={
-                tab === "prompt" ? "Copy the delivery prompt" : "Copy the code"
-              }
-            />
+            {tab === "prompt" ? (
+              <CopyButton
+                text={component.delivery_prompt}
+                idleLabel="Copy the delivery prompt"
+              />
+            ) : null}
+            {tab === "code" ? (
+              <CopyButton
+                text={code}
+                idleLabel={
+                  shown !== undefined ? `Copy ${shown}` : "Copy the code"
+                }
+              />
+            ) : null}
           </div>
 
           <TabsContent value="code" className="p-0">
-            <AttemptCaption
-              attemptNo={selected?.attempt_no ?? null}
-              total={generations.length}
-              createdAt={selected?.created_at ?? component.created_at}
-            />
-            {shown !== undefined ? (
-              <FileStrip paths={paths} chosen={shown} onChoose={setFile} />
-            ) : null}
-            <pre className="type-code bg-ink text-on-ink overflow-x-auto p-5">
-              {code}
-            </pre>
+            <div className="flex flex-col lg:flex-row">
+              {shown !== undefined ? (
+                <FileRail paths={paths} chosen={shown} onChoose={setFile} />
+              ) : null}
+              <pre className="type-code bg-ink text-on-ink min-w-0 flex-1 overflow-x-auto p-5">
+                {code}
+              </pre>
+            </div>
             <InstallLine dependencies={component.dependencies} />
           </TabsContent>
 
           <TabsContent value="render" className="p-0">
-            <AttemptCaption
-              attemptNo={selected?.attempt_no ?? null}
-              total={generations.length}
-              createdAt={selected?.created_at ?? component.created_at}
-            />
-            {/* The render of the attempt selected in the ledger, which is the
-                same history the code pane shows. A run that never got as far as
-                a page says so rather than showing an empty frame. */}
+            {/* The render that run produced. A run that never got as far as a page
+                says so rather than showing an empty frame. */}
             <AssetPlate
-              path={selected?.screenshot_path ?? ""}
+              path={generation?.screenshot_path ?? ""}
               alt={`The rendered block: ${component.title}`}
-              sizes="(min-width: 1024px) 620px, 100vw"
+              sizes="(min-width: 1024px) 680px, 100vw"
               caption={
-                selected?.screenshot_path
-                  ? (selected.model ?? "Model not recorded")
-                  : "No render was taken for this attempt."
+                generation?.screenshot_path
+                  ? (generation.model ?? "Model not recorded")
+                  : "No render was taken for this run."
               }
               className="aspect-[16/10]"
             />
@@ -283,19 +255,7 @@ export function ComponentDialog({
         </Tabs>
       }
       evidence={
-        <EvidencePanel
-          kind="component"
-          judged={judged}
-          attempts={generations}
-          selectedAttempt={selected?.attempt_no}
-          onSelectAttempt={(attempt) =>
-            setSelectedId(
-              generations.find(
-                (generation) => generation.attempt_no === attempt,
-              )?.id ?? null,
-            )
-          }
-        />
+        <EvidencePanel kind="component" judged={judgedFrom(generation)} />
       }
     />
   );
@@ -313,9 +273,9 @@ function RecipeRow({ label, value }: { label: string; value: string }) {
 /**
  * A stock image.
  *
- * An image carries its scores directly instead of an attempt history, because a
- * standalone image is its own judged artifact. Its verdict is not stored either:
- * the library only holds pieces that passed, so a scored row is a published one.
+ * An image carries its scores directly instead of a producing task, because it is
+ * its own judged artifact. Its verdict is not stored either: the library only
+ * holds pieces that passed, so a scored row is a published one.
  */
 export function ImageDialog({
   image,
@@ -341,7 +301,7 @@ export function ImageDialog({
           <AssetPlate
             path={image.path}
             alt={image.prompt}
-            sizes="(min-width: 1024px) 620px, 100vw"
+            sizes="(min-width: 1024px) 680px, 100vw"
             caption={dimensions(image.width, image.height)}
             className="border-rule aspect-[3/2] border"
           />
@@ -366,7 +326,6 @@ export function ImageDialog({
             rubricVersion: image.rubric_version,
             model: image.model,
             traceId: image.langfuse_trace_id,
-            // An image is scored as it enters the library: nothing sandboxes it.
             checks: null,
           }}
         />

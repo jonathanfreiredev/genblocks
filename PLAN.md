@@ -179,6 +179,12 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     publicación, que baja de sitio, para que el orden siga siendo el orden. Un
     intento tumbado queda `rejected` —por el sandbox o por el juez—; `candidate`
     es solo lo que nadie ha tumbado todavía.
+    → *Con la puerta de la Fase 9 hay **un artefacto por tarea**: la fila sigue
+    siendo donde vive lo que esa corrida produjo —código, checks, render y scores,
+    que es lo único que deja legible un rechazo—, pero ya no hay lista que recorrer
+    y el frontend no la enseña: se ve **el resultado**, no un historial. El
+    `attempt_no` se queda en 1 y su índice único es lo que garantiza "una tarea, un
+    artefacto".*
     → *La Fase 9 sustituye el bucle exterior por el del harness (decisiones 30–32).
     Se quedan la puerta, la calibración y el motivo del rechazo.*
 30. **El harness es un bucle acotado, con el sandbox como ojos.** El paso de generar
@@ -196,12 +202,14 @@ Supabase Auth, Postgres, multi-tenancy por organización).
       modelo.
 31. **El juez es la puerta, no el volante.** Una corrida del juez, al final de todo.
     Si el artefacto no pasa el listón, la tarea falla con el motivo delante
-    (dimensión, número y la frase del juez) y el intento se queda **visible en la
+    (dimensión, número y la frase del juez) y el artefacto se queda **visible en la
     tarea**, fuera de la biblioteca: **la biblioteca solo contiene piezas que
     pasaron su listón**, y eso es un invariante del producto, no una promesa.
-    Reintentar es una decisión humana —`POST /v1/tasks`, que ya existe, con el brief
-    editable delante— y `max_attempts` se queda en 1 como ajuste, para poder medir
-    la política contraria con datos.
+    Reintentar es una decisión humana, con el brief delante — **y por ahora no se
+    ofrece desde la interfaz**: la puerta y el endpoint están (`POST /v1/tasks`, el
+    mismo encolar que usa todo lo demás), el botón no. El bucle de reintento del
+    pipeline se retiró con la Fase 9 (`max_attempts` incluido): el único bucle es el
+    de dentro del harness.
 32. **Vueltas contadas, no guardadas.** El tope de iteraciones es un ajuste
     (`harness_max_iterations`) y **el número sale de medirlo**, no de la prudencia:
     se arranca alto, se mira la distribución real y si la vuelta n mejora el score.
@@ -873,6 +881,9 @@ Los **mandos del bucle** no hacen falta en `.env`: tienen valores por defecto en
 - **El brief como entidad duradera**: hoy reintentar crea otra tarea y el historial
   del item es el de la tarea que publicó (`parent_task_id` o una tabla `briefs` es
   lo que lo cambiaría). Se decide con uso.
+- **Reintentar desde la interfaz**: la política y el endpoint están
+  (`POST /v1/tasks`); el botón en la tarea fallida —con el brief delante y el
+  motivo del juez al lado, sin meterlo dentro del brief— no se ofrece por ahora.
 - `tw-animate-css` en el scaffold, y si el motion merece **dimensión propia** en la
   rúbrica (hoy va dentro de `visual`).
 - **Dependencias fuera de la lista blanca**, declaradas por el propio bloque:

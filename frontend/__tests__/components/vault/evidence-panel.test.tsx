@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, test } from "vitest";
 
-import { EvidencePanel, type Judged } from "@/components/vault/evidence-panel";
-import type { Generation, HarnessChecks } from "@/lib/vault/types";
+import { EvidencePanel } from "@/components/vault/evidence-panel";
+import type { Judged } from "@/lib/vault/judged";
+import type { HarnessChecks } from "@/lib/vault/types";
 
 const SCORES = {
   render: 96,
@@ -55,48 +56,6 @@ const FOUND: HarnessChecks = {
   ],
 };
 
-function attempt(overrides: Partial<Generation>): Generation {
-  return {
-    id: "attempt",
-    task_id: null,
-    component_id: "component",
-    attempt_no: 1,
-    code: "export function Block() { return null }",
-    files: null,
-    screenshot_path: null,
-    checks: null,
-    scores: null,
-    verdict: "candidate",
-    rubric_version: "seed-v0",
-    model: "gpt-6-luna",
-    langfuse_trace_id: null,
-    created_at: "2026-10-14T09:12:00Z",
-    ...overrides,
-  };
-}
-
-const ATTEMPTS = [
-  attempt({
-    id: "first",
-    attempt_no: 1,
-    verdict: "rejected",
-    scores: {
-      render: 92,
-      accessibility: 88,
-      visual: 54,
-      copy: 41,
-      novelty: 33,
-      compliance: 79,
-    },
-  }),
-  attempt({
-    id: "second",
-    attempt_no: 2,
-    verdict: "published",
-    scores: SCORES,
-  }),
-];
-
 describe("EvidencePanel", () => {
   test("prints every dimension the judge scored", () => {
     render(<EvidencePanel kind="component" judged={JUDGED} />);
@@ -130,7 +89,7 @@ describe("EvidencePanel", () => {
     expect(screen.getByText(/No model ran/)).toBeInTheDocument();
   });
 
-  test("says an attempt has not been judged yet", () => {
+  test("says a run has not been judged yet", () => {
     render(
       <EvidencePanel
         kind="component"
@@ -147,35 +106,6 @@ describe("EvidencePanel", () => {
 
     expect(screen.getByText("Not judged")).toBeInTheDocument();
     expect(screen.getByText(/No scores yet/)).toBeInTheDocument();
-  });
-
-  test("reads the history by each attempt's weakest dimension", () => {
-    render(
-      <EvidencePanel kind="component" judged={JUDGED} attempts={ATTEMPTS} />,
-    );
-
-    expect(screen.getByText("REJECTED")).toBeInTheDocument();
-    expect(screen.getByText("33")).toBeInTheDocument();
-    // Once as a rubric row, once beside the number it decided.
-    expect(screen.getAllByText("Novelty")).toHaveLength(2);
-  });
-
-  test("hands the chosen attempt back to its caller", () => {
-    const onSelectAttempt = vi.fn();
-
-    render(
-      <EvidencePanel
-        kind="component"
-        judged={JUDGED}
-        attempts={ATTEMPTS}
-        selectedAttempt={2}
-        onSelectAttempt={onSelectAttempt}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /show attempt 1/ }));
-
-    expect(onSelectAttempt).toHaveBeenCalledWith(1);
   });
 
   test("shows an image's three dimensions and none of the block's", () => {

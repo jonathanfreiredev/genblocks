@@ -1,11 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import {
-  rubricFor,
-  scoresFor,
-  stampFor,
-  weakestDimension,
-} from "@/lib/vault/rubric";
+import { rubricFor, scoresFor, stampFor } from "@/lib/vault/rubric";
 
 describe("rubricFor", () => {
   test("a block is judged on six dimensions, an image on three", () => {
@@ -42,40 +37,13 @@ describe("scoresFor", () => {
   });
 });
 
-describe("weakestDimension", () => {
-  test("names the number that decided the verdict", () => {
-    const weakest = weakestDimension({
-      render: 92,
-      accessibility: 88,
-      visual: 54,
-      copy: 41,
-      novelty: 33,
-      compliance: 79,
-    });
-
-    expect(weakest?.dimension).toEqual({ key: "novelty", label: "Novelty" });
-    expect(weakest?.value).toBe(33);
-  });
-
-  test("reads a dimension that only the images rubric has", () => {
-    const weakest = weakestDimension({ visual: 90, prompt_fit: 84 });
-
-    expect(weakest?.dimension.label).toBe("Prompt fit");
-    expect(weakest?.value).toBe(84);
-  });
-
-  test("has nothing to name without scores", () => {
-    expect(weakestDimension(null)).toBeNull();
-  });
-});
-
 describe("stampFor", () => {
   test("maps the artifact's fate onto the verdict stamp", () => {
     expect(stampFor("published")).toBe("pass");
     expect(stampFor("rejected")).toBe("fail");
   });
 
-  test("leaves an unjudged attempt without a stamp", () => {
+  test("leaves an unjudged run without a stamp", () => {
     expect(stampFor("candidate")).toBeNull();
   });
 });

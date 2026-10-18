@@ -20,14 +20,15 @@ const COMPONENT: Component = {
   dependencies: null,
   delivery_prompt: "A newsletter band",
   spec: null,
-  winning_generation_id: "second",
+  winning_generation_id: "run",
   created_by: null,
   license: "MIT",
 };
 
-function attempt(overrides: Partial<Generation>): Generation {
+/** The one artifact a task produces, as the panel and the panes read it. */
+function run(overrides: Partial<Generation>): Generation {
   return {
-    id: "attempt",
+    id: "run",
     task_id: "task",
     component_id: "component",
     attempt_no: 1,
@@ -37,7 +38,7 @@ function attempt(overrides: Partial<Generation>): Generation {
     checks: null,
     scores: null,
     verdict: "published",
-    rubric_version: "canned-v1",
+    rubric_version: "components-1a2b3c4d",
     model: "gpt-6-luna",
     langfuse_trace_id: null,
     created_at: "2026-10-17T09:12:00Z",
@@ -45,21 +46,16 @@ function attempt(overrides: Partial<Generation>): Generation {
   };
 }
 
-const GENERATIONS = [
-  attempt({ id: "first", attempt_no: 1, screenshot_path: null }),
-  attempt({
-    id: "second",
-    attempt_no: 2,
-    screenshot_path: "genblocks/screenshots/0123456789ab-2",
-  }),
+const RENDERED = [
+  run({ screenshot_path: "genblocks/screenshots/0123456789ab-1" }),
 ];
 
 describe("ComponentDialog", () => {
-  test("shows the render of the attempt the ledger has selected", () => {
+  test("shows the render of the run that made it", () => {
     render(
       <ComponentDialog
         component={COMPONENT}
-        generations={GENERATIONS}
+        generations={RENDERED}
         typeName="Hero"
         closeHref="/"
       />,
@@ -67,19 +63,21 @@ describe("ComponentDialog", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Render" }));
 
-    // The winning attempt is the one selected, and it has a render: the plate
-    // carries the block's name, and the caption names what made it.
-    expect(screen.getByText(/Attempt № 2 of 2/)).toBeInTheDocument();
+    // The plate carries the block's name, and the panel beside it names what made
+    // the run and which rubric scored it.
     expect(
       screen.getByAltText("The rendered block: Newsletter band"),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("gpt-6-luna · components-1a2b3c4d"),
+    ).toBeInTheDocument();
   });
 
-  test("says an attempt has no render rather than drawing an empty frame", () => {
+  test("says a run has no render rather than drawing an empty frame", () => {
     render(
       <ComponentDialog
         component={COMPONENT}
-        generations={[GENERATIONS[0]]}
+        generations={[run({})]}
         typeName="Hero"
         closeHref="/"
       />,
@@ -89,7 +87,7 @@ describe("ComponentDialog", () => {
 
     expect(screen.getByText("Awaiting asset")).toBeInTheDocument();
     expect(
-      screen.getByText("No render was taken for this attempt."),
+      screen.getByText("No render was taken for this run."),
     ).toBeInTheDocument();
   });
 
@@ -97,7 +95,7 @@ describe("ComponentDialog", () => {
     render(
       <ComponentDialog
         component={COMPONENT}
-        generations={GENERATIONS}
+        generations={RENDERED}
         typeName="Hero"
         closeHref="/"
       />,
@@ -124,7 +122,7 @@ describe("ComponentDialog", () => {
     render(
       <ComponentDialog
         component={block}
-        generations={GENERATIONS}
+        generations={RENDERED}
         typeName="Hero"
         closeHref="/"
       />,
@@ -157,7 +155,7 @@ describe("ComponentDialog", () => {
     const { unmount } = render(
       <ComponentDialog
         component={block}
-        generations={GENERATIONS}
+        generations={RENDERED}
         typeName="Hero"
         closeHref="/"
       />,
@@ -172,7 +170,7 @@ describe("ComponentDialog", () => {
     render(
       <ComponentDialog
         component={COMPONENT}
-        generations={GENERATIONS}
+        generations={RENDERED}
         typeName="Hero"
         closeHref="/"
       />,

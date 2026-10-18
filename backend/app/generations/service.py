@@ -1,4 +1,4 @@
-"""Read side of a block's attempt history."""
+"""Read side of what a task produced."""
 
 import uuid
 from collections.abc import Sequence
@@ -15,16 +15,12 @@ async def list_generations(
     component_id: uuid.UUID | None = None,
     task_id: uuid.UUID | None = None,
 ) -> Sequence[Generation]:
-    """Return attempts, oldest first.
+    """Return what a task produced, oldest first.
 
-    By ``task_id`` while a task runs (the attempts have no component yet), or by
-    ``component_id`` once it is published, to show an item's whole history.
-
-    Ordered by ``created_at`` before ``attempt_no``: a block can have more than
-    one producing task, and attempt numbers restart at one per task, so ordering
-    by the number alone would interleave two tasks' attempts. The timestamp puts
-    them back in the order they were made; the number breaks ties within a task
-    (seeded attempts are written in one transaction and share a timestamp).
+    By ``task_id`` while a task runs (the artifact has no component yet), or by
+    ``component_id`` once it is published. A list for one row, because the shape
+    of the table is what a run makes — one artifact today, and the same call if a
+    run ever makes several.
     """
     statement = select(Generation).where(Generation.deleted_at.is_(None))
 

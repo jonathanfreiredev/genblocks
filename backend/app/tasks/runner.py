@@ -234,6 +234,8 @@ async def _build(
     stored = await _store(found, task=task)
     attempt = Generation(
         task_id=task.id,
+        # One artifact per run: the number is the invariant the table enforces
+        # rather than a counter of tries.
         attempt_no=1,
         # The entry file, as well as the whole project: everything that read an
         # attempt's code before there were projects keeps working.
@@ -439,8 +441,8 @@ async def _publish(
     session.add(component)
     await session.flush()
 
-    # Every attempt of the task points at the block, not only the winner, so the
-    # item can show its whole history after publication (PLAN.md, decision 21).
+    # Every attempt of the task points at the block — one row, and the shape is
+    # the same whether a run makes one artifact or several (PLAN.md, decision 21).
     for also in await list_generations(session, task_id=task.id):
         also.component_id = component.id
 

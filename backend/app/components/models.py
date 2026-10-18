@@ -38,7 +38,8 @@ class Component(BaseModel):
     # migration.
     spec: Mapped[dict | None] = mapped_column(JSONB)
     # The attempt that was published. Created after ``generations`` exists,
-    # because the two tables point at each other (``use_alter``).
+    # because the two tables point at each other (``use_alter``). With one artifact
+    # per task this is simply "the run this block came from".
     winning_generation_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("generations.id", ondelete="SET NULL", use_alter=True), index=True
     )

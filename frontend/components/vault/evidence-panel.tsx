@@ -1,30 +1,13 @@
 "use client";
 
 import { CopyButton } from "@/components/copy-button";
-import { AttemptLedger } from "@/components/ui/attempt-ledger";
 import { ScoreReadout } from "@/components/ui/score-readout";
 import { VerdictStamp } from "@/components/ui/verdict-stamp";
 import { cn } from "@/lib/utils";
-import { attemptRows } from "@/lib/vault/attempts";
 import { checkRows } from "@/lib/vault/checks";
+import type { Judged } from "@/lib/vault/judged";
 import { scoresFor, stampFor } from "@/lib/vault/rubric";
-import type {
-  Generation,
-  HarnessChecks,
-  Kind,
-  Verdict,
-} from "@/lib/vault/types";
-
-/** What one judged artifact says about itself. */
-export interface Judged {
-  scores: Record<string, number> | null;
-  verdict: Verdict;
-  rubricVersion: string | null;
-  model: string | null;
-  traceId: string | null;
-  /** What the sandbox found, when the artifact came out of one. */
-  checks: HarnessChecks | null;
-}
+import type { Kind } from "@/lib/vault/types";
 
 function Group({
   label,
@@ -51,16 +34,9 @@ function Group({
 export function EvidencePanel({
   kind,
   judged,
-  attempts,
-  selectedAttempt,
-  onSelectAttempt,
 }: {
   kind: Kind;
   judged: Judged;
-  /** The attempts, oldest first. */
-  attempts?: Generation[];
-  selectedAttempt?: number;
-  onSelectAttempt?: (attempt: number) => void;
 }) {
   const stamp = stampFor(judged.verdict);
   const rows = scoresFor(kind, judged.scores);
@@ -155,18 +131,6 @@ export function EvidencePanel({
               ))}
             </ul>
           ) : null}
-        </Group>
-      ) : null}
-
-      {attempts && attempts.length > 0 ? (
-        <Group label="Attempts">
-          <AttemptLedger
-            className="mt-3"
-            attempts={attemptRows(attempts)}
-            scoreHeading="Lowest"
-            selectedAttempt={selectedAttempt}
-            onSelectAttempt={onSelectAttempt}
-          />
         </Group>
       ) : null}
     </div>

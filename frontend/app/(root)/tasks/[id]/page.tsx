@@ -4,20 +4,21 @@ import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AttemptLedger } from "@/components/ui/attempt-ledger";
 import { Button } from "@/components/ui/button";
+import { AssetPlate } from "@/components/vault/asset-plate";
+import { EvidencePanel } from "@/components/vault/evidence-panel";
 import { StatusWord } from "@/components/vault/status-word";
 import { TaskChecklist } from "@/components/vault/task-checklist";
 import { getSession } from "@/server/auth/auth.lib";
 import { VaultUnreadable, getTask } from "@/lib/vault/api";
-import { attemptRows } from "@/lib/vault/attempts";
 import { formatDate, formatTime } from "@/lib/vault/format";
+import { judgedFrom } from "@/lib/vault/judged";
 import { TASK_STATUS_LABELS } from "@/lib/vault/task-status";
 import type { TaskDetail } from "@/lib/vault/types";
 
 export const metadata: Metadata = {
   title: "Task",
-  description: "One task's checklist and the attempts it has produced.",
+  description: "One task's checklist and the result it produced.",
 };
 
 function Meta({ label, children }: { label: string; children: ReactNode }) {
@@ -72,7 +73,9 @@ export default async function TaskPage({
     notFound();
   }
 
-  const attempts = task ? attemptRows(task.generations) : [];
+  // One artifact per task: what the run produced, published or refused. It is
+  // the only place a run that published nothing can be read at all.
+  const generation = task?.generations.at(-1) ?? null;
 
   return (
     <div className="mx-auto w-full max-w-[900px] px-6 py-12">
@@ -119,14 +122,30 @@ export default async function TaskPage({
           <h2 className="type-label text-ink-faint mt-10">Checklist</h2>
           <TaskChecklist steps={task.steps} className="mt-3" />
 
-          {attempts.length > 0 ? (
+          {generation ? (
             <>
-              <h2 className="type-label text-ink-faint mt-10">Attempts</h2>
-              <AttemptLedger
-                attempts={attempts}
-                scoreHeading="Lowest"
-                className="mt-3"
-              />
+              <h2 className="type-label text-ink-faint mt-10">The result</h2>
+              <div className="border-rule mt-3 flex flex-col border">
+                {generation.screenshot_path ? (
+                  <div className="p-6 pb-0">
+                    <AssetPlate
+                      path={generation.screenshot_path}
+                      alt={`The block this task produced: ${task?.brief ?? ""}`}
+                      sizes="(min-width: 1024px) 900px, 100vw"
+                      caption={generation.model ?? "Model not recorded"}
+                      className="aspect-[16/10]"
+                    />
+                  </div>
+                ) : (
+                  <p className="type-meta text-ink-soft p-6 pb-0">
+                    No render was taken for this run.
+                  </p>
+                )}
+                <EvidencePanel
+                  kind="component"
+                  judged={judgedFrom(generation)}
+                />
+              </div>
             </>
           ) : null}
 

@@ -23,22 +23,23 @@ class Verdict(StrEnum):
 
 
 class Generation(BaseModel):
-    """One attempt at a component: its code, its screenshot and its scores.
+    """The artifact one task produced: its code, its screenshot and its scores.
 
-    An attempt is owned by the **task** that produced it, not by the component
-    it may become: a rejected attempt still exists on its own, and the component
-    is only created at commit. ``component_id`` is filled in then, on every
-    attempt of the task, so an item can show its whole history.
-
-    Rejected attempts are kept, not hidden: "we tried and it was not good
-    enough" is part of the product's claim.
+    One per task, and the unique constraint below is what makes that a guarantee
+    rather than a habit: a run makes one artifact, the judge scores it once, and
+    it is either published or kept as the record of a refusal. It hangs off the
+    **task** rather than the component it may become, because a run that publishes
+    nothing still has to be readable — "we tried and it did not hold up" is part of
+    the product's claim — and because the scores belong to the run: the same block
+    can be judged again under a new rubric without losing what it scored first.
+    ``component_id`` is filled in at commit, on the artifact that was published.
     """
 
     __tablename__ = "generations"
 
     __table_args__ = (
-        # One attempt number per task: the attempt's real owner. Component ids
-        # are assigned later and in bulk, so they cannot carry this invariant.
+        # One artifact per task, which is what a run makes: the attempt number is
+        # always 1, and this constraint is what says so instead of a comment.
         UniqueConstraint("task_id", "attempt_no", name="uq_generations_task_attempt"),
         CheckConstraint("verdict IN ('candidate', 'published', 'rejected')", name="verdict_valid"),
         CheckConstraint("attempt_no >= 1", name="attempt_positive"),

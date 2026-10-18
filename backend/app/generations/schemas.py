@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class GenerationRead(BaseModel):
-    """One attempt, as shown in a block's history."""
+    """What a task produced, as the task view and the item view read it."""
 
     id: uuid.UUID
     task_id: uuid.UUID | None
