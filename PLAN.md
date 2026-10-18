@@ -1,7 +1,7 @@
 # GenBlocks — Plan de ejecución
 
-Este documento es la fuente de verdad del plan. Recoge las decisiones ya
-cerradas en la fase de diseño y las ordena en rebanadas ejecutables, pensadas
+Este documento es la fuente de verdad del plan. Recoge las decisiones cerradas y
+las que van cerrando las fases, y las ordena en rebanadas ejecutables, pensadas
 para que cada una se pueda revisar en `git` y entender sin perderse.
 
 El código, los identificadores, los comentarios y los mensajes de commit van en
@@ -14,8 +14,12 @@ inglés (ver `AGENTS.md`). Este documento va en español por comodidad.
 - **Secciones 1–11**: qué construimos, cómo está decidido y por qué. Contexto.
 - **Sección 12**: el plan de ejecución por fases. Es el núcleo. Cada fase se
   entrega como una rebanada revisable en `git`.
-- **Secciones 13–16**: variables de entorno, lo aplazado, riesgos y fuera de
-  alcance.
+- **Secciones 13–15**: variables de entorno, lo aplazado y los riesgos.
+
+**Estado (oct 2026)**: fases **0–8 hechas** y en `git`; la **9 en curso**, larga y
+en tres rebanadas. Las fases 0–8 se quedan escritas como se entregaron: son el
+registro de lo construido, no una promesa pendiente. Las decisiones antiguas
+tampoco se reescriben: cuando una cambia, la nueva dice a cuál sustituye.
 
 Principio de construcción: **rebanadas verticales finas, con dobles ("fakes")
 primero**. Antes de depender de Modal, Chroma o del LLM real, el sistema se cierra
@@ -56,6 +60,8 @@ Supabase Auth, Postgres, multi-tenancy por organización).
    en un dialog de shadcn. Termina al arrancar la generación. Sin chat de colección.
 6. **Reintentos**: máximo **2 intentos** (1 reintento). Publica el primer intento que
    pasa todos los umbrales; si ninguno, el de mayor puntuación.
+   → *Sustituida en la Fase 9 por la 30: el bucle vive dentro del harness y el
+   juez es una puerta.*
 7. **Juez independiente del generador**: agente, skill y run separados. Es
    inquebrantable: si decide quien crea, la evaluación es teatro.
 8. **El juez consume los artefactos del harness** (screenshots + informes); no
@@ -173,6 +179,87 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     publicación, que baja de sitio, para que el orden siga siendo el orden. Un
     intento tumbado queda `rejected` —por el sandbox o por el juez—; `candidate`
     es solo lo que nadie ha tumbado todavía.
+    → *La Fase 9 sustituye el bucle exterior por el del harness (decisiones 30–32).
+    Se quedan la puerta, la calibración y el motivo del rechazo.*
+30. **El harness es un bucle acotado, con el sandbox como ojos.** El paso de generar
+    deja de ser una llamada y pasa a ser un agente (`create_agent` de LangGraph, el
+    mismo motor que la conversación) que escribe, construye, **mira el render** y
+    edita, hasta que decide que está. **No hace falta un DeepAgent**: lo que aporta
+    aquí es ver el artefacto y tener las skills, no la planificación ni los
+    sub-agentes, y el sistema de ficheros ya lo pone el sandbox. El bucle **exterior**
+    de la Fase 8 (reintento ≤ 1, margen, "el más cercano") se retira en cuanto
+    existe éste: hacían el mismo trabajo a distinta resolución.
+    - **El render vuelve como resultado de herramienta**, y se probó antes de
+      construir nada: el resultado de `look` lleva el informe y la imagen, así que
+      el bucle es `create_agent` con el sandbox como una herramienta más —sin nodo
+      propio— y el tope de vueltas se lleva por herramienta, no por turno del
+      modelo.
+31. **El juez es la puerta, no el volante.** Una corrida del juez, al final de todo.
+    Si el artefacto no pasa el listón, la tarea falla con el motivo delante
+    (dimensión, número y la frase del juez) y el intento se queda **visible en la
+    tarea**, fuera de la biblioteca: **la biblioteca solo contiene piezas que
+    pasaron su listón**, y eso es un invariante del producto, no una promesa.
+    Reintentar es una decisión humana —`POST /v1/tasks`, que ya existe, con el brief
+    editable delante— y `max_attempts` se queda en 1 como ajuste, para poder medir
+    la política contraria con datos.
+32. **Vueltas contadas, no guardadas.** El tope de iteraciones es un ajuste
+    (`harness_max_iterations`) y **el número sale de medirlo**, no de la prudencia:
+    se arranca alto, se mira la distribución real y si la vuelta n mejora el score.
+    Además del tope hay parada por **no-progreso** (los mismos checks fallando, o el
+    código sin cambios): eso permite ser generoso con el tope sin pagar la rueda del
+    ratón. Las vueltas se cuentan (`iterations` en el detalle del paso); lo que se
+    guarda es el artefacto final.
+33. **Las dependencias entran, con lista blanca y una regla.** Preinstaladas en la
+    imagen del sandbox —nada de `npm install` por corrida, que se lleva por delante
+    los 5 s y el determinismo— y del juego de la casa: `motion`, `@base-ui/react`,
+    `lucide-react`, `clsx` + `tailwind-merge`, y `class-variance-authority`. La base
+    es siempre React + Tailwind v4 + primitivas.
+    - **Regla de admisión: traen comportamiento, no aspecto.** Tailwind v4 no
+      escanea `node_modules`, así que un paquete que traiga clases no se compilaría;
+      el aspecto lo pone Tailwind y lo puntúa el juez.
+    - Las **preferencias** ("motion cuando hace falta muelle, orquestación o salida;
+      CSS nativo cuando basta; una primitiva cuando de verdad hay foco y teclado que
+      gestionar") son una skill, no una lista.
+    - Las dependencias del bloque se **deducen de sus imports** (determinista, no
+      opinión del modelo) y se enseñan en el panel con el comando de instalación.
+      Un import fuera de la lista es un check **fatal**: compilaría, pero el usuario
+      no lo podría instalar.
+    - **Dónde vive la lista**: en el scaffold (`app/harness/scaffold/package.json`).
+      El check `imports` del sandbox lee los ficheros que le manda el llamante —el
+      bloque, no el scaffold— y los compara con esas dependencias, así que la lista
+      y lo que se instala no pueden discrepar. React y React DOM no cuentan en la
+      línea de instalación del panel: son el medio, no algo que el bloque pida.
+34. **El bloque es un proyecto, no un fichero.** El agente trabaja sobre varios
+    ficheros (`write_file`/`read_file`) con `src/Block.tsx` como entrada, así que un
+    formulario puede componetizarse. Se guarda `files` (jsonb) en `components` y en
+    `generations`, y `code` se queda como el fichero de entrada: aditivo, la lectura
+    y la puerta MCP no se rompen. El panel del item gana pestañas por fichero.
+35. **Motion con dependencia y con reglas.** `motion` más CSS nativo cuando basta.
+    Dos cosas que son de checks y no de gusto: el screenshot **espera a que la
+    animación aterrice** (`document.getAnimations()`, o la foto del ledger saldrá a
+    medias y el juez puntuará el temblor), y `prefers-reduced-motion` es criterio de
+    **accesibilidad**. El motion se puntúa dentro de `visual` por ahora; dimensión
+    propia solo si los datos dicen que mueve scores.
+36. **Las imágenes se generan una vez, y tarde.** Una sola pasada de imágenes cuando
+    la estructura está decidida —nunca por vuelta: una imagen no cambia con la
+    maquetación— seguida de **una vuelta de verificación** con las fotos reales, para
+    que el artefacto no se edite después de que los ojos dejaran de mirar. Los huecos
+    de relleno llevan la **proporción final** y son identificables: eso es lo que hace
+    seguro el intercambio. Tope de imágenes por bloque en settings, y reemplazar un
+    hueco como mucho una vez.
+    - Los assets vienen **de nuestra biblioteca** (fila en `images`), nunca de fuera:
+      es lo que corrige la frase de la Fase 8, que decía "ninguna imagen de fuera"
+      cuando un bloque todavía no podía tener imágenes. Se enlazan en
+      `component_assets` al publicar.
+    - El bloque copiado carga nuestras imágenes del CDN. Es la historia de cualquier
+      stock, pero **se dice en el panel**, no se deja implícito.
+37. **Las skills son los principios; la rúbrica es el criterio.** El escritor lee
+    skills (cómo se construye bien en este medio); el juez lee su rúbrica (cómo se
+    puntúa). Las dos tienen que ser la misma tradición o el bucle oscila: el agente
+    arregla lo que nadie mira y deja lo que sí se puntúa. Al escritor **no** le llegan
+    la rúbrica literal ni los umbrales: quien sabe dónde está el listón escribe notas,
+    no bloques. Las skills se leen con **índice + `read_skill`** (divulgación
+    progresiva): el índice va en el system prompt, que es lo que se cachea.
 
 ---
 
@@ -184,40 +271,44 @@ Supabase Auth, Postgres, multi-tenancy por organización).
 - **API (FastAPI)**: lo que consume la web.
 - **MCP (FastMCP)**: los mismos servicios, para agentes externos (Claude Code,
   opencode…).
-- **Modal**: sandbox de ejecución y render. Fuera de la red, efímero, CPU.
+- **Modal**: sandbox de ejecución y render. Efímero, CPU, sin secretos; no alcanza
+  nada nuestro — el navegador sí sale a la red pública, que es lo que hace falta
+  para ver un bloque con fotos o con un paquete instalado.
 
 ### Flujo de generación
 
 ```
 brief → [conversación] → create_component → tarea (background)
                                               │
-        spec → assets(imágenes, dentro del harness) → harness → judge
-                                                      ▲          │
-                                                      └── retry ─┘ (máx 1)
-                                                                 │
-                                                              commit
+                        spec → harness (agente) → judge (puerta) → commit
+                                   │   ▲
+                         sandbox ──┘   └── render + checks
 ```
 
 - **spec**: retrieval de taxonomía + vecinos (para no duplicar) + guía; escribe el
-  spec y el prompt de entrega. Primer uso del LLM.
-- **harness**: el DeepAgent hace una checklist, decide imágenes, las genera y las
-  sube a Cloudinary, construye el componente y ejecuta las comprobaciones
-  (TypeScript, lint, compilación, render en 3 viewports, accesibilidad, seguridad).
-  Un solo step visible, de minutos, con latido de progreso.
-- **judge**: puntúa sobre los artefactos del harness. Decide reintentar o pasar.
-- **commit**: crea el componente y lo estampa en todos los intentos de la tarea,
-  sube el screenshot, lo embebe, fija taxonomía y publica.
+  spec y el prompt de entrega. Primer uso del LLM. Sigue siendo canned hasta la
+  Fase 10.
+- **harness**: **un agente** con las skills y el sandbox como herramientas. Hace su
+  propio bucle —escribe, construye, **mira** el render, edita—, decide las imágenes
+  (una pasada, al final, con una vuelta de verificación detrás) y entrega un
+  proyecto: varios ficheros, sus dependencias y sus assets. Un solo step visible, de
+  minutos, con latido de progreso.
+- **judge**: una corrida al final, sobre los artefactos del harness. **Es una
+  puerta**: si no pasa, no se publica nada.
+- **commit**: crea el componente, enlaza los assets, sube el screenshot, lo embebe,
+  fija taxonomía y publica.
 
-Los **steps visibles** son los nodos del grafo (harness intento 2, judge intento 2…).
-El DeepAgent es **un** step.
+Los **steps visibles** son cuatro: recuperar, generar, juzgar, publicar. El bucle del
+agente no se ve edición a edición (se cuenta en `iterations`, en el detalle del
+paso): lo que un lector sigue es el trabajo, no cada guardado.
 
 ### Modelo de datos (Postgres)
 
 | Tabla | Campos clave |
 |---|---|
 | `categories` | id, parent_id, kind(component\|image), slug, name, level |
-| `components` | id, slug, title, description, category_id, code, delivery_prompt, spec, winning_generation_id, created_by, license, created_at |
-| `generations` | id, task_id, component_id, attempt_no, code, screenshot_path, scores jsonb, verdict, rubric_version, model, langfuse_trace_id |
+| `components` | id, slug, title, description, category_id, `code` (fichero de entrada), `files` jsonb, `dependencies` jsonb, delivery_prompt, spec, winning_generation_id, created_by, license, created_at |
+| `generations` | id, task_id, component_id, attempt_no, `code` (entrada), `files` jsonb, screenshot_path, scores jsonb, verdict, rubric_version, model, langfuse_trace_id |
 | `images` | id, prompt, path, width, height, category_id, created_by, license, model, scores jsonb, rubric_version, langfuse_trace_id |
 | `component_assets` | component_id, image_id, slot |
 | `tasks` | id, kind, status, brief, component_id, created_by, created_at, finished_at, error, langfuse_trace_id |
@@ -306,24 +397,36 @@ Dimensiones 0–100, cada una con su umbral (no basta la media):
 
 | Dimensión | Cómo se mide |
 |---|---|
-| Render | compila y pinta sin error en 3 viewports; sin overflow ni clipping |
-| Accesibilidad | contraste calculado, focus visible, roles y labels |
-| Visual (VLM) | jerarquía, espaciado, alineación, anticliché |
-| Copy | coherente y plausible (nada de lorem ipsum ni "Acme Inc.") |
-| Novedad | distancia vectorial a los componentes más cercanos |
-| Cumplimiento | ¿hace lo que su propio spec dijo que haría? |
+| Render | compila y pinta sin error en 3 viewports; sin overflow ni clipping; con la animación ya aterrizada |
+| Accesibilidad | contraste calculado, focus visible, roles y labels; `prefers-reduced-motion` respetado |
+| Visual (VLM) | jerarquía, espaciado, alineación, anticliché — y motion con intención |
+| Copy | coherente y plausible (nada de lorem ipsum ni «Acme Inc.») |
+| Cumplimiento | ¿hace lo que el brief pidió, y se puede copiar tal cual? |
+| *Novedad* | **aplazada**: es distancia vectorial a la biblioteca, y llega con los vectores (Fase 10) |
 
-- **Independencia**: el agente del sandbox puede autorevisarse el render; puntúa
-  otro. El juez es un agente separado con su propia skill.
+Hoy el panel de un componente puntúa **cinco** dimensiones y el de una imagen
+**tres**. La sexta, novedad, se suma cuando exista contra qué medirla.
+
+- **Dos bucles, uno dentro del otro.** El de dentro es del **harness**: el agente
+  mirando su propio render y arreglándolo, con tope de vueltas (decisión 32). El de
+  fuera es del **juez**, y es una **puerta**: una corrida al final y, si no pasa, la
+  tarea falla con el motivo (decisiones 30 y 31).
+- **Independencia**: el agente puede —debe— autorevisarse el render, que para eso
+  tiene ojos; pero **puntúa otro**: agente, run y rúbrica separados.
+- **Las skills son los principios y la rúbrica es el criterio** (decisión 37): el
+  escritor lee skills de este medio, el juez lee la rúbrica, y las dos tienen que ser
+  la misma tradición o el bucle oscila.
 - La **rúbrica vive como skill** y la lee el juez: una para componentes, otra más
-  corta para imágenes.
-- Los umbrales se **calibran** con 5–10 generaciones de prueba, no a ojo.
+  corta para imágenes. Su **versión es el hash del texto**, y se estampa en cada
+  intento para poder releer un score contra el texto que lo produjo.
+- Los umbrales se **calibran** contra generaciones reales, no a ojo, y **no se le
+  dicen al juez**.
 
 **Imágenes.** Las dimensiones de arriba son de un componente: una imagen no se
-renderiza ni lleva copy. Su rúbrica es corta —**Calidad visual**, **Ajuste al
-prompt**, **Cumplimiento**— y pasa por el mismo juez antes de entrar en la
-biblioteca. Así el panel del item es idéntico en las dos vistas: a la derecha, los
-scores de la generación y el enlace a su trace.
+renderiza ni lleva copy. Su rúbrica es corta —**visual**, **prompt_fit**,
+**compliance**— y pasa por el mismo juez antes de entrar en la biblioteca; quien la
+llama es la tool de imágenes (Fase 9). Así el panel del item es idéntico en las dos
+vistas: a la derecha, los scores de la generación y el enlace a su trace.
 
 ---
 
@@ -343,19 +446,24 @@ scores de la generación y el enlace a su trace.
 
 ## 9. Coste
 
-- **Modal**: CPU. Una tarea ≈ $0.02. A 10/día ≈ $6–12/mes. La capa gratuita de $30
-  sobra.
-- **LLM (luna)**: ≈ $0.05–0.20 por tarea (2 intentos). A 10/día ≈ $15–60/mes. Lo
-  bajan el tope de iteraciones, la caché de prompt y el guard de duplicados.
-- Mitigaciones: guard de duplicados, reúso de imágenes, tope de 2 intentos, rate
-  limit por usuario, caché por brief, cortacircuitos global.
+- **Modal**: CPU. Una tarea con un bucle de 3–4 vueltas son 3–4 sandbox ≈ $0.02–0.05.
+- **LLM (luna)**: el coste dominante, porque cada vuelta reenvía el render (una
+  imagen de ~100 KB) y la conversación. Por tarea, del orden de $0.10–0.40. Lo bajan
+  la caché de prompt (skills y rúbrica van al principio y son estables), el tope de
+  vueltas, la parada por no-progreso y el guard de duplicados.
+- **Imágenes (BFL)**: la partida con más pico —una galería de ocho fotos cuesta más
+  que el resto de la tarea junta—. De ahí el tope por bloque (decisión 36) y, desde
+  la Fase 10, mirar la biblioteca **antes** de generar.
+- Mitigaciones: guard de duplicados, reúso de imágenes, tope de vueltas y de
+  imágenes, rate limit por usuario, caché por brief, cortacircuitos global.
 
 ---
 
 ## 10. Fuera de alcance (no implementar)
 
 - RAG sobre código o shaders externos.
-- Guías de diseño curadas (se evalúan más adelante; el gusto vive en skills).
+- Guías de diseño de terceros: el gusto vive en skills propias de este medio
+  (decisión 37), finas y escritas para un bloque de un fichero y Tailwind genérico.
 - Imágenes de bancos externos tipo Unsplash.
 - Imágenes como tareas de background.
 - Tipos de item que no sean componente o imagen.
@@ -381,6 +489,9 @@ scores de la generación y el enlace a su trace.
 
 Cada fase es una rebanada revisable. Formato: **Objetivo**, **Cambios**,
 **Verificación** y **Fuera de este paso**.
+
+**Estado**: **0–8 hechas** (cada una, un commit); la **9 en curso**, larga y en tres
+rebanadas. La 10 es la siguiente. Las fases 0–8 se quedan como se entregaron.
 
 ### Fase 0 — Preparación: settings y entorno
 
@@ -539,12 +650,12 @@ streaming.
   Playwright en 3 viewports, accesibilidad básica, y devuelve artefactos
   (screenshots + informes). Sin secretos dentro.
 - Integrar como `harness` con un generador **simple** (una llamada a `gpt-6-luna`,
-  no DeepAgent todavía).
+  sin agente todavía).
 - Subida del screenshot a **Cloudinary** (`genblocks/screenshots/`).
 
 **Verificación**: una tarea produce un screenshot real y los informes de checks.
 
-**Fuera**: sin DeepAgent ni skills; sin embeddings.
+**Fuera**: sin agente ni skills; sin embeddings.
 
 ### Fase 8 — Juez + rúbrica (reintento ≤ 1)
 
@@ -573,25 +684,80 @@ depender de la red es hoy una frase en la rúbrica y en el prompt —el juez lo
 penaliza, y lo hizo— pero el check mecánico (referencias a assets externos) es
 trabajo de endurecimiento (Fase 11).
 
-**Fuera**: todavía sin DeepAgent ni RAG.
+**Fuera**: todavía sin bucle de agente ni RAG. El bucle de reintento que trae esta
+fase se retira en la 9, cuando el bucle viva donde tiene que vivir (decisión 30).
 
-### Fase 9 — Harness DeepAgent + skills + tool de imágenes
+### Fase 9 — El harness con ojos (agente, skills y medio real)
 
-**Objetivo**: la generación real de calidad.
+> **Fase larga, en tres rebanadas.** La primera cambia la **forma del pipeline**; la
+> segunda, la **forma del artefacto**; la tercera añade un **tipo de artefacto**
+> nuevo. Cada una se revisa sola y se puede parar entre medias.
 
-**Cambios**
-- Sustituir el generador simple por el **DeepAgent** (`gpt-6-luna`) con:
-  - **Skills** versionadas en el repo (diseño, accesibilidad) montadas en el sandbox.
-  - Bucle interno (compila / se ve) y bucle externo (juez).
-  - Tope duro de iteraciones internas (control de coste).
-- **Tool de imágenes**: genera con BFL (`flux-2-pro`), sube a Cloudinary
-  (`genblocks/images/`) → (embedding en Fase 10) → devuelve la URL. El agente
-  decide cuántas y sus prompts antes de construir. La API es asíncrona: se encola,
-  se sondea y se descarga la imagen.
+**Objetivo**: que el bloque se construya de verdad —mirándolo, arreglándolo, con las
+dependencias y las animaciones que un bloque de producción necesita— y que el juez
+sea la puerta, no el volante.
 
-**Verificación**: generación real de punta a punta con imágenes.
+#### 9a — El bucle con ojos, y el medio que necesita
 
-**Fuera**: sin RAG (guard y reúso llegan en la Fase 10).
+- El paso de generar deja de ser una llamada: es un **agente** (`create_agent` de
+  LangGraph, el mismo motor que la conversación) con el **sandbox como herramienta**.
+  Escribe, construye, **ve el render y los checks**, edita, y decide cuándo está.
+  Tope de vueltas en settings y parada por **no-progreso**; las vueltas se cuentan
+  (`iterations` en el detalle del paso), no se guardan (decisiones 30 y 32).
+  - **Sonda primero**: el render no vuelve como resultado de herramienta, así que la
+    vuelta se monta como **nodo del grafo** (modelo → sandbox → mensaje con el informe
+    y la imagen → modelo). Se prueba antes de construir nada.
+- **Skills** versionadas en `app/harness/skills/`, leídas con **índice +
+  `read_skill`** (decisión 37). Finas y de este medio: accesibilidad de un bloque,
+  jerarquía y composición, motion, y los clichés que este registro no publica —
+  empezando por los que la Fase 8 vio fallar en vivo.
+- **Dependencias**: lista blanca preinstalada en la imagen del sandbox, del juego de
+  la casa y con la regla de admisión de la decisión 33. Prompt del escritor y
+  sección "qué es un bloque" de la rúbrica, reescritos; las dependencias se deducen
+  de los imports, se enseñan en el panel y un import fuera de la lista es un check
+  **fatal**.
+- El juez pasa a ser **puerta** (decisión 31): se retira el bucle exterior de la
+  Fase 8 (margen y "el más cercano"), `max_attempts` queda en 1, y el motivo del
+  rechazo va en el error de la tarea. El intento sigue visible en la tarea.
+
+#### 9b — Multi-fichero y motion fino
+
+- El agente trabaja sobre un **proyecto** (`write_file`/`read_file`): un formulario
+  puede componetizarse en `Field`, `Label`, `Error`. `files` (jsonb) en `components`
+  y en `generations`, `code` como fichero de entrada, y pestañas por fichero en el
+  panel del item (decisión 34).
+- El screenshot **espera a que la animación aterrice** y `prefers-reduced-motion` es
+  criterio de accesibilidad. El motion se puntúa dentro de `visual` (decisión 35).
+
+#### 9c — Imágenes
+
+- Tool `generate_image`: BFL (`flux-2-pro`), asíncrona —encolar, sondear, descargar—
+  y subida a Cloudinary (`genblocks/images/`). Devuelve la URL y deja la fila en
+  `images`; la rúbrica corta del juez la puntúa al entrar en la biblioteca. El nombre
+  es el que reserva la sección 6; su registro en la puerta MCP (para agentes
+  externos) es aparte, igual que el resto de tools del agente (decisión 25).
+- **Una sola pasada, tarde, y con una vuelta de verificación detrás** (decisión 36):
+  nada de imágenes por vuelta, huecos de relleno con la proporción final, tope por
+  bloque en settings, y los assets enlazados en `component_assets` al publicar.
+
+**Verificación**: un brief de cada tipo termina en un componente publicado con su
+render, su score y sus dependencias declaradas; un artefacto flojo lo tumba el juez y
+la tarea falla con el motivo (nada entra en la biblioteca); el A/B de los mismos cinco
+briefs **con y sin skills**, comparando dimensiones, para saber si las skills sirven
+de algo; y la distribución de `iterations` para fijar el tope con datos.
+
+**Notas**: medido en vivo, con corridas reales: las vueltas fueron 1, 2, 2, 3 y 5
+(mediana 2), así que el tope de 6 es techo y no objetivo. El juez tumbó dos de las
+seis —un héroe por leer «una línea de copy» al pie de la letra, y una galería por
+pedir cuatro veces el mismo prompt, que devolvió casi la misma foto cuatro veces— y
+las dos se arreglaron donde tocaba: la primera en la rúbrica (un brief se lee como
+lo leería un diseñador, no como una hoja de especificaciones) y la segunda en la
+herramienta (el mismo prompt dos veces se rechaza, y la skill dice que cada imagen
+es su propio asunto). Con eso, el mismo brief del héroe publicó: compliance 96 y una
+sola vuelta. **La biblioteca quedó limpia de las dos**, que es lo que la puerta
+promete. El spec sigue canned (la taxonomía por RAG es la Fase 10).
+
+**Fuera**: sin RAG (guard, reúso de imágenes y taxonomía) y sin moderación.
 
 ### Fase 10 — RAG / Chroma
 
@@ -600,10 +766,13 @@ trabajo de endurecimiento (Fase 11).
 **Cambios**
 - Cliente Chroma (dev `PersistentClient`; config para Chroma Cloud).
 - Colecciones `components` e `images`; embeddings con `voyage-multimodal-3`.
-- Embeber el screenshot en `commit`; embeber la imagen en la tool de imágenes.
+- Embeber el screenshot en `commit`; embeber la imagen cuando entra en la
+  biblioteca.
 - **Guard de duplicados** (brief ↔ componentes) antes de generar.
-- **Reúso de imágenes** en `assets`.
-- **Routing de taxonomía** por RAG en `spec`.
+- **Reúso de imágenes**: el agente mira la biblioteca **antes** de generar y solo
+  genera lo que falta, así que `generate_image` deja de ser el camino por defecto.
+- **Routing de taxonomía** por RAG en `spec`, que deja de ser canned: es el primer
+  uso real del LLM en ese paso.
 
 **Verificación**: el guard detecta un duplicado; una imagen se reutiliza; un brief
 recibe el tipo correcto.
@@ -619,9 +788,12 @@ recibe el tipo correcto.
 - Rate limit por usuario y **cortacircuitos global** de gasto, comprobado antes de
   encolar.
 - Caché por brief.
-- Comprobación de "seguridad" del harness: alcance definitivo.
+- **Los checks mecánicos que faltan del harness**: referencias a assets externos
+  (hoy es una frase en la rúbrica y el juez lo penaliza, pero no lo impide nada) y
+  el alcance definitivo de la comprobación de "seguridad" del código generado.
 
-**Verificación**: límite y tope se activan; un brief abusivo se rechaza.
+**Verificación**: límite y tope se activan; un brief abusivo se rechaza; un bloque
+que apunta a un asset de fuera no se publica.
 
 **Fuera**: nada de features nuevas.
 
@@ -632,6 +804,9 @@ recibe el tipo correcto.
 **Cambios**
 - `langfuse_trace_id` nullable; push de scores en **fire-and-forget** después del
   commit en Postgres; enlace al trace en la UI (con "no disponible" si falta).
+- Aquí viven también **las palabras que el ledger no guarda**: las notas y el
+  resumen del juez (hoy solo viajan en el error de la tarea rechazada) y las vueltas
+  del agente. El ledger tiene los números; la traza tiene el porqué.
 
 **Verificación**: el trace aparece cuando Langfuse está configurado y la app
 funciona igual cuando no lo está.
@@ -657,7 +832,7 @@ funciona igual cuando no lo está.
 - `vary_component`.
 - Edición del componente por prompt y edición de su código.
 - Render en vivo seguro.
-- Guías curadas.
+- Descargar los assets con el bloque (hoy apuntan a nuestro CDN).
 
 ---
 
@@ -682,23 +857,50 @@ frontend solo pinta.
 
 Los servicios `backend` y `mcp` del compose ya leen el mismo `backend/.env`.
 
+Los **mandos del bucle** no hacen falta en `.env`: tienen valores por defecto en
+`app/settings.py` y se cambian ahí o por entorno —`RUBRIC_THRESHOLDS`,
+`MAX_ATTEMPTS`, `HARNESS_MAX_ITERATIONS`, `IMAGES_PER_BLOCK`—.
+
 ---
 
 ## 14. Aplazado a propósito
 
-- Umbrales exactos de la rúbrica (calibrar con 5–10 generaciones).
-- Alcance de la comprobación de "seguridad" del harness.
+- Afinar los umbrales con más generaciones (la primera calibración está hecha, con
+  siete).
+- Alcance de la comprobación de "seguridad" del harness (Fase 11).
 - Chroma: detalle de despliegue en prod.
 - Proveedor de hosting del despliegue.
+- **El brief como entidad duradera**: hoy reintentar crea otra tarea y el historial
+  del item es el de la tarea que publicó (`parent_task_id` o una tabla `briefs` es
+  lo que lo cambiaría). Se decide con uso.
+- `tw-animate-css` en el scaffold, y si el motion merece **dimensión propia** en la
+  rúbrica (hoy va dentro de `visual`).
+- **Dependencias fuera de la lista blanca**, declaradas por el propio bloque:
+  cambia la historia de copiar y trae deriva de versiones.
 
 ---
 
 ## 15. Riesgos
 
-- **Coste**: 2 intentos × visitantes. Mitigado con guard de duplicados, reúso de
-  imágenes, tope de intentos, rate limit y cortacircuitos.
-- **Latencia de Modal**: arranque en frío + navegador = minutos. Por eso la tarea en
-  background no es un lujo, es la UX.
+- **Coste**: vueltas del agente × visitantes, más las imágenes. Mitigado con tope de
+  vueltas y de imágenes, parada por no-progreso, guard de duplicados, reúso, rate
+  limit y cortacircuitos.
+- **Oscilación del agente**: puede arreglar una cosa y romper otra. Mitigado con la
+  parada por no-progreso y el tope (decisión 32); el que avanza sigue, el que no, se
+  corta.
+- **Coste de las imágenes**: una galería puede costar más que el resto de la tarea
+  junta. Tope por bloque y, desde la Fase 10, reúso de la biblioteca.
+- **Deriva de versiones**: el bloque se construye contra nuestras dependencias
+  (`motion@13`, `@base-ui/react@1.7`); copiarlo a un proyecto con otras puede pedir
+  ajustes. Por eso se declaran y se enseñan en el panel.
+- **Los assets viven en nuestro CDN**: copiar un bloque no copia sus imágenes. Es la
+  historia de cualquier stock, pero se dice en el panel — y queda decidir si algún
+  día se descargan con el bloque.
+- **El listón puede dejar la biblioteca vacía**: si el juez es más duro que el
+  agente, casi todo falla. Mitigado porque el escritor lee los mismos principios
+  (decisión 37), y vigilado con la tasa de publicación.
+- **Latencia de Modal**: arranque en frío + navegador = minutos, y ahora además unas
+  vueltas. Por eso la tarea en background no es un lujo, es la UX.
 - **Instancia única**: la fuente de verdad de las tareas es Postgres, no la memoria.
 - **Rate limit de Groq** (free): solo afecta a moderación; el camino crítico no
   depende de Groq.

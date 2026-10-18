@@ -51,7 +51,7 @@ def test_editing_what_a_rubric_says_changes_its_version():
         name=COMPONENTS.name,
         kind=COMPONENTS.kind,
         dimensions=COMPONENTS.dimensions,
-        text=COMPONENTS.text.replace("Whether someone decided.", "Whether anyone cared."),
+        text=COMPONENTS.text.replace("## render", "## rendering"),
     )
 
     assert edited.version != COMPONENTS.version

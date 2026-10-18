@@ -1,11 +1,13 @@
-"""Storing a render in Cloudinary.
+"""Storing what we generate in Cloudinary.
 
-A screenshot is a write into somebody else's account, so the upload is signed
-with the API secret, and what comes back is stored as a public id rather than a
-URL — the transform belongs to whoever renders it (PLAN.md, decision 11).
+Two trees of one account: the renders of blocks (``genblocks/screenshots``) and the
+stock images (``genblocks/images``). Both are writes into somebody else's account,
+so both are signed with the API secret, and what comes back is kept as a public id
+rather than a URL — the transform belongs to whoever renders it (PLAN.md, decision
+11).
 
-Every id is built by :func:`public_id`, under the ``genblocks/`` root this module
-owns: there is no way to write outside that tree from here.
+Every id is built here, under the ``genblocks/`` root this module owns: there is no
+way to write outside that tree from this code.
 """
 
 import hashlib
@@ -19,17 +21,23 @@ from app.settings import settings
 # The root the code owns, from the plan's folder tree. Nothing writes beside it.
 ROOT = "genblocks"
 SCREENSHOTS = f"{ROOT}/screenshots"
+IMAGES = f"{ROOT}/images"
 
 # A render is a few hundred kilobytes over a link we do not control. This bounds
 # the upload only; the sandbox has its own bound.
 UPLOAD_TIMEOUT_SECONDS = 60.0
 
+# How much of a content hash names an image. Content-addressed on purpose: the
+# same picture asked for twice is the same object in the CDN, and the unique path
+# on the row is what keeps it from becoming two rows.
+IMAGE_ID_LENGTH = 16
 
-class ScreenshotsUnavailable(Exception):
-    """There is no cloud to store a render in, or it refused the write."""
+
+class StorageUnavailable(Exception):
+    """There is no cloud to store in, or it refused the write."""
 
 
-def public_id(task_id: uuid.UUID, attempt_no: int) -> str:
+def screenshot_id(task_id: uuid.UUID, attempt_no: int) -> str:
     """Where one attempt's render lives.
 
     Named after the task and the attempt rather than the block: the block's slug
@@ -37,6 +45,21 @@ def public_id(task_id: uuid.UUID, attempt_no: int) -> str:
     exists.
     """
     return f"{SCREENSHOTS}/{task_id.hex[:12]}-{attempt_no}"
+
+
+def image_id(data: bytes) -> str:
+    """Where one generated image lives: named after its own bytes."""
+    return f"{IMAGES}/{hashlib.sha256(data).hexdigest()[:IMAGE_ID_LENGTH]}"
+
+
+def delivery_url(public_id: str) -> str:
+    """The URL a browser reads an asset from.
+
+    A block is served from somebody else's page, so it needs an address rather
+    than an id. The transform is left out: whoever renders the block decides what
+    size it needs, and Cloudinary takes it in the path.
+    """
+    return f"https://res.cloudinary.com/{_account()}/image/upload/{public_id}"
 
 
 def signature(params: dict[str, str], *, api_secret: str) -> str:
@@ -51,12 +74,13 @@ def signature(params: dict[str, str], *, api_secret: str) -> str:
 
 
 async def store(
-    png: bytes,
+    data: bytes,
     *,
     name: str,
+    media_type: str = "image/png",
     client: httpx.AsyncClient | None = None,
 ) -> str:
-    """Upload one render and return its public id.
+    """Upload one asset and return its public id.
 
     ``client`` is how a test watches the request without sending it.
     """
@@ -71,10 +95,10 @@ async def store(
     url = f"https://api.cloudinary.com/v1_1/{account}/image/upload"
 
     if client is not None:
-        return await _send(client, url, fields, png)
+        return await _send(client, url, fields, data, media_type=media_type)
 
     async with httpx.AsyncClient(timeout=UPLOAD_TIMEOUT_SECONDS) as http:
-        return await _send(http, url, fields, png)
+        return await _send(http, url, fields, data, media_type=media_type)
 
 
 def _account() -> str:
@@ -84,8 +108,8 @@ def _account() -> str:
         and settings.cloudinary_api_key
         and settings.cloudinary_api_secret
     ):
-        raise ScreenshotsUnavailable(
-            "No Cloudinary account is configured, so a render cannot be stored: "
+        raise StorageUnavailable(
+            "No Cloudinary account is configured, so nothing can be stored: "
             "set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET."
         )
 
@@ -96,22 +120,25 @@ async def _send(
     client: httpx.AsyncClient,
     url: str,
     fields: dict[str, str],
-    png: bytes,
+    data: bytes,
+    *,
+    media_type: str,
 ) -> str:
     """The upload itself, and the public id out of the answer."""
+    extension = media_type.rsplit("/", 1)[-1]
     response = await client.post(
         url,
         data=fields,
-        files={"file": ("render.png", png, "image/png")},
+        files={"file": (f"asset.{extension}", data, media_type)},
     )
 
     if response.status_code >= 400:
-        raise ScreenshotsUnavailable(
+        raise StorageUnavailable(
             f"Cloudinary refused the upload ({response.status_code}): {response.text[:200]}"
         )
 
     stored = response.json().get("public_id")
     if not isinstance(stored, str):
-        raise ScreenshotsUnavailable("Cloudinary answered without a public id.")
+        raise StorageUnavailable("Cloudinary answered without a public id.")
 
     return stored

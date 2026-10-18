@@ -56,6 +56,10 @@ class Generation(BaseModel):
     )
     attempt_no: Mapped[int]
     code: Mapped[str]
+    # The project this attempt produced, and its pictures' slots. Same shape as the
+    # component's, kept on the attempt too: a rejected attempt that cannot be rebuilt
+    # is a record of an opinion rather than of a block.
+    files: Mapped[dict | None] = mapped_column(JSONB)
     # Cloudinary public id of the render. Nullable until the upload succeeds.
     screenshot_path: Mapped[str | None]
     # What the sandbox found: one entry per check, with its short detail. Null on

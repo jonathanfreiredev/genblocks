@@ -12,6 +12,7 @@ class GenerationRead(BaseModel):
     component_id: uuid.UUID | None
     attempt_no: int
     code: str
+    files: dict | None
     screenshot_path: str | None
     checks: dict | None
     scores: dict | None

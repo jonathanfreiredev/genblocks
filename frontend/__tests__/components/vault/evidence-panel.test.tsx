@@ -62,6 +62,7 @@ function attempt(overrides: Partial<Generation>): Generation {
     component_id: "component",
     attempt_no: 1,
     code: "export function Block() { return null }",
+    files: null,
     screenshot_path: null,
     checks: null,
     scores: null,

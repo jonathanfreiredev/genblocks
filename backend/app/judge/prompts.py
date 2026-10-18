@@ -7,9 +7,10 @@ input at a tenth of fresh input, and the rubric is the part that is the same
 every time (PLAN.md, section 5).
 
 The artifact arrives as a reader of it would see it: the brief it was written
-from, the code as written, what the sandbox found when it built it, and the
-render. The judge is told what the checks said rather than what they are worth:
-whether a failed layout check matters is exactly the judgement being asked for.
+from, **every file** it is made of, what the sandbox found when it built it, and
+the render. The judge is told what the checks said rather than what they are
+worth: whether a failed layout check matters is exactly the judgement being asked
+for.
 """
 
 import base64
@@ -36,7 +37,7 @@ apology, no restating the numbers.
 # rubric's: a judge reading "what the sandbox found" knows which dimension it is
 # evidence for.
 BRIEF_HEADING = "The brief this block was written from:"
-CODE_HEADING = "The block, as it was written:"
+FILES_HEADING = "The block, as it was written:"
 FOUND_HEADING = "What the sandbox found when it built it:"
 RENDER_ATTACHED = "The render is attached."
 RENDER_MISSING = (
@@ -46,9 +47,9 @@ RENDER_MISSING = (
 PROMPT_HEADING = "The prompt this image was generated from:"
 IMAGE_HEADING = "The image, as it came back:"
 
-# What the code is fenced as. The language is a hint to the model, not a parser:
-# the fence is closed on its own line whatever the tag was.
-CODE_FENCE = "tsx"
+# What each file is fenced as. A hint for the model, not a parser: the fence is
+# closed on its own line whatever the tag was.
+LANGUAGES = {".tsx": "tsx", ".ts": "ts", ".css": "css"}
 
 
 def system_prompt(rubric: Rubric) -> str:
@@ -59,25 +60,23 @@ def system_prompt(rubric: Rubric) -> str:
 def about_component(
     *,
     brief: str,
-    code: str,
+    files: dict[str, str],
     found: SandboxResult,
     screenshot: bytes | None,
 ) -> list[dict]:
-    """One block, as the message the judge reads it in."""
-    said = [
-        BRIEF_HEADING,
-        "",
-        brief,
-        "",
-        CODE_HEADING,
-        "",
-        f"```{CODE_FENCE}",
-        code,
-        "```",
-        "",
+    """One block, as the message the judge reads it in.
+
+    Every file is sent, named by its path: a block is a project, and a judge that
+    only saw the entry point would be scoring a fragment of it.
+    """
+    said = [BRIEF_HEADING, "", brief, "", FILES_HEADING, ""]
+    for path in sorted(files):
+        said += [path, f"```{LANGUAGES.get(_suffix(path), '')}", files[path], "```", ""]
+
+    said += [
         FOUND_HEADING,
         "",
-        report(found),
+        found.report(),
         "",
         RENDER_ATTACHED if screenshot is not None else RENDER_MISSING,
     ]
@@ -112,26 +111,6 @@ def about_image(
     ]
 
 
-def report(found: SandboxResult) -> str:
-    """The sandbox's findings, one line each, in the order it made them.
-
-    Every check is named, passing or not: a judge that only hears about failures
-    cannot tell a block that passed seven checks from one that was never asked.
-    """
-    lines = [
-        f"- {check.name}: {'ok' if check.ok else 'failed'}"
-        + (f" — {check.detail}" if check.detail else "")
-        for check in found.checks
-    ]
-    lines.extend(
-        f"- axe {violation.id} ({violation.impact or 'unknown impact'}, {violation.nodes} nodes): "
-        f"{violation.help}"
-        for violation in found.violations
-    )
-
-    return "\n".join(lines) if lines else "- the sandbox reported nothing"
-
-
 def render(image: bytes, *, media_type: str = "image/png") -> dict:
     """Image bytes as a message part: a data URL, since nothing is hosted."""
     encoded = base64.b64encode(image).decode()
@@ -140,3 +119,8 @@ def render(image: bytes, *, media_type: str = "image/png") -> dict:
         "type": "image_url",
         "image_url": {"url": f"data:{media_type};base64,{encoded}"},
     }
+
+
+def _suffix(path: str) -> str:
+    """The extension of a path, for the fence's hint."""
+    return path[path.rfind(".") :] if "." in path else ""

@@ -1,14 +1,14 @@
 """The task runner, driven the way a worker drives it.
 
 What a run leaves behind *is* the product's claim: a checklist that says what
-happened, attempts that keep their own scores, and a block that only exists
-because the sandbox built something and a judge read it. These tests read those
-rows back from the database rather than from the objects the run was holding.
+happened, an attempt that keeps its own scores, a block that only exists because
+the judge cleared it, and the pictures it asked for filed in the library. These
+tests read those rows back from the database rather than from the objects the run
+was holding.
 
-The loop is tested here as a whole: which attempt is published, what a retry is
-told, and where the cap lands. The judge's own reading of an answer is tested
-apart (``tests/unit/test_judge_scoring.py``); what is faked here is the model
-call, not the decision it produces.
+What is faked here is everything that leaves the process — the agent, the sandbox,
+the cloud, the image provider — and the model calls. What is real is the runner,
+the gate, the thresholds it applies and the rows it writes.
 """
 
 import asyncio
@@ -21,18 +21,16 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.components.models import Component
+from app.components.models import Component, ComponentAsset
 from app.db.models import utcnow
 from app.generations.models import Generation, Verdict
-from app.harness import generator, sandbox, screenshots
-from app.harness.schemas import (
-    FATAL_CHECKS,
-    SandboxCheck,
-    SandboxFile,
-    SandboxResult,
-)
+from app.harness import agent, cloudinary, sandbox
+from app.harness.agent import Built, Placed
+from app.harness.images import Generated
+from app.harness.schemas import FATAL_CHECKS, SandboxCheck, SandboxFile, SandboxResult
+from app.images.models import Image
 from app.judge import scoring as judging
-from app.judge.rubrics import COMPONENTS
+from app.judge.rubrics import COMPONENTS, IMAGES
 from app.judge.schemas import DimensionScore, JudgeAnswer, Judged
 from app.settings import settings
 from app.tasks import canned, runner
@@ -49,13 +47,18 @@ from tests.helpers import create_category
 pytestmark = pytest.mark.anyio
 
 BRIEF = "A pricing page for a developer tool"
+CATEGORY = "photography"
 
-# What the generator writes, in a test: one block, and the same one every time.
+# What the harness writes, in a test: a project of two files, and the same two
+# every time.
 CODE = "export default function Block() {\n  return <section>Pricing</section>;\n}\n"
+PART = "export default function Rule() { return <hr />; }\n"
+PROJECT = {"src/Block.tsx": CODE, "src/parts/Rule.tsx": PART}
 
 # What the sandbox finds on a run that went well. One entry per check it makes,
 # in the order it makes them.
 FINDINGS = (
+    SandboxCheck(name="imports", ok=True),
     SandboxCheck(name="typecheck", ok=True),
     SandboxCheck(name="lint", ok=True),
     SandboxCheck(name="build", ok=True),
@@ -66,26 +69,31 @@ FINDINGS = (
     SandboxCheck(name="accessibility", ok=True),
 )
 
+# What the sandbox read out of the project: the install line the block declares.
+DEPENDENCIES = {"motion": "^13.0.0", "react": "^19.2.4"}
+
 PNG = b"\x89PNG\r\n\x1a\n"
+PICTURE = b"\xff\xd8\xff\xe0jpeg-bytes"
 
 # What the fake judge says, and what the thresholds it is read against are. The
-# bars are pinned in the fixture rather than read from settings: recalibrating
-# the shipped ones must not move a test, and what the thresholds *do* is tested
-# where they live.
+# bars are pinned in the fixture rather than read from settings: recalibrating the
+# shipped ones must not move a test, and what the thresholds *do* is tested where
+# they live.
 THRESHOLDS = {
     "render": 80,
     "accessibility": 75,
     "visual": 70,
     "copy": 70,
     "compliance": 80,
+    "prompt_fit": 70,
 }
 
 # Above every one of them.
 GOOD = {"render": 91, "accessibility": 89, "visual": 84, "copy": 86, "compliance": 93}
-# Misses the copy bar by a lot, and misses nothing else.
+# Misses the copy bar, and misses nothing else.
 WEAK = {**GOOD, "copy": 41}
-# Misses the visual bar by very little: the attempt that came closest.
-CLOSE = {**GOOD, "visual": 68}
+# What an image is scored on, by its own shorter rubric.
+PICTURE_SCORES = {"visual": 88, "prompt_fit": 91, "compliance": 97}
 
 # How long a test waits on the worker before calling it stuck. Generous: the
 # worker polls every hundredth of a second and the run itself never leaves the
@@ -111,27 +119,45 @@ def findings(*failing: str) -> SandboxResult:
             )
             for check in FINDINGS
         ],
+        dependencies=dict(DEPENDENCIES),
         screenshot=None if refused & set(FATAL_CHECKS) else PNG,
+    )
+
+
+def picture(slot: str = "hero", category: str = CATEGORY) -> Placed:
+    """One picture the harness asked the library for."""
+    return Placed(
+        slot=slot,
+        category=category,
+        image=Generated(
+            prompt="A wide photograph of an empty road at dawn",
+            path="genblocks/images/abc123",
+            url="https://cdn.test/genblocks/images/abc123",
+            width=1024,
+            height=768,
+            media_type="image/jpeg",
+            data=PICTURE,
+        ),
     )
 
 
 class Harness:
     """What the runner asked the harness for, and what it was answered.
 
-    A real run writes with a model, builds in a container and uploads to a
-    cloud. A test that did any of those would be testing somebody else's uptime
-    and this machine's network. What is real here is everything the runner does
-    with the answers.
+    A real run talks to a model, a container and two clouds. A test that did any of
+    those would be testing somebody else's uptime and this machine's network. What
+    is real here is everything the runner does with the answers.
     """
 
     def __init__(self) -> None:
-        self.asked: list[tuple[str, str, str | None]] = []
+        self.asked: list[dict] = []
         self.checked: list[list[SandboxFile]] = []
         self.uploaded: list[str] = []
         self.answer = findings()
-        # A test that needs the sandbox to answer differently on a second try
+        # A test that needs the sandbox to answer differently on a later call
         # writes the whole script; its last answer is repeated after that.
         self.script: list[SandboxResult] = []
+        self.built = Built(files=dict(PROJECT), images=[], iterations=3, skills="1a2b3c4d")
 
     def fails(self, *names: str) -> None:
         """Make the named checks fail, the way the sandbox would report it."""
@@ -139,7 +165,7 @@ class Harness:
 
     def unrendered(self) -> None:
         """A run that never got as far as a page, so there is nothing to keep."""
-        self.answer = SandboxResult(checks=list(FINDINGS))
+        self.answer = SandboxResult(checks=list(FINDINGS), dependencies=dict(DEPENDENCIES))
 
     def next_answer(self) -> SandboxResult:
         """The answer for the call being made, from the script or the default."""
@@ -152,7 +178,7 @@ class Harness:
 class Judge:
     """What the judge was shown, and what it decided to say.
 
-    A real one sends the code, the sandbox's report and a render to a vision
+    A real one sends the project, the sandbox's report and a render to a vision
     model. The messages are somebody else's uptime; what is real here is what the
     runner does with the answer, so the fake answers through the same
     ``app.judge.scoring.read`` the model's answer goes through — thresholds,
@@ -160,45 +186,68 @@ class Judge:
     """
 
     def __init__(self) -> None:
-        self.shown: list[tuple[str, str]] = []
+        self.shown: list[tuple[str, dict[str, str]]] = []
+        self.pictures: list[str] = []
         self.script: list[dict[str, int]] = [GOOD]
 
-    async def score_component(self, *, brief: str, code: str, found: SandboxResult) -> Judged:
-        self.shown.append((brief, code))
+    def _answer(self, said: dict[str, int]) -> JudgeAnswer:
+        return JudgeAnswer(
+            dimensions={
+                name: DimensionScore(score=score, note=f"{name} earned this")
+                for name, score in said.items()
+            },
+            summary="What the judge said in full.",
+        )
+
+    async def score_component(
+        self, *, brief: str, files: dict[str, str], found: SandboxResult
+    ) -> Judged:
+        self.shown.append((brief, files))
         said = self.script[min(len(self.shown) - 1, len(self.script) - 1)]
 
-        return judging.read(
-            JudgeAnswer(
-                dimensions={
-                    name: DimensionScore(score=score, note=f"{name} earned this")
-                    for name, score in said.items()
-                },
-                summary="What the judge said in full.",
-            ),
-            COMPONENTS,
-        )
+        return judging.read(self._answer(said), COMPONENTS)
+
+    async def score_image(
+        self, *, prompt: str, image: bytes, width: int, height: int, media_type: str
+    ) -> Judged:
+        assert image == PICTURE
+        self.pictures.append(prompt)
+
+        return judging.read(self._answer(PICTURE_SCORES), IMAGES)
 
 
 @pytest.fixture
 def harness(monkeypatch) -> Harness:
-    """The three ends of the harness, answered without leaving the process."""
+    """The harness, the sandbox and the cloud, answered without leaving the process."""
     harness = Harness()
 
-    async def write_component(*, brief: str, category: str, feedback: str | None = None) -> str:
-        harness.asked.append((brief, category, feedback))
-        return CODE
+    async def build(
+        *,
+        brief: str,
+        category: str,
+        image_categories: list[str] | None = None,
+        model=None,
+    ) -> Built:
+        harness.asked.append(
+            {"brief": brief, "category": category, "image_categories": image_categories}
+        )
+
+        return harness.built
 
     async def check(files: list[SandboxFile]) -> SandboxResult:
         harness.checked.append(files)
+
         return harness.next_answer()
 
-    async def store(png: bytes, *, name: str) -> str:
+    async def store(data: bytes, *, name: str, media_type: str = "image/png", client=None) -> str:
         harness.uploaded.append(name)
+
         return name
 
-    monkeypatch.setattr(generator, "write_component", write_component)
+    monkeypatch.setattr(agent, "build", build)
     monkeypatch.setattr(sandbox, "check", check)
-    monkeypatch.setattr(screenshots, "store", store)
+    monkeypatch.setattr(cloudinary, "store", store)
+
     return harness
 
 
@@ -208,6 +257,8 @@ def judge(monkeypatch) -> Judge:
     judge = Judge()
     monkeypatch.setattr(settings, "rubric_thresholds", dict(THRESHOLDS))
     monkeypatch.setattr(judging, "score_component", judge.score_component)
+    monkeypatch.setattr(judging, "score_image", judge.score_image)
+
     return judge
 
 
@@ -298,227 +349,116 @@ async def test_a_queued_task_runs_towards_a_published_block(runner_session, harn
     assert ran.error is None
     assert ran.finished_at is not None
 
-    # The checklist is the one the plan describes: one attempt's worth of steps,
-    # every one of them closed.
+    # Four steps, every one of them closed, and the harness's own numbers on the
+    # step that did the work.
     assert [step.name for step in ran.steps] == list(runner.STEP_NAMES)
     assert [step.status for step in ran.steps] == [StepStatus.SUCCEEDED] * len(runner.STEP_NAMES)
-    assert all(step.started_at and step.finished_at for step in ran.steps)
     assert ran.steps[0].detail == {"category": canned.CATEGORY_SLUG}
-    assert ran.steps[1].detail == {"attempt": 1, "checks": "8/8"}
+    assert ran.steps[1].detail == {
+        "checks": "9/9",
+        "files": 2,
+        "iterations": 3,
+        "skills": "1a2b3c4d",
+    }
     # The judge's line carries the dimension that decided it, not a mean: a mean
     # can look respectable on an attempt that failed one (see the ledger).
-    assert ran.steps[2].detail == {"attempt": 1, "weakest": "visual 84"}
-    assert ran.steps[3].detail == {"slug": slug, "attempt": 1}
+    assert ran.steps[2].detail == {"weakest": "visual 84"}
+    assert ran.steps[3].detail == {"slug": slug, "files": 2, "pictures": 0}
 
-    # The generator was asked for this brief and this type, with nothing to
-    # answer for; the sandbox was handed the block at the path the scaffold
-    # imports; and the judge was shown the brief it was written from and the code.
-    assert harness.asked == [(BRIEF, canned.CATEGORY_SLUG, None)]
-    assert [sent.path for sent in harness.checked[0]] == [runner.BLOCK_PATH]
-    assert harness.checked[0][0].content == CODE
-    assert judge.shown == [(BRIEF, CODE)]
+    # The harness was asked for this brief and this type, the project went to the
+    # sandbox file by file, and the judge was shown the whole of it.
+    assert harness.asked == [
+        {"brief": BRIEF, "category": canned.CATEGORY_SLUG, "image_categories": []}
+    ]
+    assert sorted(one.path for one in harness.checked[0]) == ["src/Block.tsx", "src/parts/Rule.tsx"]
+    assert judge.shown == [(BRIEF, PROJECT)]
 
     attempts = await _attempts(runner_session, task_id)
     assert len(attempts) == 1
     attempt = attempts[0]
     assert attempt.attempt_no == 1
     assert attempt.verdict == Verdict.PUBLISHED
+    # The entry file as well as the project: everything that read an attempt's
+    # code before there were projects keeps working.
+    assert attempt.code == CODE
+    assert attempt.files == PROJECT
+    assert attempt.model == settings.llm_model
     assert attempt.scores == GOOD
     assert attempt.rubric_version == COMPONENTS.version
 
-    # A model wrote this code and the attempt says which one; what the sandbox
-    # found is kept on the attempt, and the render is uploaded under the tree the
-    # screenshots module owns.
-    assert attempt.code == CODE
-    assert attempt.model == settings.llm_model
-    assert attempt.screenshot_path == screenshots.public_id(task_id, 1)
-    assert harness.uploaded == [screenshots.public_id(task_id, 1)]
+    # What the sandbox found is kept on the attempt, and the render is uploaded
+    # under the tree the cloudinary module owns.
+    assert attempt.screenshot_path == cloudinary.screenshot_id(task_id, 1)
+    assert harness.uploaded == [cloudinary.screenshot_id(task_id, 1)]
     assert attempt.checks is not None
     assert attempt.checks["blocked"] is False
-    assert (attempt.checks["passed"], attempt.checks["total"]) == (8, 8)
-    assert [check["name"] for check in attempt.checks["checks"]] == [
-        check.name for check in FINDINGS
-    ]
+    assert (attempt.checks["passed"], attempt.checks["total"]) == (9, 9)
 
     component = await runner_session.get(Component, ran.component_id)
     assert component is not None
     assert component.slug == slug
     assert component.category_id == category_id
     assert component.code == CODE
+    assert component.files == PROJECT
+    # The install line, read from the project by the sandbox rather than declared
+    # by the model that wrote it.
+    assert component.dependencies == DEPENDENCIES
     assert component.delivery_prompt == BRIEF
     assert component.license == "MIT"
     assert component.created_by == owner_id
     assert component.winning_generation_id == attempt.id
-
-    # The attempt points at the block it became, so the published item can still
-    # show the history that produced it.
     assert attempt.component_id == component.id
 
-    # Nothing is left queued behind it.
     assert await runner.claim_next_task() is None
 
 
-async def test_an_attempt_under_its_bar_is_tried_again_and_the_better_one_wins(
+async def test_a_block_under_the_bar_is_kept_as_an_attempt_and_not_published(
     runner_session, harness, judge
 ):
-    """The judge is what decides between two attempts, and a retry is told why."""
+    """The judge is a gate: the block is readable, and the library does not have it."""
     await create_category(runner_session, slug=canned.CATEGORY_SLUG)
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
     task_id = task.id
-    judge.script = [WEAK, GOOD]
+    judge.script = [WEAK]
 
     await runner.claim_next_task()
     await runner.run_task(task_id)
     runner_session.expire_all()
 
-    done = await get_task(runner_session, task_id=task_id)
-    assert done is not None
-    assert done.status == TaskStatus.SUCCEEDED
-    assert [step.name for step in done.steps] == [
-        "Retrieving references",
-        "Generating the block",
-        "Judging the attempt",
-        "Generating the block (attempt 2)",
-        "Judging the attempt (attempt 2)",
-        "Publishing the block",
+    failed = await get_task(runner_session, task_id=task_id)
+    assert failed is not None
+    assert failed.status == TaskStatus.FAILED
+    assert failed.component_id is None
+    # The reason travels with the task: which dimension, by how much, and why.
+    assert "copy 41, below 70" in (failed.error or "")
+    assert "copy earned this" in (failed.error or "")
+    assert "What the judge said in full." in (failed.error or "")
+
+    # Every step that ran says so, and publishing never happened.
+    assert [step.status for step in failed.steps] == [
+        StepStatus.SUCCEEDED,
+        StepStatus.SUCCEEDED,
+        StepStatus.SUCCEEDED,
+        StepStatus.PENDING,
     ]
-    assert [step.status for step in done.steps] == [StepStatus.SUCCEEDED] * 6
-    # The steps of the retry are numbered after the ones already there, so the
-    # checklist still reads in the order the run happened.
-    assert [step.index for step in done.steps] == [0, 1, 2, 3, 4, 5]
-    assert done.steps[2].detail == {"attempt": 1, "weakest": "copy 41", "below": "copy"}
-    assert done.steps[4].detail == {"attempt": 2, "weakest": "visual 84"}
+    assert failed.steps[2].detail == {"weakest": "copy 41", "below": "copy"}
 
-    # The retry was told what the first one got wrong, in the judge's words: the
-    # one thing a second attempt has that the first did not.
-    assert harness.asked[0][2] is None
-    feedback = harness.asked[1][2]
-    assert feedback is not None
-    assert "copy (41, below 70)" in feedback
-    assert "copy earned this" in feedback
-    assert "What the judge said in full." in feedback
+    # The attempt survives, with everything it is: a reader can see what was built
+    # and what it was told about it.
+    attempt = (await _attempts(runner_session, task_id))[0]
+    assert attempt.verdict == Verdict.REJECTED
+    assert attempt.scores == WEAK
+    assert attempt.rubric_version == COMPONENTS.version
+    assert attempt.files == PROJECT
+    assert attempt.component_id is None
 
-    assert judge.shown == [(BRIEF, CODE), (BRIEF, CODE)]
-
-    attempts = await _attempts(runner_session, task_id)
-    assert [one.attempt_no for one in attempts] == [1, 2]
-    assert [one.verdict for one in attempts] == [Verdict.REJECTED, Verdict.PUBLISHED]
-    assert attempts[0].scores == WEAK
-    assert attempts[0].rubric_version == COMPONENTS.version
-    assert attempts[1].scores == GOOD
-
-    # Both attempts belong to the block, so its history is readable after the
-    # fact, and the render of each was kept as it was made.
-    block = await runner_session.get(Component, done.component_id)
-    assert block is not None
-    assert [one.component_id for one in attempts] == [block.id, block.id]
-    assert block.winning_generation_id == attempts[1].id
-    assert done.steps[5].detail == {"slug": block.slug, "attempt": 2}
-    assert harness.uploaded == [
-        screenshots.public_id(task_id, 1),
-        screenshots.public_id(task_id, 2),
-    ]
+    assert await runner_session.scalar(select(Component)) is None
 
 
-async def test_the_run_stops_at_the_cap_and_publishes_the_closest_attempt(
+async def test_a_block_the_sandbox_refuses_is_kept_and_nobody_judges_it(
     runner_session, harness, judge
 ):
-    """Two attempts, and no third: the cap is a setting and it is respected."""
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
-    owner = await _owner(runner_session)
-    task = await _queued(runner_session, owner)
-    task_id = task.id
-    judge.script = [WEAK, CLOSE]
-
-    await runner.claim_next_task()
-    await runner.run_task(task_id)
-    runner_session.expire_all()
-
-    done = await get_task(runner_session, task_id=task_id)
-    assert done is not None
-    # Nothing cleared the bar, and the run published the one that came closest:
-    # a block with visible weak numbers is the registry's claim (decision 6).
-    assert done.status == TaskStatus.SUCCEEDED
-    assert len(judge.shown) == settings.max_attempts
-    assert len(harness.asked) == settings.max_attempts
-
-    attempts = await _attempts(runner_session, task_id)
-    assert [one.verdict for one in attempts] == [Verdict.REJECTED, Verdict.PUBLISHED]
-    # The second attempt missed one dimension by two points, the first by
-    # twenty-nine: the margin is what chose, not the number of attempts made.
-    assert attempts[1].scores == CLOSE
-    assert done.steps[5].detail["attempt"] == 2
-
-
-async def test_the_closest_attempt_is_not_necessarily_the_last_one(runner_session, harness, judge):
-    """Each attempt is published on its numbers, not on having gone last."""
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
-    owner = await _owner(runner_session)
-    task = await _queued(runner_session, owner)
-    task_id = task.id
-    judge.script = [CLOSE, WEAK]
-
-    await runner.claim_next_task()
-    await runner.run_task(task_id)
-    runner_session.expire_all()
-
-    done = await get_task(runner_session, task_id=task_id)
-    assert done is not None
-    assert done.status == TaskStatus.SUCCEEDED
-
-    attempts = await _attempts(runner_session, task_id)
-    assert [one.verdict for one in attempts] == [Verdict.PUBLISHED, Verdict.REJECTED]
-    assert attempts[0].scores == CLOSE
-    assert done.steps[5].detail["attempt"] == 1
-
-
-async def test_a_refused_attempt_is_tried_again_with_the_sandbox_s_words(
-    runner_session, harness, judge
-):
-    """Code that does not build is the most retryable refusal there is."""
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
-    owner = await _owner(runner_session)
-    task = await _queued(runner_session, owner)
-    task_id = task.id
-    harness.script = [findings("typecheck"), findings()]
-
-    await runner.claim_next_task()
-    await runner.run_task(task_id)
-    runner_session.expire_all()
-
-    done = await get_task(runner_session, task_id=task_id)
-    assert done is not None
-    assert done.status == TaskStatus.SUCCEEDED
-    assert [step.name for step in done.steps] == [
-        "Retrieving references",
-        "Generating the block",
-        "Judging the attempt",
-        "Generating the block (attempt 2)",
-        "Judging the attempt (attempt 2)",
-        "Publishing the block",
-    ]
-    # The first attempt was turned down by the sandbox, and its line says so in
-    # the sandbox's words rather than in a score: nobody judged it.
-    assert done.steps[2].detail == {"attempt": 1, "refused": "typecheck"}
-
-    assert "typecheck did not pass" in (harness.asked[1][2] or "")
-
-    attempts = await _attempts(runner_session, task_id)
-    assert [one.verdict for one in attempts] == [Verdict.REJECTED, Verdict.PUBLISHED]
-    assert attempts[0].scores is None
-    assert attempts[0].screenshot_path is None
-    assert attempts[0].checks is not None
-    assert attempts[0].checks["blocked"] is True
-    assert attempts[1].scores == GOOD
-    # Only the attempt that rendered has a picture to keep.
-    assert harness.uploaded == [screenshots.public_id(task_id, 2)]
-
-
-async def test_a_run_the_sandbox_refuses_every_time_fails_with_its_words(
-    runner_session, harness, judge
-):
-    """Refusals are retried, and a run that only gets refusals has nothing to publish."""
     await create_category(runner_session, slug=canned.CATEGORY_SLUG)
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
@@ -532,29 +472,96 @@ async def test_a_run_the_sandbox_refuses_every_time_fails_with_its_words(
     failed = await get_task(runner_session, task_id=task_id)
     assert failed is not None
     assert failed.status == TaskStatus.FAILED
-    assert failed.component_id is None
-    assert "refused every attempt" in (failed.error or "")
     assert "typecheck did not pass" in (failed.error or "")
 
-    # The steps that ran say so; the one the run never reached stays queued.
-    assert [step.status for step in failed.steps] == [
-        StepStatus.SUCCEEDED,
-        StepStatus.SUCCEEDED,
-        StepStatus.SUCCEEDED,
-        StepStatus.SUCCEEDED,
-        StepStatus.SUCCEEDED,
-        StepStatus.PENDING,
-    ]
-
-    # Both attempts survive the run, with their code and the reason on them.
-    attempts = await _attempts(runner_session, task_id)
-    assert [one.verdict for one in attempts] == [Verdict.REJECTED, Verdict.REJECTED]
-    assert all(one.component_id is None for one in attempts)
-    assert all(one.scores is None for one in attempts)
-    assert all((one.checks or {})["blocked"] is True for one in attempts)
+    # The judge is not asked about something the sandbox would not build, and the
+    # step that ran is closed with the checks it found.
     assert judge.shown == []
+    assert failed.steps[1].detail["checks"] == "8/9"
+    assert failed.steps[2].status == StepStatus.PENDING
+
+    attempt = (await _attempts(runner_session, task_id))[0]
+    assert attempt.verdict == Verdict.REJECTED
+    assert attempt.scores is None
+    assert attempt.screenshot_path is None
+    assert attempt.checks is not None
+    assert attempt.checks["blocked"] is True
+    assert harness.uploaded == []
 
     assert await runner_session.scalar(select(Component)) is None
+
+
+async def test_the_pictures_a_block_asks_for_are_filed_and_linked(runner_session, harness, judge):
+    """A picture is a library artifact of its own, judged as it enters."""
+    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug=CATEGORY, kind="image")
+    owner = await _owner(runner_session)
+    owner_id = owner.id
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+    harness.built = Built(
+        files=dict(PROJECT),
+        images=[picture()],
+        iterations=4,
+        skills="1a2b3c4d",
+    )
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    done = await get_task(runner_session, task_id=task_id)
+    assert done is not None
+    assert done.status == TaskStatus.SUCCEEDED
+
+    # The taxonomy was handed to the harness rather than invented by it.
+    assert harness.asked[0]["image_categories"] == [CATEGORY]
+
+    image = await runner_session.scalar(select(Image))
+    assert image is not None
+    assert image.path == "genblocks/images/abc123"
+    assert image.width == 1024
+    assert image.height == 768
+    assert image.model == settings.image_model
+    assert image.created_by == owner_id
+    # Scored on entry, by the shorter rubric, and the judge was given the bytes.
+    assert image.scores == PICTURE_SCORES
+    assert image.rubric_version == IMAGES.version
+    assert judge.pictures == ["A wide photograph of an empty road at dawn"]
+
+    # And linked to the block in its slot, which is what a visitor needs to know
+    # which assets came with the code.
+    asset = await runner_session.scalar(select(ComponentAsset))
+    assert asset is not None
+    assert asset.image_id == image.id
+    assert asset.slot == "hero"
+    assert asset.component_id == done.component_id
+    assert done.steps[3].detail["pictures"] == 1
+
+
+async def test_a_picture_asked_for_by_a_block_that_is_not_published_stays_in_the_library(
+    runner_session, harness, judge
+):
+    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug=CATEGORY, kind="image")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+    harness.built = Built(files=dict(PROJECT), images=[picture()], iterations=4, skills="1a2b3c4d")
+    judge.script = [WEAK]
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    failed = await get_task(runner_session, task_id=task_id)
+    assert failed is not None
+    assert failed.status == TaskStatus.FAILED
+
+    # The block was refused and the picture is still the library's: it is stock,
+    # and a later run can reuse it instead of generating another (Fase 10).
+    assert await runner_session.scalar(select(Image)) is not None
+    assert await runner_session.scalar(select(ComponentAsset)) is None
 
 
 async def test_findings_that_are_not_fatal_are_evidence_not_a_gate(runner_session, harness, judge):
@@ -572,7 +579,7 @@ async def test_findings_that_are_not_fatal_are_evidence_not_a_gate(runner_sessio
     done = await get_task(runner_session, task_id=task_id)
     assert done is not None
     assert done.status == TaskStatus.SUCCEEDED
-    assert done.steps[1].detail == {"attempt": 1, "checks": "6/8"}
+    assert done.steps[1].detail["checks"] == "7/9"
 
     attempt = (await _attempts(runner_session, task_id))[0]
     assert attempt.checks is not None
@@ -600,14 +607,45 @@ async def test_a_run_with_no_render_is_still_judged_and_publishes_without_a_phot
     done = await get_task(runner_session, task_id=task_id)
     assert done is not None
     assert done.status == TaskStatus.SUCCEEDED
-    # The judge was still asked: the code and the checks are the artifact, and a
-    # missing render is a fact about the attempt rather than a reason to skip it.
-    assert judge.shown == [(BRIEF, CODE)]
+    assert judge.shown == [(BRIEF, PROJECT)]
 
     attempt = (await _attempts(runner_session, task_id))[0]
     assert attempt.screenshot_path is None
     assert attempt.scores == GOOD
     assert harness.uploaded == []
+
+
+async def test_a_harness_that_writes_nothing_fails_the_task(runner_session, harness, monkeypatch):
+    async def wrote_nothing(
+        *, brief: str, category: str, image_categories=None, model=None
+    ) -> Built:
+        raise agent.NothingWritten(
+            "The harness finished without writing anything into the project."
+        )
+
+    monkeypatch.setattr(agent, "build", wrote_nothing)
+
+    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    failed = await get_task(runner_session, task_id=task_id)
+    assert failed is not None
+    assert failed.status == TaskStatus.FAILED
+    assert "without writing anything" in (failed.error or "")
+    # The step that was open is the one that failed, and no attempt was written.
+    assert [step.status for step in failed.steps] == [
+        StepStatus.SUCCEEDED,
+        StepStatus.FAILED,
+        StepStatus.PENDING,
+        StepStatus.PENDING,
+    ]
+    assert await runner_session.scalar(select(Generation)) is None
 
 
 async def test_a_sandbox_that_never_answers_fails_the_task_with_its_words(
@@ -632,8 +670,6 @@ async def test_a_sandbox_that_never_answers_fails_the_task_with_its_words(
     assert failed.status == TaskStatus.FAILED
     assert "within 900 seconds" in (failed.error or "")
 
-    # No attempt and no retry: an unreachable sandbox is not the block's fault,
-    # and the step that was open is the one that failed.
     assert [step.status for step in failed.steps] == [
         StepStatus.SUCCEEDED,
         StepStatus.FAILED,
@@ -668,7 +704,6 @@ async def test_a_run_that_cannot_plan_fails_the_task_and_says_why(runner_session
         StepStatus.PENDING,
     ]
 
-    # No block and no attempt: a run that planned nothing published nothing.
     assert await runner_session.scalar(select(Component)) is None
     assert await runner_session.scalar(select(Generation)) is None
 
@@ -746,7 +781,7 @@ async def test_a_restart_with_nothing_running_changes_nothing(runner_session):
 
 
 async def test_the_worker_drains_the_queue_and_stops(runner_session, harness, judge):
-    """The loop, end to end: a queued brief becomes a published block."""
+    """The worker, end to end: a queued brief becomes a published block."""
     await create_category(runner_session, slug=canned.CATEGORY_SLUG)
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)

@@ -35,6 +35,8 @@ class ComponentRead(ComponentSummary):
     """A whole block, for the item view and for an agent that wants to reuse it."""
 
     code: str
+    files: dict | None
+    dependencies: dict | None
     delivery_prompt: str
     spec: dict | None
     winning_generation_id: uuid.UUID | None

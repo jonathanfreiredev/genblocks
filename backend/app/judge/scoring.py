@@ -68,7 +68,7 @@ def as_judge(model: BaseChatModel | None = None) -> Runnable:
 async def score_component(
     *,
     brief: str,
-    code: str,
+    files: dict[str, str],
     found: SandboxResult,
     model: Runnable | None = None,
 ) -> Judged:
@@ -83,7 +83,7 @@ async def score_component(
             HumanMessage(
                 about_component(
                     brief=brief,
-                    code=code,
+                    files=files,
                     found=found,
                     screenshot=found.screenshot,
                 )

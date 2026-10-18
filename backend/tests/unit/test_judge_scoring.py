@@ -184,8 +184,9 @@ async def test_the_artifact_is_what_the_model_is_handed(monkeypatch):
     monkeypatch.setattr(settings, "rubric_thresholds", dict.fromkeys(COMPONENTS.dimensions, 80))
     scripted = ScriptedJudge(every(dict.fromkeys(COMPONENTS.dimensions, 88)))
     found = SandboxResult(checks=[SandboxCheck(name="render", ok=True)], screenshot=PNG)
+    files = {"src/Block.tsx": CODE}
 
-    judged = await score_component(brief="A pricing page", code=CODE, found=found, model=scripted)
+    judged = await score_component(brief="A pricing page", files=files, found=found, model=scripted)
 
     system, human = scripted.shown
     # The rubric is the stable half, and the brief is not in it: the same prompt
@@ -196,6 +197,8 @@ async def test_the_artifact_is_what_the_model_is_handed(monkeypatch):
 
     assert isinstance(human, HumanMessage)
     assert "A pricing page" in human.text
+    # The file is sent with the path it lives at: a block is a project.
+    assert "src/Block.tsx" in human.text
     assert CODE in human.text
     assert human.content[1]["image_url"]["url"].startswith("data:image/png;base64,")
 

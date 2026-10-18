@@ -22,6 +22,15 @@ class Component(BaseModel):
         ForeignKey("categories.id", ondelete="RESTRICT"), index=True
     )
     code: Mapped[str]
+    # The whole project: path → file, as the harness left it. ``code`` is the entry
+    # file, kept beside it because it is what the read API and the MCP door have
+    # always answered with — a block that grew files must not break a client that
+    # only ever asked for one.
+    files: Mapped[dict | None] = mapped_column(JSONB)
+    # What it imports from packages, with the version it was built against: the
+    # install line a visitor needs, read from the project by the sandbox rather
+    # than declared by the model that wrote it.
+    dependencies: Mapped[dict | None] = mapped_column(JSONB)
     # What a visitor would type to get this block: the brief that produced it,
     # cleaned up.
     delivery_prompt: Mapped[str]

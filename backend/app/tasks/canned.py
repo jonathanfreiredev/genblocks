@@ -7,9 +7,9 @@ be more than it is: the spec's ``spec`` block says ``"source": "canned"`` on its
 own face, and its version is :data:`VERSION` rather than a rubric's.
 
 What is *not* here anymore is the block or the judgement: since Fase 7 the code
-is written by the generator and checked by the sandbox (``app/harness``), and
-since Fase 8 an independent judge scores the attempt (``app.judge``). Both credit
-what they are.
+is built in a sandbox, since Fase 9 an **agent** writes it with its eyes on the
+render (``app/harness``), and since Fase 8 an independent judge scores the attempt
+(``app.judge``). Each credits what it is.
 
 The seeded vault (``app.seed.vault``) is a different thing: planted by hand to
 show what a finished run looks like, with ``seed-v0`` as its rubric version.

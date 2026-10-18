@@ -22,12 +22,21 @@ def test_a_fatal_check_that_failed_stops_the_run():
 
 
 def test_findings_that_are_not_fatal_do_not_stop_the_run():
-    # A block that is 40px too wide on a phone is a judgement call, and the phase
-    # that judges has not run yet.
+    # A block that is 40px too wide on a phone is a judgement call, and the judge
+    # is the one who makes it.
     found = result(("typecheck", True), ("build", True), ("layout:phone", False))
 
     assert found.blocked is False
     assert [check.name for check in found.failures] == ["layout:phone"]
+
+
+def test_an_import_outside_the_shelf_stops_the_run():
+    # It would build — the package is installed in the sandbox — and the person
+    # copying the block could not install it. That is the one thing the shelf
+    # check is for.
+    found = result(("imports", False), ("typecheck", True), ("build", True), ("render", True))
+
+    assert found.blocked is True
 
 
 def test_a_run_where_everything_passed_is_not_blocked():
@@ -62,3 +71,31 @@ def test_the_record_carries_the_checks_and_the_findings():
     # The picture is not in the record: it is uploaded, and the public id is what
     # points at it.
     assert "screenshot" not in record
+
+
+def test_the_dependencies_are_what_the_project_asked_for():
+    found = SandboxResult(
+        checks=[SandboxCheck(name="imports", ok=True)],
+        dependencies={"motion": "^13.0.0", "react": "^19.2.4"},
+    )
+
+    assert found.dependencies == {"motion": "^13.0.0", "react": "^19.2.4"}
+    assert found.blocked is False
+
+
+def test_the_report_names_every_check_and_the_findings():
+    found = SandboxResult(
+        checks=[
+            SandboxCheck(name="typecheck", ok=True),
+            SandboxCheck(name="layout:phone", ok=False, detail="40px wider."),
+        ],
+        violations=[
+            SandboxViolation(id="color-contrast", impact="serious", help="Contrast.", nodes=2)
+        ],
+    )
+
+    said = found.report()
+
+    assert "- typecheck: ok" in said
+    assert "- layout:phone: failed — 40px wider." in said
+    assert "- axe color-contrast (serious, 2 nodes): Contrast." in said

@@ -43,9 +43,12 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-6-luna"
 
     # Black Forest Labs generates the stock image library through its
-    # asynchronous FLUX.2 API.
+    # asynchronous FLUX.2 API: a request is queued, polled and downloaded. The
+    # model is the pinned snapshot rather than the moving "preview" one, on
+    # purpose: a block scored today should be comparable with the next one.
     bfl_api_key: str | None = None
     image_model: str = "flux-2-pro"
+    bfl_base_url: str = "https://api.bfl.ai/v1"
 
     # Groq powers moderation only, with a free-tier safety model.
     groq_api_key: str | None = None
@@ -83,8 +86,15 @@ class Settings(BaseSettings):
     chroma_database: str | None = None
 
     # --- Generation loop -----------------------------------------------------
-    # A component is published from the best of at most this many attempts.
-    max_attempts: int = 2
+    # How many times the harness may build the block and look at it before it has
+    # to finish with what it has. The budget counts *looks*, not model turns: the
+    # sandbox and its render are what cost, and reading a skill is free. The number
+    # was set by measuring real runs — the distribution of `iterations` and whether
+    # the next look still changes the score — not by taste.
+    harness_max_iterations: int = 6
+    # How many pictures one block may ask the library for, in one pass near the end
+    # of its run. Images are the priciest part of a task by a distance.
+    images_per_block: int = 4
     # Every dimension of the judge's rubric has its own bar, and an attempt
     # clears only when it clears all of them: a high mean does not carry a block
     # past a dimension it failed (PLAN.md, section 7). These numbers are the

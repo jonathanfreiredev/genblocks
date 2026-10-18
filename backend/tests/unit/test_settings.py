@@ -40,9 +40,13 @@ def test_generation_defaults(monkeypatch):
 
     assert settings.llm_model == "gpt-6-luna"
     assert settings.image_model == "flux-2-pro"
+    assert settings.bfl_base_url == "https://api.bfl.ai/v1"
     assert settings.moderation_model == "openai/gpt-oss-safeguard-20b"
     assert settings.embedding_model == "voyage-multimodal-3"
-    assert settings.max_attempts == 2
+    # The loop's two budgets: how many times the harness may look at what it built,
+    # and how many pictures one block may ask for.
+    assert settings.harness_max_iterations == 6
+    assert settings.images_per_block == 4
 
 
 def test_harness_defaults(monkeypatch):

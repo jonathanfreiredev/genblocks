@@ -21,14 +21,18 @@ executed lazily are not the same block.
 
 ## What a block is, before it is judged
 
-One component, in one file, with Tailwind's generic utilities, copied whole into
-somebody else's project: it carries everything it needs. An element that fetches
-something — an image URL, a font, a stylesheet, a script from another domain — is
-a piece the block cannot hand over, so an `<img>` pointing outwards is not an
-image, and the placeholder box it should have drawn is the honest answer. Cost
-that under `compliance`, however good it looks in the render. When the brief asks
-for photographs, a block that draws their place properly is doing what the rules
-allow rather than missing them.
+One project of React and generic Tailwind, copied whole into somebody else's
+project. It may install packages from this registry's shelf — the primitive, the
+motion library, the icons, the class helper — and the files you are given are all
+of it: what it imports is what a visitor has to install, and an import the shelf
+does not have is a block that does not build.
+
+What it does **not** bring is pictures. A photograph is an asset of our library,
+handed to the builder as an address; a URL to anywhere else is a picture that will
+not arrive, and a block that fetches its own look from somebody else's server
+breaks when that server does. Cost that under `compliance` — and the other way
+round: a brief that asks for photographs and gets the library's is the block doing
+exactly what it should.
 
 ## render
 
@@ -49,16 +53,24 @@ that are buttons and links and not clickable boxes; a text alternative wherever
 an element is only a picture. The sandbox's axe findings are handed to you: treat
 a serious one as a fact about the block. Then add what axe cannot judge — a
 button labelled "Submit" that never says what it submits, two `h1`s in one
-section, a label that promises something else.
+section, a label that promises something else, and movement with no way out:
+somebody who has asked for less motion has to be able to read the block without
+it.
 
 ## visual
 
-Whether someone decided. Spacing that follows a rhythm rather than a guess,
-alignment the eye can follow, weight where the eye should land first, and
-restraint: the palette and the type sizes in play are the ones the block needs
-and no more. This is where taste is asked for, and where the clichés cost — a
-centred everything, four equal cards, a headline that is large because nothing
-else was decided, decoration standing in for hierarchy.
+Whether someone decided — and whether the movement explains something. Spacing
+that follows a rhythm rather than a guess, alignment the eye can follow, weight
+where the eye should land first, and restraint: the palette and the type sizes in
+play are the ones the block needs and no more. This is where taste is asked for,
+and where the clichés cost — a centred everything, four equal cards, a headline
+that is large because nothing else was decided, decoration standing in for
+hierarchy.
+
+Motion is part of it, both ways. An entrance that explains what arrived, or a
+transition that shows two things are the same thing, is worth its lines. A page
+where everything fades in because it looked empty is decoration, and it costs
+here — especially when the content only exists while it is moving.
 
 ## copy
 
@@ -75,3 +87,9 @@ requirements — the sections, their order, anything it was told to avoid — an
 score what is missing or contradicted. A block that is beautiful and answers a
 different brief scores low here and high in `visual`: the two are separate
 questions and both are asked.
+
+Read it as a designer would, though, and not as a spec sheet: "one line of copy"
+is a short sentence rather than a promise about where the browser wraps it, a
+"simple" section is allowed to be a little intricate, and a brief that names a
+colour is naming a mood. Missing the point costs; missing the letter of it is a
+misreading, and it would fail blocks that did exactly what was asked.

@@ -88,6 +88,8 @@ class ScriptedChatModel(BaseChatModel):
     ) -> ChatResult:
         # A whole answer, for a caller that is not streaming: the graph streams,
         # a single call does not, and both have to work with one script.
+        self.seen.append(list(messages))
+
         return ChatResult(generations=[ChatGeneration(message=self._next())])
 
     def _stream(

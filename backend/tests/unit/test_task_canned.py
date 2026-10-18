@@ -1,8 +1,8 @@
 """The stand-in spec, which is the only thing a run varies by.
 
 The copy that carries the brief into a title and a card line is what is left here
-that has behaviour: the block comes from the generator and the judgement from the
-judge (Fase 7 and Fase 8), so neither is tested as a stand-in any more.
+that has behaviour: the block comes from the harness agent and the judgement from
+the judge, so neither is tested as a stand-in any more.
 """
 
 from app.tasks import canned

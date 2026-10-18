@@ -19,10 +19,23 @@ test("the gallery files what it holds", async ({ page }) => {
 test("a type narrows the sheet", async ({ page }) => {
   await page.goto("/");
 
+  const shown = () =>
+    page
+      .getByText(/^\d+ blocks$/)
+      .innerText()
+      .then((said) => Number(said.split(" ")[0]));
+
+  const all = await shown();
+
   await page.getByRole("link", { name: "Hero", exact: true }).click();
 
   await expect(page).toHaveURL(/type=hero/);
-  await expect(page.locator('[data-slot="item-cell"]')).toHaveCount(1);
+  await expect(page.locator('[data-slot="item-cell"]').first()).toBeVisible();
+
+  // Narrowed, not counted: the dataset grows every time somebody builds a block,
+  // and a test that pinned the number would fail the day the registry did the
+  // thing it exists for.
+  expect(await shown()).toBeLessThan(all);
 });
 
 test("an item opens with its code and its evidence", async ({ page }) => {
@@ -38,14 +51,18 @@ test("an item opens with its code and its evidence", async ({ page }) => {
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
   await expect(dialog.getByRole("tab", { name: "Code" })).toBeVisible();
-  await expect(dialog.getByText("Attempt № 2 of 2")).toBeVisible();
+  await expect(dialog.getByText(/Attempt № \d+ of \d+/)).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(page).not.toHaveURL(/item=/);
 });
 
 test("the ledger walks the attempt history", async ({ page }) => {
-  await page.goto("/");
+  // Found by searching rather than by being first: the seeded block is nobody's
+  // newest any more, and the attempt history it carries is what this walks. The
+  // query goes in the URL, since typing waits on a debounce that a test should
+  // not have to race.
+  await page.goto("/?q=Tiered%20pricing");
   await page.locator('[data-slot="item-cell"] a').first().click();
 
   const dialog = page.getByRole("dialog");

@@ -51,6 +51,18 @@ export interface ComponentSummary {
 
 export interface Component extends ComponentSummary {
   code: string;
+  /**
+   * The whole project: path → file, as the harness left it, with `code` as the
+   * entry file. A block may be several files; `code` is what every reader that
+   * predates projects still gets.
+   */
+  files: Record<string, string> | null;
+  /**
+   * What it imports from packages, with the version it was built against. Read
+   * out of the project by the sandbox rather than declared by whoever wrote it,
+   * so it is what a visitor has to install and not a claim.
+   */
+  dependencies: Record<string, string> | null;
   delivery_prompt: string;
   spec: Record<string, unknown> | null;
   winning_generation_id: string | null;
@@ -93,6 +105,8 @@ export interface Generation {
   component_id: string | null;
   attempt_no: number;
   code: string;
+  /** The project, as the attempt left it. `code` is its entry file. */
+  files: Record<string, string> | null;
   screenshot_path: string | null;
   checks: HarnessChecks | null;
   scores: Record<string, number> | null;
