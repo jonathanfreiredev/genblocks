@@ -85,6 +85,26 @@ class Settings(BaseSettings):
     # --- Generation loop -----------------------------------------------------
     # A component is published from the best of at most this many attempts.
     max_attempts: int = 2
+    # Every dimension of the judge's rubric has its own bar, and an attempt
+    # clears only when it clears all of them: a high mean does not carry a block
+    # past a dimension it failed (PLAN.md, section 7). These numbers are the
+    # calibration, not the code — they move against real generations, and the
+    # rubric's own version is what records its wording. A dimension that is not
+    # named here is scored, shown, and not gated on.
+    #
+    # Calibrated against the first real generations: the judge scores good work
+    # between 75 and 100, so the bars sit just inside its "good" band. The three
+    # that are not taste are set higher — a block whose render is shaky is a
+    # shaky block, and one that does not do what the brief asked is the wrong
+    # block, however well it looks.
+    rubric_thresholds: dict[str, int] = {
+        "render": 85,
+        "accessibility": 80,
+        "visual": 75,
+        "copy": 75,
+        "compliance": 85,
+        "prompt_fit": 75,
+    }
 
     @property
     def debug(self) -> bool:

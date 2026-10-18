@@ -1,26 +1,11 @@
-"""The stand-in copy, which is the only thing a run varies by.
+"""The stand-in spec, which is the only thing a run varies by.
 
-The spec and the judge are fixed, so these are the functions that have to
-behave: a title that reads and a card line that fits. The block itself is no
-longer written here — since Fase 7 it comes from the generator.
+The copy that carries the brief into a title and a card line is what is left here
+that has behaviour: the block comes from the generator and the judgement from the
+judge (Fase 7 and Fase 8), so neither is tested as a stand-in any more.
 """
 
 from app.tasks import canned
-
-# The six dimensions the component panel renders. The canned judge has to write
-# all of them: a missing one would show as a blank row in the item's evidence.
-COMPONENT_RUBRIC_KEYS = {
-    "render",
-    "accessibility",
-    "visual",
-    "copy",
-    "novelty",
-    "compliance",
-}
-
-
-def test_the_canned_scores_cover_the_component_rubric():
-    assert set(canned.SCORES) == COMPONENT_RUBRIC_KEYS
 
 
 def test_a_short_brief_is_its_own_title():
@@ -58,7 +43,3 @@ def test_the_description_keeps_the_whole_brief_until_it_has_to_fit():
 
     assert description.endswith("…")
     assert len(description) <= canned.DESCRIPTION_LIMIT + 1
-
-
-def test_the_headline_is_the_flat_mean_of_the_scores():
-    assert canned.headline_score({"a": 90, "b": 81}) == 86

@@ -1,17 +1,15 @@
-"""The stand-ins for what the pipeline does not do yet.
+"""The stand-in for what the pipeline does not do yet.
 
 A task has to run end to end long before every phase exists, so this module
-supplies what is missing: the **spec** (which type a brief is filed under) and the
-**judge** (what an attempt scores). Both are fixed, so a run is reproducible and
-free, and neither pretends to be more than it is:
+supplies what is still missing: the **spec**, which is what a brief is filed
+under. It is fixed, so a run is reproducible and free, and it does not pretend to
+be more than it is: the spec's ``spec`` block says ``"source": "canned"`` on its
+own face, and its version is :data:`VERSION` rather than a rubric's.
 
-- ``rubric_version`` is :data:`VERSION`, so a stand-in score can never be mistaken
-  for a calibrated one.
-- The spec's ``spec`` block says ``"source": "canned"`` on its own face.
-
-What is *not* here anymore is the block itself: since Fase 7 the code is written
-by the generator and checked by the sandbox (``app/harness``), and the attempt
-credits the model that wrote it.
+What is *not* here anymore is the block or the judgement: since Fase 7 the code
+is written by the generator and checked by the sandbox (``app/harness``), and
+since Fase 8 an independent judge scores the attempt (``app.judge``). Both credit
+what they are.
 
 The seeded vault (``app.seed.vault``) is a different thing: planted by hand to
 show what a finished run looks like, with ``seed-v0`` as its rubric version.
@@ -24,25 +22,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.categories import service as categories_service
 
-# The version both the spec and the rubric are stamped with. Not a rubric
-# version in the real sense: nothing was measured.
+# The version the stand-in spec is stamped with. Not a rubric version in the real
+# sense — nothing was measured. The rubric that is measured is the judge's
+# (``app.judge.rubrics``), and this is what a canned spec says about itself.
 VERSION = "canned-v1"
 
 # The type a run files its block under, until the spec phase reads the taxonomy.
 # It has to exist; the seed plants it, and a missing one fails the task with a
 # message that says so.
 CATEGORY_SLUG = "hero"
-
-# What the stand-in judge wrote, already above every threshold. Every run gets
-# the same numbers: the point of a stand-in is that it does not vary.
-SCORES = {
-    "render": 91,
-    "accessibility": 89,
-    "visual": 84,
-    "copy": 86,
-    "novelty": 79,
-    "compliance": 93,
-}
 
 # How much of the brief survives into the title and the card's one-liner.
 TITLE_LIMIT = 60
@@ -114,11 +102,6 @@ def description_for(brief: str) -> str:
         return single_line
 
     return f"{single_line[:DESCRIPTION_LIMIT].rsplit(' ', 1)[0]}…"
-
-
-def headline_score(scores: dict[str, int]) -> int:
-    """The judge's headline number: the flat mean of its rubric scores."""
-    return round(sum(scores.values()) / len(scores))
 
 
 def _first_clause(value: str) -> str:

@@ -10,8 +10,10 @@ export type Kind = "component" | "image";
 /**
  * An attempt's verdict: where the artifact ended up, not a grade.
  *
- * ``candidate`` is an attempt nobody has judged yet; the judge either publishes
- * it or rejects it, and a rejected attempt is kept.
+ * ``candidate`` is an attempt nobody has turned down yet, which is what an
+ * attempt is while its run is in flight. One that was turned down is
+ * ``rejected`` — by the sandbox that would not build it or by the judge that
+ * scored it below its bar — and it is kept either way.
  */
 export type Verdict = "candidate" | "published" | "rejected";
 

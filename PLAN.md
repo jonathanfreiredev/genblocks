@@ -142,6 +142,37 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     screenshot se sube **en el paso del harness** (Fase 7) y no en el commit de
     la Fase 9 como insinuaba la nota de la decisión 23: el intento lleva su
     render desde que existe, y el juez lo necesita antes de publicar.
+28. **El juez puntúa a ciegas, y su rúbrica es una skill con versión de texto.**
+    Es un agente aparte (`app/judge/`) que no ve la conversación que produjo el
+    brief y no puede tocar la pieza: recibe el brief, el código, lo que encontró
+    el sandbox y el render, y devuelve un número y una frase por dimensión más un
+    resumen. La rúbrica vive como documento en el repo
+    (`app/judge/rubrics/*.md`) y su **versión es el hash del texto y de la lista
+    de dimensiones**, no un número que alguien recuerde subir: un score siempre
+    se puede releer contra el texto que lo produjo, y una versión que cambió sin
+    motivo no puede existir. Las dimensiones de componente son **cinco** —render,
+    accessibility, visual, copy, compliance—: *novedad* no se puntúa todavía
+    porque es una distancia contra la biblioteca y la biblioteca no tiene
+    vectores hasta la Fase 10; un juez que la adivinara estaría contestando a
+    otra pregunta con el mismo nombre. Los **umbrales no se le dicen al juez**:
+    quien sabe dónde está el listón puntúa contra el listón, y el veredicto deja
+    de ser una lectura independiente. Sus notas y su resumen alimentan al
+    reintento y no se guardan: el ledger tiene los números (decisión 13) y la
+    traza con las palabras llega con la Fase 12.
+29. **El bucle publica el primer intento que pasa todos los umbrales; si ninguno,
+    el que quedó más cerca.** Reintento máximo 1 (`settings.max_attempts`), y "más
+    cerca" es el **margen**: la menor distancia a un umbral entre las dimensiones
+    medidas, no la media — la media deja que un bloque esconda la dimensión que
+    falló, que es justo lo que el ledger se niega a hacer. Un reintento se lleva
+    el **motivo por escrito** (los checks que fallaron o las notas del juez):
+    un segundo intento sin él es otra tirada de los mismos dados al precio de
+    otro sandbox. Un intento que el sandbox rechaza **también se reintenta** si
+    queda alguno: el código que no compila es lo más arreglable que hay. El
+    checklist crece con el bucle: los pasos del primer intento se escriben al
+    abrir la tarea y un reintento inserta los suyos por delante del paso de
+    publicación, que baja de sitio, para que el orden siga siendo el orden. Un
+    intento tumbado queda `rejected` —por el sandbox o por el juez—; `candidate`
+    es solo lo que nadie ha tumbado todavía.
 
 ---
 
@@ -528,6 +559,19 @@ streaming.
 
 **Verificación**: el juez puntúa un candidato; el reintento se dispara y se respeta
 el tope. Calibrar umbrales con varias generaciones.
+
+**Notas**: los umbrales se calibraron contra las primeras generaciones reales: el
+juez puntúa el trabajo bueno entre 75 y 100, así que los listones quedan justo
+dentro de esa banda y suben donde no hay gusto que valga —render, accesibilidad y
+cumplimiento—. Medido en vivo: de siete tareas, cinco publicaron al primer
+intento, una se arregló en el segundo y en otra ningún intento pasó el listón, así
+que se publicó el más cercano con su número flojo a la vista. La rúbrica de
+imágenes y su llamada existen y están probadas, pero **su llamante es la tool de
+imágenes de la Fase 9**: hasta entonces ninguna imagen entra en la biblioteca, y
+las sembradas no tienen asset que mirar. **Pendiente**: que un bloque no pueda
+depender de la red es hoy una frase en la rúbrica y en el prompt —el juez lo
+penaliza, y lo hizo— pero el check mecánico (referencias a assets externos) es
+trabajo de endurecimiento (Fase 11).
 
 **Fuera**: todavía sin DeepAgent ni RAG.
 

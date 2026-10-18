@@ -57,6 +57,27 @@ def test_the_question_carries_the_brief_and_what_the_registry_decided():
     assert "A pricing page" in asked
 
 
+def test_a_first_attempt_has_nothing_to_answer_for():
+    asked = generator.asked(brief="A pricing page", category="pricing")
+
+    assert generator.FEEDBACK_HEADING not in asked
+
+
+def test_a_second_attempt_is_told_what_was_wrong_with_the_first():
+    asked = generator.asked(
+        brief="A pricing page",
+        category="pricing",
+        feedback="- copy (41, below 70): the buttons say Click here",
+    )
+
+    assert "A pricing page" in asked
+    assert generator.FEEDBACK_HEADING in asked
+    # In the words it was given: the report is the sandbox's or the judge's, and
+    # the writer is the only reader that can act on it.
+    assert "the buttons say Click here" in asked
+    assert "Write the block again" in asked
+
+
 async def test_the_writer_returns_what_the_model_wrote():
     written = await generator.write_component(
         brief="A pricing page",

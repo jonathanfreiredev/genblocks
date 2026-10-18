@@ -33,5 +33,9 @@ What it must not be:
 - A comment about the brief, a `TODO`, or placeholder copy that says what the
   block would contain. Write the copy a designer would ship.
 
+If the message names why an earlier attempt at this brief was not published, that
+report is the first thing to answer: fix what it names and keep what it did not
+complain about.
+
 Answer with the file, in one fenced code block, and nothing else.
 """

@@ -8,6 +8,11 @@ neither knows how the other is built.
 What comes back is a model's answer, so it is read rather than trusted: the file
 is taken out of its fence, and an answer with no component in it is a failure
 with a message rather than an empty attempt.
+
+A second attempt at the same brief arrives with the reason the first one did not
+publish (the loop is ``app.tasks.runner``). That report is the only thing a retry
+has that a first attempt did not, and without it a retry buys a second sandbox
+run for another roll of the same dice.
 """
 
 from langchain_core.language_models import BaseChatModel
@@ -23,6 +28,10 @@ MIN_CODE_LENGTH = 60
 # Answers arrive fenced. The tag is whatever the model felt like writing, so the
 # opening fence is read as a fence and the tag thrown away.
 FENCE = "```"
+
+# How a previous attempt's report is introduced. The heading says what the
+# paragraph under it is for: the message is otherwise all brief.
+FEEDBACK_HEADING = "Why the last attempt at this brief was not published:"
 
 
 class GeneratorUnavailable(Exception):
@@ -55,26 +64,42 @@ async def write_component(
     *,
     brief: str,
     category: str,
+    feedback: str | None = None,
     model: BaseChatModel | None = None,
 ) -> str:
     """Write one block for a brief, and return its source.
 
-    ``model`` is there so a test can write a script instead of paying for a
-    completion; production passes nothing and gets the configured model.
+    ``feedback`` is what a previous attempt at the same brief was told was wrong
+    with it, or ``None`` on a first attempt. ``model`` is there so a test can
+    write a script instead of paying for a completion; production passes nothing
+    and gets the configured model.
     """
     answer = await (model or writer_model()).ainvoke(
         [
             SystemMessage(WRITER_PROMPT),
-            HumanMessage(asked(brief=brief, category=category)),
+            HumanMessage(asked(brief=brief, category=category, feedback=feedback)),
         ]
     )
 
     return read_component(str(answer.text))
 
 
-def asked(*, brief: str, category: str) -> str:
-    """The brief, with what the registry already decided about it."""
-    return f"The registry files this under: {category}\n\nThe brief:\n{brief}"
+def asked(*, brief: str, category: str, feedback: str | None = None) -> str:
+    """The brief, with what the registry already decided about it.
+
+    A retry arrives with the reason the attempt before it did not publish, in the
+    words of whoever turned it down — the sandbox's failing checks or the judge's
+    own notes. A second attempt without it would be another roll of the same
+    dice, at the price of another sandbox run.
+    """
+    said = f"The registry files this under: {category}\n\nThe brief:\n{brief}"
+    if not feedback:
+        return said
+
+    return (
+        f"{said}\n\n{FEEDBACK_HEADING}\n{feedback}\n\n"
+        "Write the block again. Fix what is named above, and keep what was not."
+    )
 
 
 def read_component(answer: str) -> str:

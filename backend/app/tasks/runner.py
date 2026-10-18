@@ -2,10 +2,27 @@
 
 The four steps are the pipeline's shape — spec, harness, judge, commit — under
 the names the checklist already uses: retrieving references, generating the
-block, judging the attempt and publishing the block. Two of them are real now:
-the block is written by a model and put through the sandbox (``app/harness``).
-The spec and the judge are still stand-ins (``app.tasks.canned``); replacing one
-replaces a body, not the lifecycle around it.
+block, judging the attempt and publishing the block. All four are real: the block
+is written by a model and put through the sandbox (``app/harness``), and what it
+is worth is decided by a judge that did not write it (``app.judge``).
+
+**The loop.** A run gets at most ``settings.max_attempts`` attempts at one brief.
+The first attempt that clears every threshold is the one published; if none does,
+the attempt that came closest is published anyway (PLAN.md, decision 6), because
+a block with visible weak numbers is a better answer than a task that failed and
+published nothing. A retry is told what was wrong with the attempt before it, in
+the words of whoever turned it down, because a second roll of the same dice does
+not pay for a second sandbox run. Every attempt stays on the record, refusals
+included: the history of a block is the claim.
+
+**The checklist grows.** The steps of the first attempt are written when the run
+starts, so a reader watches what is still to come. A retry inserts its own pair
+in front of the publish step, which moves down: a checklist is read in order and
+the publishing line belongs last, and two attempts sharing one row would have to
+say "generating" while the judge was already reading. An attempt the sandbox
+refused closes its judging row all the same — with the sandbox's own words
+instead of a score, because a row left queued for ever is a worse answer than one
+that names who turned it down.
 
 **Postgres is both the queue and the source of truth.** A worker claims work by
 updating a ``pending`` row under ``FOR UPDATE SKIP LOCKED``, in the same
@@ -34,21 +51,24 @@ from app.generations.models import Generation, Verdict
 from app.generations.service import list_generations
 from app.harness import generator, sandbox, screenshots
 from app.harness.schemas import SandboxFile, SandboxResult
+from app.judge import scoring as judge
+from app.judge.schemas import Judged
 from app.settings import settings
 from app.tasks import canned, service
 from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
 
 logger = structlog.get_logger("app.tasks.runner")
 
+RETRIEVE_STEP = "Retrieving references"
+GENERATE_STEP = "Generating the block"
+JUDGE_STEP = "Judging the attempt"
+PUBLISH_STEP = "Publishing the block"
+
 # The checklist every run writes, in order. Written up front rather than as the
 # work happens: a reader should see what is still to come, not only what is done.
-# Moderation prepends itself here when it lands (Fase 11).
-STEP_NAMES = (
-    "Retrieving references",
-    "Generating the block",
-    "Judging the attempt",
-    "Publishing the block",
-)
+# These four steps are the first attempt's; a retry appends its own (see
+# ``_step``). Moderation prepends itself here when it lands (Fase 11).
+STEP_NAMES = (RETRIEVE_STEP, GENERATE_STEP, JUDGE_STEP, PUBLISH_STEP)
 
 # Where the generated block goes in the sandbox's project: the file the
 # scaffold's entry point imports (``app/harness/scaffold/src/main.tsx``). The
@@ -75,9 +95,10 @@ class HarnessRefused(Exception):
     the answer they came for.
     """
 
-    def __init__(self, result: SandboxResult) -> None:
+    def __init__(self, result: SandboxResult, *, attempts: int = 1) -> None:
         said = "; ".join(f"{check.name}: {check.detail or 'failed'}" for check in result.failures)
-        super().__init__(f"The sandbox refused the attempt — {said}")
+        every = "every attempt" if attempts > 1 else "the attempt"
+        super().__init__(f"The sandbox refused {every} — {said}")
 
 
 async def claim_next_task() -> uuid.UUID | None:
@@ -118,22 +139,15 @@ async def run_task(task_id: uuid.UUID) -> None:
             return
 
         steps = await _open_checklist(session, task_id=task.id)
-        # Which step the run is on, so a failure can be attributed to it.
-        step_index = 0
 
         try:
-            spec = await _retrieve(session, task=task, step=steps[step_index])
-
-            step_index = 1
-            attempt = await _generate(session, task=task, step=steps[step_index], spec=spec)
-
-            step_index = 2
-            await _judge(session, step=steps[step_index], attempt=attempt)
-
-            step_index = 3
-            await _publish(session, task=task, step=steps[step_index], attempt=attempt, spec=spec)
+            spec = await _retrieve(session, task=task, step=steps[0])
+            attempt = await _run_attempts(session, task=task, spec=spec, steps=steps)
+            # The publish step is the one the checklist closed with, moved down by
+            # every retry that inserted itself in front of it.
+            await _publish(session, task=task, step=steps[-1], attempt=attempt, spec=spec)
         except Exception as error:  # noqa: BLE001 - the task row is where this is kept
-            await _fail(session, task_id=task.id, step_index=step_index, error=error)
+            await _fail(session, task_id=task.id, error=error)
 
 
 async def run_worker(stop: asyncio.Event, *, poll_seconds: float = POLL_SECONDS) -> None:
@@ -173,53 +187,181 @@ async def _retrieve(session: AsyncSession, *, task: Task, step: TaskStep) -> can
     return spec
 
 
-async def _generate(
-    session: AsyncSession, *, task: Task, step: TaskStep, spec: canned.CannedSpec
+async def _run_attempts(
+    session: AsyncSession,
+    *,
+    task: Task,
+    spec: canned.CannedSpec,
+    steps: list[TaskStep],
 ) -> Generation:
-    """Write the first attempt and put it through the sandbox.
+    """Try one brief up to the allowed number of attempts, and pick what to publish.
 
-    One pass, always: the retry loop is Fase 8, and what decides between two
-    attempts is the judge. The order is a reader's order — write it, check it,
-    photograph it, keep the record — and what the sandbox proves is written on the
-    attempt rather than only on the step, because the judge will read it there.
+    Returns the first attempt that cleared every threshold, or — when none did —
+    the one that came closest, which is published with its weak numbers showing
+    (PLAN.md, decision 6). Raises :class:`HarnessRefused` when no attempt got as
+    far as being judged: a run in which the sandbox turned down everything has
+    nothing to publish, and its own words are the error.
+    """
+    # The checklist opens with the first attempt's pair and closes with publishing.
+    generating, judging = steps[1], steps[2]
+    publish = steps[-1]
 
-    Code that does not typecheck, does not bundle or renders nothing is not
-    published: it fails the task with the sandbox's own words. The attempt stays
-    behind either way, since "we tried and it did not hold up" is part of the
-    claim the registry makes.
+    attempts: list[Generation] = []
+    last_result: SandboxResult | None = None
+    feedback: str | None = None
+
+    for attempt_no in range(1, settings.max_attempts + 1):
+        generating = await _step(
+            session,
+            opening=generating if attempt_no == 1 else None,
+            publish=publish,
+            name=GENERATE_STEP,
+            attempt_no=attempt_no,
+        )
+
+        attempt, found = await _generate(
+            session,
+            task=task,
+            step=generating,
+            spec=spec,
+            attempt_no=attempt_no,
+            feedback=feedback,
+        )
+        attempts.append(attempt)
+        last_result = found
+
+        judging = await _step(
+            session,
+            opening=judging if attempt_no == 1 else None,
+            publish=publish,
+            name=JUDGE_STEP,
+            attempt_no=attempt_no,
+        )
+
+        if found.blocked:
+            # Refused before the judge read it, and the step is closed either way:
+            # the checklist was opened with it, and an attempt has to say what
+            # became of it rather than leave a row queued for ever. The retry is
+            # worth making here more than anywhere else — code that does not build
+            # is code that can be fixed, and the sandbox said what was wrong.
+            await _finish(
+                session,
+                judging,
+                detail={"attempt": attempt_no, "refused": _refused(found)},
+            )
+            feedback = _refused_feedback(found)
+            continue
+
+        judged = await _judge(
+            session,
+            step=judging,
+            attempt=attempt,
+            brief=task.brief,
+            found=found,
+            attempt_no=attempt_no,
+        )
+        if judged.passed:
+            return attempt
+
+        feedback = _judge_feedback(judged)
+
+    if last_result is None or not any(one.scores for one in attempts):
+        raise HarnessRefused(last_result or SandboxResult(), attempts=len(attempts))
+
+    # Nothing cleared the bar, so the closest one goes out: the registry's claim
+    # is that the numbers are visible, not that every block is good.
+    return max(attempts, key=lambda one: judge.margin(one.scores or {}))
+
+
+async def _step(
+    session: AsyncSession,
+    *,
+    opening: TaskStep | None,
+    publish: TaskStep,
+    name: str,
+    attempt_no: int,
+) -> TaskStep:
+    """The step this work runs in, written if the checklist does not have it.
+
+    The checklist opens with one attempt's steps, so the first attempt uses what
+    is already there. A retry's step is inserted in front of the publish step,
+    which moves down by one: the checklist is read in order and the publishing
+    line belongs last, so the alternative — one generating row reused by both
+    attempts — would have to say "generating" while the judge was already reading.
+    """
+    if opening is not None:
+        return opening
+
+    step = TaskStep(
+        task_id=publish.task_id,
+        index=publish.index,
+        name=step_name(name, attempt_no),
+    )
+    publish.index += 1
+    session.add(step)
+    await session.commit()
+    return step
+
+
+def step_name(name: str, attempt_no: int) -> str:
+    """A step's name on a retry, which has to say that it is one.
+
+    Two rows with the same name would read as one step that happened twice by
+    accident rather than as a second attempt.
+    """
+    return name if attempt_no == 1 else f"{name} (attempt {attempt_no})"
+
+
+async def _generate(
+    session: AsyncSession,
+    *,
+    task: Task,
+    step: TaskStep,
+    spec: canned.CannedSpec,
+    attempt_no: int,
+    feedback: str | None,
+) -> tuple[Generation, SandboxResult]:
+    """Write one attempt and put it through the sandbox.
+
+    The order is a reader's order — write it, check it, photograph it, keep the
+    record — and what the sandbox proves is written on the attempt rather than
+    only on the step, because the judge reads it there.
+
+    Whether a refusal ends the run is not decided here: an attempt the sandbox
+    turns down is one a retry can still fix, and only the loop knows whether
+    there is one left.
     """
     await _begin(session, step)
 
-    code = await generator.write_component(brief=task.brief, category=spec.category_slug)
+    code = await generator.write_component(
+        brief=task.brief,
+        category=spec.category_slug,
+        feedback=feedback,
+    )
+
     found = await sandbox.check([SandboxFile(path=BLOCK_PATH, content=code)])
-    stored = await _store(found, task=task, attempt_no=1)
+    stored = await _store(found, task=task, attempt_no=attempt_no)
 
     attempt = Generation(
         task_id=task.id,
-        attempt_no=1,
+        attempt_no=attempt_no,
         code=code,
-        # A model wrote this, and the attempt credits it. The scores it will
-        # carry are still the stand-in's (Fase 8), and those say so.
+        # A model wrote this, and the attempt credits it. The judge runs on the
+        # same model as a separate agent; what it scored is in ``scores``.
         model=settings.llm_model,
         screenshot_path=stored,
         checks=found.record(),
-        verdict=Verdict.CANDIDATE,
+        # Refused is decided, judged is not yet: an attempt nobody has read is a
+        # candidate, and it stops being one the moment either turn-down lands.
+        verdict=Verdict.REJECTED if found.blocked else Verdict.CANDIDATE,
     )
     session.add(attempt)
-    # Committed before the sandbox's verdict is acted on: a refusal below reaches
-    # the failure path, which rolls the session back, and the attempt has to
-    # survive that.
+    # Committed before the refusal is acted on: a failure reaches the failure
+    # path, which rolls the session back, and the attempt has to survive that.
     await session.commit()
 
-    if found.blocked:
-        raise HarnessRefused(found)
-
-    await _finish(
-        session,
-        step,
-        detail={"attempts": 1, "checks": _tally(found)},
-    )
-    return attempt
+    await _finish(session, step, detail={"attempt": attempt_no, "checks": _tally(found)})
+    return attempt, found
 
 
 async def _store(result: SandboxResult, *, task: Task, attempt_no: int) -> str | None:
@@ -243,19 +385,71 @@ def _tally(result: SandboxResult) -> str:
     return f"{sum(1 for check in result.checks if check.ok)}/{len(result.checks)}"
 
 
-async def _judge(session: AsyncSession, *, step: TaskStep, attempt: Generation) -> None:
-    """Score the attempt. The canned judge passes everything it is shown."""
+async def _judge(
+    session: AsyncSession,
+    *,
+    step: TaskStep,
+    attempt: Generation,
+    brief: str,
+    found: SandboxResult,
+    attempt_no: int,
+) -> Judged:
+    """Score one attempt, and say whether it clears every bar.
+
+    The judge reads the artifacts the sandbox left — the brief it was written
+    from, the code, what the sandbox found, and the render — and never the
+    attempt's own row: a judge reading a verdict it wrote earlier is not a second
+    opinion (PLAN.md, decision 7).
+    """
     await _begin(session, step)
 
-    attempt.scores = dict(canned.SCORES)
-    attempt.rubric_version = canned.VERSION
-    attempt.verdict = Verdict.PUBLISHED
+    judged = await judge.score_component(brief=brief, code=attempt.code, found=found)
 
-    await _finish(
-        session,
-        step,
-        detail={"verdict": Verdict.PUBLISHED, "score": canned.headline_score(canned.SCORES)},
-    )
+    attempt.scores = judged.scores
+    attempt.rubric_version = judged.version
+    if not judged.passed:
+        attempt.verdict = Verdict.REJECTED
+    await session.commit()
+
+    detail = {"attempt": attempt_no, "weakest": _weakest(judged)}
+    if judged.below:
+        detail["below"] = ", ".join(judged.below)
+    await _finish(session, step, detail=detail)
+    return judged
+
+
+def _weakest(judged: Judged) -> str:
+    """The dimension that decided the attempt, as the checklist's one number.
+
+    The lowest score rather than the mean, and for the same reason the attempt
+    ledger is written that way (``frontend/lib/vault/rubric.ts``): a mean can
+    look respectable on an attempt that failed a dimension, which is the one
+    thing a line about a judgement must never do.
+    """
+    dimension = min(judged.scores, key=lambda name: judged.scores[name])
+
+    return f"{dimension} {judged.scores[dimension]}"
+
+
+def _judge_feedback(judged: Judged) -> str:
+    """What the judge found, in the words the next attempt is told about it."""
+    said = [
+        f"- {dimension} ({judged.scores[dimension]}, below {judge.threshold_for(dimension)}): "
+        f"{judged.notes[dimension]}"
+        for dimension in judged.below
+    ]
+
+    return "\n".join([*said, f"The judge's own summary: {judged.summary}"])
+
+
+def _refused(found: SandboxResult) -> str:
+    """Which checks turned the attempt down, as one line for the checklist."""
+    return ", ".join(check.name for check in found.failures)
+
+
+def _refused_feedback(found: SandboxResult) -> str:
+    """What the sandbox refused, in the words the next attempt is told about it."""
+    return "\n".join(f"- {check.name}: {check.detail or 'failed'}" for check in found.failures)
 
 
 async def _publish(
@@ -296,13 +490,16 @@ async def _publish(
     for made in await list_generations(session, task_id=task.id):
         made.component_id = component.id
 
+    # The winner wears the verdict now: it may be an attempt that was rejected on
+    # its way here and is still the best the run produced.
+    attempt.verdict = Verdict.PUBLISHED
     component.winning_generation_id = attempt.id
     task.component_id = component.id
     task.status = TaskStatus.SUCCEEDED
     task.finished_at = utcnow()
     task.error = None
 
-    await _finish(session, step, detail={"slug": slug})
+    await _finish(session, step, detail={"slug": slug, "attempt": attempt.attempt_no})
 
 
 def slug_for(*, title: str, task_id: uuid.UUID) -> str:
@@ -333,9 +530,7 @@ async def _finish(session: AsyncSession, step: TaskStep, *, detail: dict) -> Non
     await session.commit()
 
 
-async def _fail(
-    session: AsyncSession, *, task_id: uuid.UUID, step_index: int, error: Exception
-) -> None:
+async def _fail(session: AsyncSession, *, task_id: uuid.UUID, error: Exception) -> None:
     """Record a failure on the task, whatever state the session is in.
 
     The rollback comes first because a failure can be the database's: the row
@@ -343,10 +538,10 @@ async def _fail(
     the task afterwards is the price of that rollback, which expires what the
     run was holding.
 
-    The step is looked up on its own rather than through ``task.steps``: that
-    collection was read when the run started, before the checklist existed, and a
-    session that does not expire on commit would hand back the empty list it was
-    holding.
+    The step that failed is the one still open. A run works through one step at
+    a time and closes each before opening the next, so the ``running`` row is the
+    step the failure happened in — and reading it back off the table is what
+    saves a retry's steps from having to be numbered by hand across a rollback.
     """
     await session.rollback()
 
@@ -356,7 +551,10 @@ async def _fail(
 
     now = utcnow()
     step = await session.scalar(
-        select(TaskStep).where(TaskStep.task_id == task_id, TaskStep.index == step_index)
+        select(TaskStep).where(
+            TaskStep.task_id == task_id,
+            TaskStep.status == StepStatus.RUNNING,
+        )
     )
     if step is not None:
         step.status = StepStatus.FAILED
@@ -367,4 +565,4 @@ async def _fail(
     task.error = str(error) or type(error).__name__
     await session.commit()
 
-    logger.info("task failed", task_id=str(task_id), step=step_index, error=task.error)
+    logger.info("task failed", task_id=str(task_id), error=task.error)

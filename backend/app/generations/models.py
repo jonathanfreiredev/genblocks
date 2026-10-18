@@ -9,7 +9,13 @@ from app.db.models import BaseModel
 
 
 class Verdict(StrEnum):
-    """Where an attempt ended up once the judge had read it."""
+    """Where an attempt ended up.
+
+    ``candidate`` is an attempt nobody has turned down yet: what an attempt is
+    while its run is in flight. An attempt that was turned down is ``rejected`` —
+    by the sandbox that would not build it or by the judge that scored it below
+    its bar — and the one published is ``published``.
+    """
 
     CANDIDATE = "candidate"
     PUBLISHED = "published"
