@@ -14,6 +14,14 @@ installed when the image is built, not on every run: a check that spent a minute
 installing React is a check nobody runs twice. A run then gets a copy of the
 scaffold, with the scaffold's ``node_modules`` symlinked in rather than copied.
 
+**The container outlives the call.** Modal keeps containers warm and feeds them
+one input at a time, so ``/root`` and ``/tmp`` survive between runs; that is why
+every run works in a directory of its own (see :func:`check`).
+
+To work on it by hand, ``modal run app/harness/modal_app.py`` calls the function
+in the file — in a throwaway app, not the deployed one — and prints what it
+found. The deployed app stays where it is.
+
 The shape of the request and the answer is ``app/harness/schemas.py``, which is
 the side that strictly reads it. What this module knows is only the names of the
 checks, because it is the one that runs them.
@@ -25,6 +33,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -59,9 +68,27 @@ KEPT_VIEWPORT = "desktop"
 # and left to the judge: this phase reports, it does not rule.
 SERIOUS_IMPACTS = ("serious", "critical")
 
-# A render with nothing in it is not a render. Characters, not nodes: a block
-# that draws one empty div says nothing.
-MIN_RENDERED_TEXT = 20
+# What counts as drawn: words, or something a reader sees instead of them (a
+# chart, an illustration). The point is to tell a page that ran from one that
+# threw on the way up, not to judge how much the block says — that is the judge's
+# work, and a terse block is not a broken one.
+DRAWN = """() => {
+    if (document.body.innerText.trim().length > 0) return true;
+    return document.querySelector("svg, canvas, img, picture, video") !== null;
+}"""
+
+# How long a page gets to draw, and how often it is looked at meanwhile. Short
+# polls because the interesting answer is usually already in hand: a block that
+# throws reports itself through the error listener a moment after it loads, and
+# the bound is only for a page that mounts and never draws anything.
+RENDER_TIMEOUT_SECONDS = 15
+POLL_MILLISECONDS = 100
+
+# A run that has already failed one of these will not be published, so there is
+# nothing to photograph: the render is the most expensive thing this function
+# does. The names are the checks above the render, in the order they run; what a
+# failure *means* is decided on the other side (``app/harness/schemas.py``).
+GATES = ("typecheck", "build")
 
 # How long one command may take, and how much of its output is worth keeping. A
 # typecheck error is in the first line; the rest is the same stack again.
@@ -92,9 +119,14 @@ def check(request: dict) -> dict[str, Any]:
     """Build, check and render one project, and say what happened.
 
     The commands run in the order a reader would run them: types first, then
-    style, then whether it bundles at all. A project that does not bundle is not
-    rendered — there would be no page to render, and inventing a screenshot of
-    one would be the worst thing this function could do.
+    style, then whether it bundles at all. A project already refused by one of the
+    gates is not rendered: there would be nothing published from it either way,
+    and the render is the slow part.
+
+    Every run gets a directory of its own. Modal keeps containers warm and hands
+    them one input at a time, so a shared path would carry the last block's
+    ``src/Block.tsx`` — and worse, its ``dist/`` — into this check, where a stale
+    bundle could make a broken block pass.
     """
     with tempfile.TemporaryDirectory() as workdir:
         project = Path(workdir)
@@ -106,14 +138,13 @@ def check(request: dict) -> dict[str, Any]:
             _npm(project, script="build", name="build"),
         ]
 
-        if not next(check for check in checks if check["name"] == "build")["ok"]:
+        if any(check["name"] in GATES and not check["ok"] for check in checks):
             return {"checks": checks, "violations": [], "screenshot": None}
 
         rendered = _render(project)
-        checks.extend(rendered["checks"])
 
         return {
-            "checks": checks,
+            "checks": [*checks, *rendered["checks"]],
             "violations": rendered["violations"],
             "screenshot": rendered["screenshot"],
         }
@@ -129,7 +160,10 @@ def _lay_out(project: Path, files: list[dict[str, str]]) -> None:
     )
 
     # The image's install, not a copy of it: node_modules is hundreds of
-    # megabytes, and moving them per run would cost more than the run.
+    # megabytes, and moving them per run would cost more than the run. Shared by
+    # every run in this container, which is safe while they go one at a time —
+    # npm and Vite do write small things in there, and that is the first thing to
+    # look at before ever running two inputs at once.
     (project / "node_modules").symlink_to(
         REMOTE_SCAFFOLD / "node_modules", target_is_directory=True
     )
@@ -171,62 +205,68 @@ def _render(project: Path) -> dict[str, Any]:
     from playwright.sync_api import sync_playwright
 
     server, port = _served(project / "dist")
-    checks: list[dict[str, Any]] = []
+    violations: list[dict[str, Any]] = []
+    screenshot: bytes | None = None
 
     try:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
-            desktop = next(one for one in VIEWPORTS if one["name"] == KEPT_VIEWPORT)
-            page = browser.new_page(
-                viewport={"width": desktop["width"], "height": desktop["height"]}
-            )
+            page = browser.new_page(viewport=_size(KEPT_VIEWPORT))
 
             trouble: list[str] = []
             page.on("pageerror", lambda error: trouble.append(str(error)))
             page.on("console", lambda message: _kept(trouble, message))
 
             page.goto(f"http://127.0.0.1:{port}/", wait_until="load")
-            checks.append(_rendered(page, trouble))
+            rendered = _rendered(page, trouble)
+            rest: list[dict[str, Any]] = []
 
-            if checks[-1]["ok"]:
-                checks.extend(_layouts(page, port))
-                checks.append(_accessible(page))
+            # A page that did not come up is not measured and not photographed:
+            # its layout and its contrast say nothing about the block, and the
+            # picture would be of a blank page.
+            if rendered["ok"]:
+                rest.extend(_layouts(page, port))
+                accessibility, violations = _accessible(page)
+                rest.append(accessibility)
+                screenshot = page.screenshot()
 
-            screenshot = page.screenshot() if checks[0]["ok"] else None
-            violations = checks[-1]["violations"] if checks[-1]["name"] == "accessibility" else []
             browser.close()
     finally:
         server.shutdown()
 
-    return {
-        "checks": [{key: check[key] for key in ("name", "ok", "detail")} for check in checks],
-        "violations": violations,
-        "screenshot": screenshot,
-    }
+    return {"checks": [rendered, *rest], "violations": violations, "screenshot": screenshot}
 
 
 def _rendered(page: Page, trouble: list[str]) -> dict[str, Any]:
-    """Whether the page came up, drew something, and kept quiet doing it."""
-    try:
-        # Not a sleep: the block is mounted when it has text, and a page that
-        # never gets any is the failure this check exists for.
-        page.wait_for_function(
-            "() => document.body.innerText.trim().length > 0",
-            timeout=COMMAND_TIMEOUT_SECONDS * 1000,
-        )
-        drawn = page.evaluate("() => document.body.innerText.trim().length")
-    except Exception as drew_nothing:  # noqa: BLE001 - the page's failure is the report
-        return {"name": "render", "ok": False, "detail": _trimmed(str(drew_nothing))}
+    """Whether the page came up, drew something, and kept quiet doing it.
 
-    if trouble:
-        return {"name": "render", "ok": False, "detail": _trimmed("; ".join(trouble))}
+    Looked at in a loop rather than waited on in one go, because the two failures
+    announce themselves differently: a block that throws says so through the error
+    listener a moment after it loads, and a block that mounts and draws nothing
+    says so by never drawing. A single wait for the drawing would spend the whole
+    bound learning what the first poll already knew.
+    """
+    deadline = time.monotonic() + RENDER_TIMEOUT_SECONDS
 
-    ok = drawn >= MIN_RENDERED_TEXT
-    return {
-        "name": "render",
-        "ok": ok,
-        "detail": None if ok else "The block rendered without text of its own.",
-    }
+    while time.monotonic() < deadline:
+        if trouble:
+            return _did_not_render(trouble)
+
+        if page.evaluate(DRAWN):
+            return {"name": "render", "ok": True, "detail": None}
+
+        # Not a sleep in the Python sense: Playwright keeps delivering the page's
+        # events while this wait runs, which is what fills ``trouble``.
+        page.wait_for_timeout(POLL_MILLISECONDS)
+
+    return _did_not_render(trouble, or_else="The block mounted and drew nothing.")
+
+
+def _did_not_render(trouble: list[str], *, or_else: str | None = None) -> dict[str, Any]:
+    """The render check, failed, saying what the page did instead."""
+    said = "; ".join(trouble) or or_else or "The block drew nothing."
+
+    return {"name": "render", "ok": False, "detail": _trimmed(said)}
 
 
 def _layouts(page: Page, port: int) -> list[dict[str, Any]]:
@@ -234,7 +274,7 @@ def _layouts(page: Page, port: int) -> list[dict[str, Any]]:
     found = []
 
     for viewport in VIEWPORTS:
-        page.set_viewport_size({"width": viewport["width"], "height": viewport["height"]})
+        page.set_viewport_size(_size(viewport["name"]))
         page.goto(f"http://127.0.0.1:{port}/", wait_until="load")
 
         overflow = page.evaluate(
@@ -253,15 +293,21 @@ def _layouts(page: Page, port: int) -> list[dict[str, Any]]:
     return found
 
 
-def _accessible(page: Page) -> dict[str, Any]:
-    """axe, in its own words, at the viewport the screenshot is taken at.
+def _size(name: str) -> dict[str, int]:
+    """One viewport's dimensions, without its name: what Playwright takes."""
+    viewport = next(one for one in VIEWPORTS if one["name"] == name)
 
-    The findings travel with the check rather than being summarised into it: the
-    judge reads ids and impacts, and a count would be a worse answer than the
+    return {"width": viewport["width"], "height": viewport["height"]}
+
+
+def _accessible(page: Page) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """axe's verdict as a check, and its findings as themselves.
+
+    The findings travel separately rather than being summarised into the check:
+    the judge reads ids and impacts, and a count would be a worse answer than the
     list.
     """
-    desktop = next(viewport for viewport in VIEWPORTS if viewport["name"] == KEPT_VIEWPORT)
-    page.set_viewport_size({"width": desktop["width"], "height": desktop["height"]})
+    page.set_viewport_size(_size(KEPT_VIEWPORT))
     page.add_script_tag(path=str(REMOTE_SCAFFOLD / "node_modules" / "axe-core" / "axe.min.js"))
 
     violations = page.evaluate(
@@ -277,14 +323,15 @@ def _accessible(page: Page) -> dict[str, Any]:
     )
 
     serious = [one for one in violations if one["impact"] in SERIOUS_IMPACTS]
-    return {
+    check = {
         "name": "accessibility",
         "ok": not serious,
         "detail": None
         if not serious
         else "; ".join(f"{one['id']} ({one['impact']}, {one['nodes']} nodes)" for one in serious),
-        "violations": violations,
     }
+
+    return check, violations
 
 
 def _kept(trouble: list[str], message: Any) -> None:
@@ -303,6 +350,9 @@ def _served(directory: Path) -> tuple[ThreadingHTTPServer, int]:
     Over HTTP rather than off the filesystem because Chromium refuses to load a
     module from ``file://``: serving it is also the only honest way to screenshot
     what a host would send.
+
+    Port 0, so the system picks a free one. Containers take one input at a time by
+    default, but nothing here should depend on that being true for ever.
     """
     handler = partial(_Quiet, directory=str(directory))
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
