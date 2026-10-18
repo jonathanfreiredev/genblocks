@@ -52,6 +52,10 @@ class Generation(BaseModel):
     code: Mapped[str]
     # Cloudinary public id of the render. Nullable until the upload succeeds.
     screenshot_path: Mapped[str | None]
+    # What the sandbox found: one entry per check, with its short detail. Null on
+    # attempts that never reached the sandbox (Fase 7 writes it; the seed plants
+    # rows from before there was one).
+    checks: Mapped[dict | None] = mapped_column(JSONB)
     scores: Mapped[dict | None] = mapped_column(JSONB)
     verdict: Mapped[str] = mapped_column(default=Verdict.CANDIDATE)
     rubric_version: Mapped[str | None]

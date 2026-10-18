@@ -15,6 +15,10 @@ export default defineConfig({
       SUPABASE_SECRET_KEY: "test-secret-key",
       NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "test-publishable-key",
+      // A cloud, so a piece that has an asset renders it instead of falling back
+      // to the recipe: the fallback is the case where there is nothing to show,
+      // and a test suite that only ever sees it never renders a picture at all.
+      NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: "test-cloud",
     },
     // Restore `vi.stubEnv` values after each test.
     unstubEnvs: true,

@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     modal_token_id: str | None = None
     modal_token_secret: str | None = None
 
+    # The sandbox, by the name it was deployed under, and how long a task waits
+    # on it. A cold container plus a browser is minutes, so the bound is
+    # generous on purpose: it is there to end a run that will never answer, not
+    # to hurry one that will.
+    harness_app_name: str = "genblocks-harness"
+    harness_timeout_seconds: int = 900
+
     # Chroma stores the retrieval vectors. Left blank in development it falls
     # back to a local persistent client; in production it points at Chroma
     # Cloud, which needs all four.

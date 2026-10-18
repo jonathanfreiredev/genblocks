@@ -45,6 +45,15 @@ def test_generation_defaults(monkeypatch):
     assert settings.max_attempts == 2
 
 
+def test_harness_defaults(monkeypatch):
+    settings = _settings(monkeypatch)
+
+    # The sandbox is reached by name, and a cold container plus a browser is
+    # minutes: the bound is there to end a run that will never answer.
+    assert settings.harness_app_name == "genblocks-harness"
+    assert settings.harness_timeout_seconds == 900
+
+
 def test_provider_credentials_are_optional(monkeypatch):
     # Missing keys must not stop the service from booting.
     settings = _settings(monkeypatch)

@@ -128,6 +128,7 @@ export function ComponentDialog({
     rubricVersion: selected?.rubric_version ?? null,
     model: selected?.model ?? null,
     traceId: selected?.langfuse_trace_id ?? null,
+    checks: selected?.checks ?? null,
   };
 
   return (
@@ -145,6 +146,7 @@ export function ComponentDialog({
           <div className="border-rule flex items-center justify-between gap-4 border-b pr-4">
             <TabsList variant="line" className="pl-4">
               <TabsTrigger value="code">Code</TabsTrigger>
+              <TabsTrigger value="render">Render</TabsTrigger>
               <TabsTrigger value="prompt">Delivery prompt</TabsTrigger>
             </TabsList>
 
@@ -165,6 +167,28 @@ export function ComponentDialog({
             <pre className="type-code bg-ink text-on-ink overflow-x-auto p-5">
               {code}
             </pre>
+          </TabsContent>
+
+          <TabsContent value="render" className="p-0">
+            <AttemptCaption
+              attemptNo={selected?.attempt_no ?? null}
+              total={generations.length}
+              createdAt={selected?.created_at ?? component.created_at}
+            />
+            {/* The render of the attempt selected in the ledger, which is the
+                same history the code pane shows. A run that never got as far as
+                a page says so rather than showing an empty frame. */}
+            <AssetPlate
+              path={selected?.screenshot_path ?? ""}
+              alt={`The rendered block: ${component.title}`}
+              sizes="(min-width: 1024px) 620px, 100vw"
+              caption={
+                selected?.screenshot_path
+                  ? (selected.model ?? "Model not recorded")
+                  : "No render was taken for this attempt."
+              }
+              className="aspect-[16/10]"
+            />
           </TabsContent>
 
           <TabsContent value="prompt" className="p-0">
@@ -258,6 +282,8 @@ export function ImageDialog({
             rubricVersion: image.rubric_version,
             model: image.model,
             traceId: image.langfuse_trace_id,
+            // An image is scored as it enters the library: nothing sandboxes it.
+            checks: null,
           }}
         />
       }

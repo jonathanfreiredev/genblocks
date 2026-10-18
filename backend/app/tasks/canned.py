@@ -1,21 +1,22 @@
-"""The canned stand-in for the generation pipeline.
+"""The stand-ins for what the pipeline does not do yet.
 
-A task has to run end to end long before the harness (Fase 7) and the judge
-(Fase 8) exist, so this module supplies what they will supply: a spec, a block
-and a set of scores. All three are fixed, so a run is reproducible and free, and
-none of them pretends to be more than it is:
+A task has to run end to end long before every phase exists, so this module
+supplies what is missing: the **spec** (which type a brief is filed under) and the
+**judge** (what an attempt scores). Both are fixed, so a run is reproducible and
+free, and neither pretends to be more than it is:
 
-- ``model`` is left empty on the attempt. Nothing generated that code, and the
-  panel's job is to say what produced an artifact, not to flatter the pipeline.
-- ``rubric_version`` is :data:`VERSION`, so a canned score can never be mistaken
+- ``rubric_version`` is :data:`VERSION`, so a stand-in score can never be mistaken
   for a calibrated one.
-- The block says on its own face that it is a placeholder.
+- The spec's ``spec`` block says ``"source": "canned"`` on its own face.
+
+What is *not* here anymore is the block itself: since Fase 7 the code is written
+by the generator and checked by the sandbox (``app/harness``), and the attempt
+credits the model that wrote it.
 
 The seeded vault (``app.seed.vault``) is a different thing: planted by hand to
 show what a finished run looks like, with ``seed-v0`` as its rubric version.
 """
 
-import json
 import uuid
 from dataclasses import dataclass
 
@@ -27,12 +28,13 @@ from app.categories import service as categories_service
 # version in the real sense: nothing was measured.
 VERSION = "canned-v1"
 
-# The type the canned block is filed under. It has to exist in the taxonomy; the
-# seed plants it, and a missing one fails the task with a message that says so.
+# The type a run files its block under, until the spec phase reads the taxonomy.
+# It has to exist; the seed plants it, and a missing one fails the task with a
+# message that says so.
 CATEGORY_SLUG = "hero"
 
-# What the canned judge wrote, already above every threshold. Every run gets the
-# same numbers: the point of a stand-in is that it does not vary.
+# What the stand-in judge wrote, already above every threshold. Every run gets
+# the same numbers: the point of a stand-in is that it does not vary.
 SCORES = {
     "render": 91,
     "accessibility": 89,
@@ -52,43 +54,9 @@ TITLE_BREAKS = (",", ";", ":", ".")
 # Below this, a break is not a clause worth being a title on its own.
 TITLE_MIN_CLAUSE = 12
 
-# Generic Tailwind, no design tokens of this application's own: a block is meant
-# to be copied into someone else's project and still render (PLAN.md, decision
-# 24). ``__BRIEF__`` is replaced with the brief as a JavaScript string literal.
-CODE_TEMPLATE = """export function CannedBlock() {
-  const brief =
-    __BRIEF__;
-
-  return (
-    <section
-      aria-labelledby="canned-block-title"
-      className="bg-white px-6 py-24 text-neutral-900 sm:px-8"
-    >
-      <div className="mx-auto max-w-3xl">
-        <p className="font-mono text-xs font-bold uppercase tracking-[0.06em] text-neutral-500">
-          Placeholder · no generator ran
-        </p>
-
-        <h1
-          id="canned-block-title"
-          className="mt-8 font-sans text-4xl leading-[1.1] tracking-[-0.02em] sm:text-5xl"
-        >
-          {brief}
-        </h1>
-
-        <p className="mt-6 max-w-[60ch] text-base leading-[1.55] text-neutral-600">
-          This block is a stand-in. The harness that builds real blocks, and the judge
-          that scores them, arrive with the rest of the pipeline.
-        </p>
-      </div>
-    </section>
-  );
-}
-"""
-
 
 class CategoryNotSeeded(Exception):
-    """The canned spec names a category the taxonomy does not have.
+    """The spec names a category the taxonomy does not have.
 
     A development database without its taxonomy is a setup mistake, and it is
     worth failing the task over it loudly instead of filing the block nowhere.
@@ -103,16 +71,14 @@ class CannedSpec:
     category_slug: str
     title: str
     description: str
-    code: str
     spec: dict
 
 
 async def build_spec(session: AsyncSession, *, brief: str) -> CannedSpec:
-    """Resolve the canned spec against the taxonomy.
+    """Resolve the stand-in spec against the taxonomy.
 
     The only thing that depends on what the caller asked for is the copy that
-    carries the brief; the type, the code and the scores are the same for every
-    run.
+    carries the brief; the type and the guide are the same for every run.
     """
     category = await categories_service.get_category_by_slug(session, slug=CATEGORY_SLUG)
     if category is None:
@@ -126,7 +92,6 @@ async def build_spec(session: AsyncSession, *, brief: str) -> CannedSpec:
         category_slug=category.slug,
         title=title_for(brief),
         description=description_for(brief),
-        code=code_for(brief),
         spec={"version": VERSION, "source": "canned", "category": category.slug},
     )
 
@@ -149,16 +114,6 @@ def description_for(brief: str) -> str:
         return single_line
 
     return f"{single_line[:DESCRIPTION_LIMIT].rsplit(' ', 1)[0]}…"
-
-
-def code_for(brief: str) -> str:
-    """The canned block, with the brief written into it as a string literal.
-
-    ``json.dumps`` rather than an f-string: a brief can hold the quotes, the
-    braces and the newlines that would otherwise break the file it is pasted
-    into.
-    """
-    return CODE_TEMPLATE.replace("__BRIEF__", json.dumps(brief))
 
 
 def headline_score(scores: dict[str, int]) -> int:

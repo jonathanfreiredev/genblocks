@@ -9,3 +9,8 @@ __pycache__/
 .gitignore
 Dockerfile
 .dockerignore
+
+# The sandbox scaffold is installed inside the Modal image, never in this one:
+# the service does not run npm, and this directory is hundreds of megabytes.
+app/harness/scaffold/node_modules/
+app/harness/scaffold/dist/

@@ -56,6 +56,34 @@ export interface Component extends ComponentSummary {
   license: string;
 }
 
+/**
+ * What the sandbox found on one attempt.
+ *
+ * `blocked` is the field the pipeline acted on: a fatal check failed, and the
+ * attempt was not published. Everything else is evidence, kept as it was
+ * reported — axe's own ids and impacts rather than a count of them.
+ */
+export interface HarnessCheck {
+  name: string;
+  ok: boolean;
+  detail: string | null;
+}
+
+export interface HarnessViolation {
+  id: string;
+  impact: string | null;
+  help: string;
+  nodes: number;
+}
+
+export interface HarnessChecks {
+  blocked: boolean;
+  passed: number;
+  total: number;
+  checks: HarnessCheck[];
+  violations: HarnessViolation[];
+}
+
 /** One attempt: the code it produced, what the judge said, and where it went. */
 export interface Generation {
   id: string;
@@ -64,6 +92,7 @@ export interface Generation {
   attempt_no: number;
   code: string;
   screenshot_path: string | null;
+  checks: HarnessChecks | null;
   scores: Record<string, number> | null;
   verdict: Verdict;
   rubric_version: string | null;

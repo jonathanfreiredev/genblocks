@@ -13,6 +13,7 @@ class GenerationRead(BaseModel):
     attempt_no: int
     code: str
     screenshot_path: str | None
+    checks: dict | None
     scores: dict | None
     verdict: str
     rubric_version: str | None

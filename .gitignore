@@ -4,3 +4,9 @@
 # Browser sessions left by the Playwright tooling (page snapshots, console logs).
 # They are read once and thrown away; nothing here belongs in the repository.
 .playwright-mcp/
+
+# The sandbox scaffold's install and its build output. Both are what npm produces
+# on a machine that has the scaffold's dependencies — the Modal image installs
+# its own — and neither is a source file.
+backend/app/harness/scaffold/node_modules/
+backend/app/harness/scaffold/dist/

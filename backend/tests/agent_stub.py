@@ -12,7 +12,7 @@ from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
-from langchain_core.outputs import ChatGenerationChunk
+from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from pydantic import Field
 
 
@@ -79,10 +79,16 @@ class ScriptedChatModel(BaseChatModel):
         for start in range(0, len(text), size):
             yield AIMessageChunk(content=text[start : start + size], id=message.id)
 
-    def _generate(self, *args: Any, **kwargs: Any) -> Any:
-        # There is no whole-answer path here on purpose: a script that could be
-        # read whole would hide a stream that never streamed.
-        raise NotImplementedError
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: Any = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        # A whole answer, for a caller that is not streaming: the graph streams,
+        # a single call does not, and both have to work with one script.
+        return ChatResult(generations=[ChatGeneration(message=self._next())])
 
     def _stream(
         self,

@@ -1,11 +1,9 @@
-"""The canned copy, which is the only thing a run varies by.
+"""The stand-in copy, which is the only thing a run varies by.
 
-Everything else the stand-in produces is fixed, so these are the functions that
-have to behave: a title that reads, a card line that fits, and a block whose
-source survives whatever the caller typed into the brief.
+The spec and the judge are fixed, so these are the functions that have to
+behave: a title that reads and a card line that fits. The block itself is no
+longer written here — since Fase 7 it comes from the generator.
 """
-
-import json
 
 from app.tasks import canned
 
@@ -60,24 +58,6 @@ def test_the_description_keeps_the_whole_brief_until_it_has_to_fit():
 
     assert description.endswith("…")
     assert len(description) <= canned.DESCRIPTION_LIMIT + 1
-
-
-def test_the_code_carries_a_brief_that_would_break_it():
-    """The brief is written into source code; the source has to survive it."""
-    brief = 'A "quoted" brief with a \\ backslash, ${interpolation} and a\nnewline'
-
-    code = canned.code_for(brief)
-
-    assert code.count("const brief =") == 1
-    assert f"const brief =\n    {json.dumps(brief)};" in code
-
-
-def test_the_code_never_re_scans_what_it_inserted():
-    """A brief that is itself the marker cannot inject a second one."""
-    code = canned.code_for("__BRIEF__")
-
-    assert code.count("const brief =") == 1
-    assert '"__BRIEF__"' in code
 
 
 def test_the_headline_is_the_flat_mean_of_the_scores():

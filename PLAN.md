@@ -128,6 +128,20 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     `Bubble`) y el scroll-follow se escribe aquí. `message-scroller` arrastra
     `@shadcn/react` y un import del repo de shadcn, y lo que aporta —seguir el
     final mientras llega el stream— son unas líneas propias.
+27. **El harness es un sandbox con contrato JSON y veredicto propio**: la
+    comprobación corre como **app de Modal** (`app/harness/modal_app.py`,
+    `modal deploy` desde `backend/`) a la que el backend llama **por nombre**
+    (`app/harness/sandbox.py`). Dentro no hay ningún secreto y no alcanza nada
+    nuestro: se le mandan ficheros y devuelve informes y el PNG del render. Lo
+    que encuentra se guarda en **`generations.checks`** (jsonb), para que el
+    juez de la Fase 8 y el panel del item lean lo mismo que se comprobó. Tres
+    comprobaciones **bloquean** la publicación —tipos, build, render—: un bloque
+    que no compila no es un intento publicable. El resto (lint, encaje en cada
+    viewport, accesibilidad) es **evidencia**, no puerta: un bloque 40px más
+    ancho que un móvil es una opinión, y quien opina llega en la Fase 8. El
+    screenshot se sube **en el paso del harness** (Fase 7) y no en el commit de
+    la Fase 9 como insinuaba la nota de la decisión 23: el intento lleva su
+    render desde que existe, y el juez lo necesita antes de publicar.
 
 ---
 
