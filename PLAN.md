@@ -273,6 +273,24 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     la rúbrica literal ni los umbrales: quien sabe dónde está el listón escribe notas,
     no bloques. Las skills se leen con **índice + `read_skill`** (divulgación
     progresiva): el índice va en el system prompt, que es lo que se cachea.
+38. **Dos fondos, y el tema es de la plataforma.** El registro cambia toda la
+    biblioteca a la vez poniendo `dark` en la página, así que el `dark:` del bloque
+    cuelga de esa clase (`@custom-variant` en el scaffold) y **nunca** de
+    `prefers-color-scheme`: lo que sigue al sistema ignora el interruptor del
+    visitante. Los colores se escriben como **pares literales**
+    (`bg-white dark:bg-neutral-950`), no como tokens: el bloque se copia a proyectos
+    ajenos y tiene que funcionar solo, sin arrastrar una hoja de tema. El sandbox
+    fotografía la misma página en claro y en oscuro, corre axe en los dos esquemas
+    (checks `accessibility` y `accessibility:dark`, con su `scheme` en cada
+    violación) y **el juez recibe las dos imágenes**: un bloque que solo aguanta un
+    fondo es medio bloque. Cloudinary guarda solo la clara, que es la miniatura; la
+    oscura viaja al juez como bytes y no se almacena. El `look` del agente también
+    enseña las dos: quien no ve el fondo que se puntúa no puede arreglarlo.
+    - *El botón de la plataforma no existe todavía: necesita el render vivo. Lo que
+      existe es el código que lo soporta, verificado en cada corrida.*
+    - *Los 6 bloques sembrados siguen siendo claros y literales: no pasan por el
+      sandbox y el interruptor aún no está. Cuando llegue, se les añade el par (o se
+      re-siembran), o el toggle se limita a lo generado.*
 
 ---
 

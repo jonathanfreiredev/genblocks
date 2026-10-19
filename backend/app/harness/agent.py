@@ -62,6 +62,7 @@ TURNS_HEADROOM = 8
 # A render is an image inside the conversation, so it is worth bounding what the
 # model is told about it.
 ATTACHED = "The render is attached."
+DARK_ATTACHED = "The same block on the dark page the registry switches to:"
 NOTHING_RENDERED = "There is no render: the checker stopped before the page existed."
 UNCHANGED = "Nothing has changed since this render."
 
@@ -368,22 +369,35 @@ def _paths(draft: _Draft) -> str:
 
 
 def _seen(found: SandboxResult, *, note: str | None = None) -> list[dict[str, Any]]:
-    """The sandbox's answer as the message the agent reads it in."""
+    """The sandbox's answer as the message the agent reads it in.
+
+    Both grounds are shown. The judge will be shown both, so a builder that only
+    saw one of them would be fixing a block nobody is scoring.
+    """
     said = note + "\n\n" if note else ""
     said += found.report()
 
     if found.screenshot is None:
         return [_text(f"{said}\n\n{NOTHING_RENDERED}")]
 
-    return [
+    parts: list[dict[str, Any]] = [
         {"type": "text", "text": f"{said}\n\n{ATTACHED}"},
-        {
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/png;base64,{base64.b64encode(found.screenshot).decode()}"
-            },
-        },
+        _image(found.screenshot),
     ]
+    if found.screenshot_dark is not None:
+        parts += [
+            {"type": "text", "text": DARK_ATTACHED},
+            _image(found.screenshot_dark),
+        ]
+
+    return parts
+
+
+def _image(png: bytes) -> dict[str, Any]:
+    return {
+        "type": "image_url",
+        "image_url": {"url": f"data:image/png;base64,{base64.b64encode(png).decode()}"},
+    }
 
 
 def _text(said: str) -> dict[str, str]:

@@ -80,14 +80,7 @@ async def score_component(
     answer: JudgeAnswer = await (model or as_judge()).ainvoke(
         [
             SystemMessage(system_prompt(COMPONENTS)),
-            HumanMessage(
-                about_component(
-                    brief=brief,
-                    files=files,
-                    found=found,
-                    screenshot=found.screenshot,
-                )
-            ),
+            HumanMessage(about_component(brief=brief, files=files, found=found)),
         ]
     )
 

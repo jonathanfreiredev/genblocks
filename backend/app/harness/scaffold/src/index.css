@@ -1,1 +1,26 @@
 @import "tailwindcss";
+
+/*
+ * The theme belongs to the platform, not to the visitor's operating system. The
+ * registry switches the whole library at once by putting `dark` on the page, so
+ * `dark:` answers to that class and never to `prefers-color-scheme`: a block that
+ * followed the system would ignore the switch, which is the one thing a visitor
+ * asked for.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * The ground the block sits on. A block that paints its own surface covers it; one
+ * that does not borrows this, the way it would borrow the host page it is copied
+ * into. Without it the dark render would be a light block on a white page, and
+ * there would be nothing to judge.
+ */
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+  background-color: #0a0a0a;
+  color: #fafafa;
+}

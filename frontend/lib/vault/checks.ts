@@ -13,6 +13,9 @@ const LABELS: Record<string, string> = {
   build: "Build",
   render: "Render",
   accessibility: "Accessibility",
+  // The same check, run again on the dark page: one ground per row, so a block
+  // that loses its contrast in one of them says which.
+  "accessibility:dark": "Accessibility, dark",
 };
 
 // A layout check is one per viewport: ``layout:desktop`` and so on.

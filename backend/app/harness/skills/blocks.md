@@ -22,6 +22,14 @@ style suggestion.
   scene in each: the same prompt asked twice comes back nearly the same
   photograph, and a row of nearly identical photographs is a defect a judge will
   name. Three pictures in a band are three scenes, described three ways.
+- **Both grounds.** The registry switches the whole library between light and dark
+  by putting `dark` on the page, and `dark:` answers to that class — never to
+  `prefers-color-scheme`, which would ignore the switch. Write every colour as a
+  pair: `bg-white dark:bg-neutral-950`, `text-neutral-900 dark:text-neutral-100`,
+  `border-neutral-200 dark:border-neutral-800`. The dark page is a near-black
+  ground with light text, so a section that paints no background is showing the
+  host's. Both grounds are photographed and judged: a block that is only right on
+  one of them is half a block.
 - **Ask for pictures late, and give them their box first.** If the brief wants a
   photograph, build and look at the block with the space it will fill — a box with
   the final proportions — and ask for the picture once the layout holds. The box is

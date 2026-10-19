@@ -12,6 +12,7 @@ from app.judge.prompts import about_component, about_image, system_prompt
 from app.judge.rubrics import COMPONENTS
 
 PNG = b"\x89PNG\r\n\x1a\n"
+PNG_DARK = b"\x89PNG\r\n\x1a\ndark"
 ENTRY = "src/Block.tsx"
 PART = "src/parts/Rule.tsx"
 CODE = "export default function Block() {\n  return <section>Hi</section>;\n}"
@@ -31,6 +32,7 @@ def found(**overrides) -> SandboxResult:
             )
         ],
         "screenshot": PNG,
+        "screenshot_dark": PNG_DARK,
     }
 
     return SandboxResult(**{**defaults, **overrides})
@@ -52,7 +54,6 @@ def test_the_artifact_arrives_with_the_brief_every_file_and_the_findings():
         brief="A pricing page",
         files={PART: RULE, ENTRY: CODE},
         found=found(),
-        screenshot=PNG,
     )
 
     said = text_of(parts)
@@ -70,14 +71,24 @@ def test_the_artifact_arrives_with_the_brief_every_file_and_the_findings():
     assert "- axe color-contrast (serious, 3 nodes): Enough contrast." in said
 
 
-def test_the_render_is_attached_as_a_data_url():
-    parts = about_component(brief="b", files={ENTRY: CODE}, found=found(), screenshot=PNG)
+def test_the_render_is_attached_twice_and_named_by_ground():
+    parts = about_component(brief="b", files={ENTRY: CODE}, found=found())
 
-    assert parts[1]["image_url"]["url"].startswith("data:image/png;base64,")
+    # Light, then dark, each said out loud: the judge has to know which picture it
+    # is scoring, and a palette that only holds on one of them is half a design.
+    images = [part for part in parts if part["type"] == "image_url"]
+    assert len(images) == 2
+    assert all(one["image_url"]["url"].startswith("data:image/png;base64,") for one in images)
+
+    said = " ".join(part["text"] for part in parts if part["type"] == "text")
+    assert "On the light page:" in said
+    assert "On the dark page:" in said
 
 
 def test_a_run_with_no_render_says_so_instead_of_looking_like_a_good_one():
-    parts = about_component(brief="b", files={ENTRY: CODE}, found=found(), screenshot=None)
+    parts = about_component(
+        brief="b", files={ENTRY: CODE}, found=found(screenshot=None, screenshot_dark=None)
+    )
 
     assert len(parts) == 1
     assert "There is no render" in text_of(parts)

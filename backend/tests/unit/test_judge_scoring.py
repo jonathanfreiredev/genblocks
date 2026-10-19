@@ -182,7 +182,10 @@ async def test_the_artifact_is_what_the_model_is_handed(monkeypatch):
     # The file is sent with the path it lives at: a block is a project.
     assert "src/Block.tsx" in human.text
     assert CODE in human.text
-    assert human.content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+    images = [part for part in human.content if part.get("type") == "image_url"]
+    assert [one["image_url"]["url"][:22] for one in images] == ["data:image/png;base64,"] * len(
+        images
+    )
 
     assert judged.scores["render"] == 88
     assert judged.version == COMPONENTS.version

@@ -59,15 +59,20 @@ class SandboxViolation(BaseModel):
     impact: str | None = None
     help: str
     nodes: int = 0
+    # Which ground it was found on: "light" or "dark". A contrast failure in one
+    # scheme and not the other is a different fact from the same failure in both,
+    # and the judge reads them apart.
+    scheme: str = "light"
 
 
 class SandboxResult(BaseModel):
     """Everything one run of the sandbox produced.
 
-    ``screenshot`` is the desktop render as PNG bytes, or ``None`` when the run
-    never got as far as a page. It is the only artifact that leaves this process
-    as data: the reports are stored with the attempt, and the picture is uploaded
-    before the attempt is written.
+    ``screenshot`` is the desktop render on a light page, as PNG bytes, or ``None``
+    when the run never got as far as a page. ``screenshot_dark`` is the same page
+    with the theme the registry switches on: a block is expected to hold on both
+    grounds, and the only way to know is to look. Only the light one is stored —
+    it is the thumbnail — while both go to the judge.
 
     ``dependencies`` is what the project imports from packages, with the version it
     was built against — read by the sandbox from the project itself rather than
@@ -78,6 +83,7 @@ class SandboxResult(BaseModel):
     violations: list[SandboxViolation] = Field(default_factory=list)
     dependencies: dict[str, str] = Field(default_factory=dict)
     screenshot: bytes | None = None
+    screenshot_dark: bytes | None = None
 
     @property
     def blocked(self) -> bool:
@@ -106,8 +112,9 @@ class SandboxResult(BaseModel):
             for check in self.checks
         ]
         lines.extend(
-            f"- axe {violation.id} ({violation.impact or 'unknown impact'}, "
-            f"{violation.nodes} nodes): {violation.help}"
+            f"- axe{_on(violation.scheme)} {violation.id} "
+            f"({violation.impact or 'unknown impact'}, {violation.nodes} nodes): "
+            f"{violation.help}"
             for violation in self.violations
         )
 
@@ -128,3 +135,8 @@ class SandboxResult(BaseModel):
             "checks": [check.model_dump() for check in self.checks],
             "violations": [violation.model_dump() for violation in self.violations],
         }
+
+
+def _on(scheme: str) -> str:
+    """Which ground a finding is on, said only when it is not the usual one."""
+    return "" if scheme == "light" else f" on the {scheme} page"

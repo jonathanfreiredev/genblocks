@@ -70,6 +70,13 @@ KEPT_VIEWPORT = "desktop"
 # and left to the judge: this phase reports, it does not rule.
 SERIOUS_IMPACTS = ("serious", "critical")
 
+# The check axe's verdict is reported under, once per ground.
+ACCESSIBILITY = "accessibility"
+
+# The class the registry puts on the page to switch the library to dark. It is the
+# one the scaffold's `dark:` variant answers to (see the scaffold's `index.css`).
+DARK_CLASS = "dark"
+
 # What counts as drawn: words, or something a reader sees instead of them (a
 # chart, an illustration). The point is to tell a page that ran from one that
 # threw on the way up, not to judge how much the block says — that is the judge's
@@ -176,6 +183,7 @@ def check(request: dict) -> dict[str, Any]:
                 "violations": [],
                 "dependencies": dependencies,
                 "screenshot": None,
+                "screenshot_dark": None,
             }
 
         rendered = _render(project)
@@ -185,6 +193,7 @@ def check(request: dict) -> dict[str, Any]:
             "violations": rendered["violations"],
             "dependencies": dependencies,
             "screenshot": rendered["screenshot"],
+            "screenshot_dark": rendered["screenshot_dark"],
         }
 
 
@@ -297,7 +306,7 @@ def _npm(project: Path, *, script: str, name: str) -> dict[str, Any]:
 
 
 def _render(project: Path) -> dict[str, Any]:
-    """Serve the built page, look at it at every viewport, and photograph it."""
+    """Serve the built page, look at it at every viewport, and photograph both grounds."""
     # Imported here rather than at the top: Playwright lives in the image, not in
     # the service, and this module has to be importable wherever the service runs.
     from playwright.sync_api import sync_playwright
@@ -305,6 +314,7 @@ def _render(project: Path) -> dict[str, Any]:
     server, port = _served(project / "dist")
     violations: list[dict[str, Any]] = []
     screenshot: bytes | None = None
+    screenshot_dark: bytes | None = None
 
     try:
         with sync_playwright() as playwright:
@@ -329,11 +339,29 @@ def _render(project: Path) -> dict[str, Any]:
                 rest.append(accessibility)
                 screenshot = page.screenshot()
 
+                # The registry switches the whole library at once, by putting on
+                # the page the class the scaffold's `dark:` answers to. The same
+                # page is then measured and photographed again: a block that only
+                # holds on one ground is half a block, and nobody would find out
+                # if the second ground were never rendered.
+                page.evaluate(f"document.documentElement.classList.add('{DARK_CLASS}')")
+                page.emulate_media(color_scheme="dark")
+                _settled(page)
+                dark, dark_violations = _accessible(page, scheme="dark")
+                rest.append(dark)
+                violations.extend(dark_violations)
+                screenshot_dark = page.screenshot()
+
             browser.close()
     finally:
         server.shutdown()
 
-    return {"checks": [rendered, *rest], "violations": violations, "screenshot": screenshot}
+    return {
+        "checks": [rendered, *rest],
+        "violations": violations,
+        "screenshot": screenshot,
+        "screenshot_dark": screenshot_dark,
+    }
 
 
 def _rendered(page: Page, trouble: list[str]) -> dict[str, Any]:
@@ -432,12 +460,15 @@ def _size(name: str) -> dict[str, int]:
     return {"width": viewport["width"], "height": viewport["height"]}
 
 
-def _accessible(page: Page) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def _accessible(
+    page: Page, *, scheme: str = "light"
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """axe's verdict as a check, and its findings as themselves.
 
     The findings travel separately rather than being summarised into the check:
     the judge reads ids and impacts, and a count would be a worse answer than the
-    list.
+    list. Each finding says which ground it was found on, because the same id on
+    the dark page is a different fact from the same id on the light one.
     """
     page.set_viewport_size(_size(KEPT_VIEWPORT))
     page.add_script_tag(path=str(REMOTE_SCAFFOLD / "node_modules" / "axe-core" / "axe.min.js"))
@@ -454,9 +485,12 @@ def _accessible(page: Page) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         }"""
     )
 
+    for violation in violations:
+        violation["scheme"] = scheme
+
     serious = [one for one in violations if one["impact"] in SERIOUS_IMPACTS]
     check = {
-        "name": "accessibility",
+        "name": ACCESSIBILITY if scheme == "light" else f"{ACCESSIBILITY}:{scheme}",
         "ok": not serious,
         "detail": None
         if not serious

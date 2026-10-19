@@ -39,11 +39,16 @@ apology, no restating the numbers.
 BRIEF_HEADING = "The brief this block was written from:"
 FILES_HEADING = "The block, as it was written:"
 FOUND_HEADING = "What the sandbox found when it built it:"
-RENDER_ATTACHED = "The render is attached."
+RENDER_ATTACHED = (
+    "The render is attached twice: the same block on a light page, and on the dark "
+    "one the registry switches to."
+)
 RENDER_MISSING = (
     "There is no render: the sandbox never got as far as a page, so score `render` "
     "from what it did report."
 )
+LIGHT_RENDER = "On the light page:"
+DARK_RENDER = "On the dark page:"
 PROMPT_HEADING = "The prompt this image was generated from:"
 IMAGE_HEADING = "The image, as it came back:"
 
@@ -62,12 +67,14 @@ def about_component(
     brief: str,
     files: dict[str, str],
     found: SandboxResult,
-    screenshot: bytes | None,
 ) -> list[dict]:
     """One block, as the message the judge reads it in.
 
     Every file is sent, named by its path: a block is a project, and a judge that
-    only saw the entry point would be scoring a fragment of it.
+    only saw the entry point would be scoring a fragment of it. The render goes
+    twice — the same block on a light page and on a dark one — because a palette
+    that only holds on one of them is half a design, and a judge that never saw the
+    other ground could not say so.
     """
     said = [BRIEF_HEADING, "", brief, "", FILES_HEADING, ""]
     for path in sorted(files):
@@ -78,12 +85,20 @@ def about_component(
         "",
         found.report(),
         "",
-        RENDER_ATTACHED if screenshot is not None else RENDER_MISSING,
+        RENDER_ATTACHED if found.screenshot is not None else RENDER_MISSING,
     ]
 
     parts: list[dict] = [{"type": "text", "text": "\n".join(said)}]
-    if screenshot is not None:
-        parts.append(render(screenshot))
+    if found.screenshot is not None:
+        parts += [
+            {"type": "text", "text": LIGHT_RENDER},
+            render(found.screenshot),
+        ]
+    if found.screenshot_dark is not None:
+        parts += [
+            {"type": "text", "text": DARK_RENDER},
+            render(found.screenshot_dark),
+        ]
 
     return parts
 

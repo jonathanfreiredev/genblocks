@@ -40,6 +40,12 @@ describe("labelFor", () => {
     expect(labelFor("accessibility")).toBe("Accessibility");
   });
 
+  test("says which ground a second accessibility run was on", () => {
+    // The same check on the dark page is its own row: a block can pass one and
+    // fail the other, and "Accessibility" twice would say nothing.
+    expect(labelFor("accessibility:dark")).toBe("Accessibility, dark");
+  });
+
   test("shows a check nobody has heard of under its own name", () => {
     // A check added in a later phase should appear, not vanish.
     expect(labelFor("security")).toBe("security");

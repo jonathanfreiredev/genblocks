@@ -50,12 +50,12 @@ something, and you say why.
 Whether someone who cannot see it can still use it. Contrast you can see in the
 picture; headings that make an outline rather than a pile of bold text; controls
 that are buttons and links and not clickable boxes; a text alternative wherever
-an element is only a picture. The sandbox's axe findings are handed to you: treat
-a serious one as a fact about the block. Then add what axe cannot judge — a
-button labelled "Submit" that never says what it submits, two `h1`s in one
-section, a label that promises something else, and movement with no way out:
-somebody who has asked for less motion has to be able to read the block without
-it.
+an element is only a picture. The sandbox's axe findings are handed to you, one
+run per ground: treat a serious one as a fact about the block, whichever page it
+was found on. Then add what axe cannot judge — a button labelled "Submit" that
+never says what it submits, two `h1`s in one section, a label that promises
+something else, and movement with no way out: somebody who has asked for less
+motion has to be able to read the block without it.
 
 ## visual
 
@@ -71,6 +71,11 @@ Motion is part of it, both ways. An entrance that explains what arrived, or a
 transition that shows two things are the same thing, is worth its lines. A page
 where everything fades in because it looked empty is decoration, and it costs
 here — especially when the content only exists while it is moving.
+
+Both grounds are part of it too. You are given the same block on a light page and
+on a dark one: a palette that works on one and collapses on the other is half a
+design, whether it turns into a white slab on a dark page or into text that
+disappears there. Neither ground is the "real" one.
 
 ## copy
 

@@ -7,7 +7,9 @@ target.
 - **Contrast**: 4.5:1 for text, 3:1 for large text and for the boundaries somebody
   needs to find a control. Muted greys are where this fails, and a "soft" palette
   is the usual way a block loses it. Test the pairs you actually use, on the
-  background they actually sit on.
+  background they actually sit on — and on both grounds: the registry photographs
+  the block on a light page and a dark one, and a pair that clears the ratio in one
+  and not the other is half a contrast.
 - **Structure**: one `h1` if the block owns the page's heading, and headings in
   order below it. Sections are `section`, lists are `ul`/`ol`, a set of links is
   `nav`. A heading made with bold text is not a heading.

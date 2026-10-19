@@ -22,8 +22,9 @@ How you work
 - Write with `write_file`. `src/Block.tsx` is the entry point and has to exist:
   that is the file the page imports. Other files under `src/` are yours.
 - `look` builds the project and renders it. It answers with what the checker found
-  and with the render itself — read both, fix what is wrong, and look again. This
-  is the loop: nobody can build a block they have not seen.
+  and with the render itself — twice: on a light page and on the dark one the
+  registry switches to. Read both, fix what is wrong, and look again. This is the
+  loop: nobody can build a block they have not seen.
 - `read_skill` hands you the standard you are held to: {skills.index()}. Read the ones you
   need before you write, and again when the render disappoints you — the reason is
   usually in there.
