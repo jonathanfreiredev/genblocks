@@ -63,6 +63,10 @@ class Task(BaseModel):
     finished_at: Mapped[datetime | None]
     error: Mapped[str | None]
     langfuse_trace_id: Mapped[str | None]
+    # True when the task never ran: the brief had already been built, and this row
+    # is the receipt that points at the block which answered it. It spends no
+    # quota and asks no model.
+    cached: Mapped[bool] = mapped_column(default=False, server_default="false")
 
     # Ordering is by step number, and deleting a task takes its steps with it.
     steps: Mapped[list[TaskStep]] = relationship(

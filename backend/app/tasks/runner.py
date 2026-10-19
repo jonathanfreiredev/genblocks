@@ -36,6 +36,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.briefs import service as briefs
 from app.categories import service as categories_service
 from app.components.models import DEFAULT_LICENSE, Component, ComponentAsset
 from app.db.models import utcnow
@@ -48,6 +49,7 @@ from app.harness.schemas import SandboxFile, SandboxResult
 from app.images.models import Image
 from app.judge import scoring as judge
 from app.judge.schemas import Judged
+from app.moderation import service as moderation
 from app.settings import settings
 from app.tasks import service
 from app.tasks import spec as block_spec
@@ -89,6 +91,17 @@ class HarnessRefused(Exception):
     def __init__(self, result: SandboxResult) -> None:
         said = "; ".join(f"{check.name}: {check.detail or 'failed'}" for check in result.failures)
         super().__init__(f"The block was refused — {said}")
+
+
+class ModerationRefused(Exception):
+    """The block, once written, was refused before it could be judged.
+
+    The reason is the moderator's own sentence: a reader of the failed task should
+    learn what about the artifact did not pass, not just that something did.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"The block was refused by moderation — {reason}")
 
 
 class JudgeRejected(Exception):
@@ -235,6 +248,13 @@ async def _build(
         image_categories=list(picture_types),
         library=_picture_library(session, types=picture_types),
     )
+    # Moderation before the pictures and the render: an artifact that will not be
+    # published should not be photographed first. The brief was checked before the
+    # task existed; this is the copy the block actually grew, which can differ.
+    why = await moderation.refusal(_project_text(built.files))
+    if why is not None:
+        raise ModerationRefused(why)
+
     pictures = await _keep(session, task=task, built=built, types=picture_types)
 
     found = await checks.check(
@@ -384,6 +404,11 @@ async def _store(result: SandboxResult, *, task: Task) -> str | None:
     )
 
 
+def _project_text(files: dict[str, str]) -> str:
+    """The project as one text for the moderator: each path, then its contents."""
+    return "\n\n".join(f"{path}\n{content}" for path, content in sorted(files.items()))
+
+
 def _tally(result: SandboxResult) -> str:
     """The checks as one line, for the checklist a reader follows."""
     return f"{sum(1 for check in result.checks if check.ok)}/{len(result.checks)}"
@@ -490,6 +515,11 @@ async def _publish(
         session.add(
             ComponentAsset(component_id=component.id, image_id=picture.id, slot=placed.slot)
         )
+
+    # The brief and the block it became, in the same transaction: a cache entry
+    # that survives a publish which did not would answer with something that is
+    # not there.
+    await briefs.remember(session, brief=task.brief, component_id=component.id)
 
     made.attempt.verdict = Verdict.PUBLISHED
     component.winning_generation_id = made.attempt.id

@@ -28,6 +28,7 @@ const QUEUED: Task = {
   finished_at: null,
   error: null,
   langfuse_trace_id: null,
+  cached: false,
   steps: [],
 };
 
@@ -165,6 +166,47 @@ describe("GenerateDialog", () => {
     expect(
       screen.getByText(/The conversation ends where the task starts/),
     ).toBeInTheDocument();
+  });
+
+  test("says the registry already had the block instead of pretending it built one", async () => {
+    const cached: Task = {
+      ...QUEUED,
+      status: "succeeded",
+      component_id: COMPONENT_ID,
+      finished_at: "2026-10-17T09:12:02Z",
+      cached: true,
+      steps: [
+        {
+          id: "step-0",
+          index: 0,
+          name: "Found in the registry",
+          status: "succeeded",
+          detail: null,
+          started_at: "2026-10-17T09:12:02Z",
+          finished_at: "2026-10-17T09:12:02Z",
+        },
+      ],
+    };
+
+    server.use(
+      http.post("/api/agent/chat", () =>
+        turn(
+          ["task", cached],
+          ["token", { text: "That one already exists." }],
+          ["done", {}],
+        ),
+      ),
+    );
+
+    await send();
+
+    // The task is finished on arrival, so the copy says what happened: a lookup,
+    // not a build.
+    expect(await screen.findByText(/already had this one/)).toBeInTheDocument();
+    expect(screen.getByText("Found in the registry")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open the block" }),
+    ).toHaveAttribute("href", `/?kind=component&item=${COMPONENT_ID}`);
   });
 
   test("says so when the agent cannot be reached", async () => {

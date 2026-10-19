@@ -29,7 +29,9 @@ from app.db.session import async_session_maker
 from app.images import service as images_service
 from app.images.schemas import ImageRead
 from app.mcp.server import mcp
+from app.moderation import service as moderation
 from app.pagination import DEFAULT_LIMIT, ListParams, OffsetPage
+from app.tasks import limits
 from app.tasks import service as tasks_service
 from app.tasks.models import TaskStatus
 from app.tasks.schemas import Brief, TaskCreate, TaskRead
@@ -240,6 +242,15 @@ async def create_component(brief: Brief) -> TaskRead:
     payload = TaskCreate(brief=brief)
     async with async_session_maker() as session:
         caller = await _caller(session)
-        task = await tasks_service.create_task(session, brief=payload.brief, created_by=caller.id)
+        try:
+            # The same door the API and the conversation use: a cached brief is
+            # answered, the month's quota is spent, and the brief is moderated.
+            task = await tasks_service.enqueue_task(
+                session, brief=payload.brief, created_by=caller.id
+            )
+        except limits.MonthlyQuotaReached as reached:
+            raise ValueError(str(reached)) from reached
+        except moderation.BriefRejected as refused:
+            raise ValueError(str(refused)) from refused
 
     return TaskRead.model_validate(task)

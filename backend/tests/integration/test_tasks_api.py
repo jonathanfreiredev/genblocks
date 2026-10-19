@@ -13,6 +13,7 @@ from sqlalchemy import select
 from app.generations.models import Generation
 from app.harness.agent import ENTRY
 from app.tasks.models import Task, TaskStep
+from app.tasks.service import create_task
 from app.users.models import User
 from tests.auth_stub import mint_token
 from tests.helpers import auth_header
@@ -198,3 +199,67 @@ async def test_a_brief_of_a_thousand_pages_is_rejected(client, db_session):
     )
 
     assert response.status_code == 422
+
+
+async def test_an_eleventh_block_in_the_month_is_refused(client, db_session):
+    token, user = await _sign_in(client, db_session, "spender@example.com")
+    for number in range(10):
+        await create_task(db_session, brief=f"A block number {number}", created_by=user.id)
+
+    response = await client.post(
+        "/v1/tasks",
+        json={"brief": "One more block, because the month allows it"},
+        headers=auth_header(token),
+    )
+
+    # 429, not 403: the caller may build, just not until the month turns.
+    assert response.status_code == 429, response.text
+    assert "10 of your 10 blocks" in response.json()["detail"]
+    assert (await client.get("/v1/tasks", headers=auth_header(token))).json()["total"] == 10
+
+
+async def test_a_brief_the_moderator_refuses_is_rejected_before_it_is_queued(
+    client, db_session, monkeypatch
+):
+    from app.moderation import service as moderation
+
+    async def refused(text, *, client=None):
+        return "it describes a weapon"
+
+    monkeypatch.setattr(moderation, "refusal", refused)
+    token, _ = await _sign_in(client, db_session, "risky@example.com")
+
+    response = await client.post(
+        "/v1/tasks",
+        json={"brief": "A configurator for a weapon"},
+        headers=auth_header(token),
+    )
+
+    assert response.status_code == 422, response.text
+    assert "describes a weapon" in response.json()["detail"]
+    assert (await client.get("/v1/tasks", headers=auth_header(token))).json()["total"] == 0
+
+
+async def test_a_brief_the_registry_answered_comes_back_finished(client, db_session):
+    from app.briefs import service as briefs
+    from tests.helpers import create_category, create_component
+
+    token, _ = await _sign_in(client, db_session, "repeat@example.com")
+    category = await create_category(db_session, slug="hero")
+    block = await create_component(db_session, category_id=category.id, slug="repeat-hero")
+    await briefs.remember(db_session, brief="A hero with one headline", component_id=block.id)
+    await db_session.commit()
+
+    response = await client.post(
+        "/v1/tasks",
+        json={"brief": "  a HERO with one headline "},
+        headers=auth_header(token),
+    )
+
+    # 200, not 202: the caller was handed a finished task, not one to wait for.
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["cached"] is True
+    assert body["status"] == "succeeded"
+    assert body["component_id"] == str(block.id)
+    assert body["finished_at"] is not None

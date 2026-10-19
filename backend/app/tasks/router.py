@@ -8,16 +8,18 @@ to tell the two apart.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.authz.dependencies import get_first_party_user
 from app.db.session import get_async_db_session
 from app.generations.schemas import GenerationRead
 from app.generations.service import list_generations
+from app.moderation.service import BriefRejected
 from app.pagination import OffsetPage
+from app.tasks.limits import MonthlyQuotaReached
 from app.tasks.schemas import TaskCreate, TaskDetailRead, TaskListQuery, TaskRead
-from app.tasks.service import create_task, get_task, list_tasks
+from app.tasks.service import enqueue_task, get_task, list_tasks
 from app.users.models import User
 
 tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -28,13 +30,31 @@ async def queue_task(
     payload: TaskCreate,
     user: Annotated[User, Depends(get_first_party_user)],
     session: Annotated[AsyncSession, Depends(get_async_db_session)],
+    response: Response,
 ) -> TaskRead:
     """Queue a component for generation and return the task to follow.
 
     202, not 201: the caller has been handed a queued task, not a finished block.
-    The task's own endpoint is where its checklist fills in.
+    The task's own endpoint is where its checklist fills in. A brief the registry
+    has already answered is a finished task from the start — 200, and ``cached``
+    says why.
     """
-    task = await create_task(session, brief=payload.brief, created_by=user.id)
+    try:
+        task = await enqueue_task(session, brief=payload.brief, created_by=user.id)
+    except MonthlyQuotaReached as reached:
+        # 429 rather than 403: the caller is allowed to do this, just not yet.
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(reached)
+        ) from reached
+    except BriefRejected as refused:
+        # 422: the request is well formed and the brief is not buildable as written.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(refused)
+        ) from refused
+
+    if task.cached:
+        response.status_code = status.HTTP_200_OK
+
     return TaskRead.model_validate(task)
 
 

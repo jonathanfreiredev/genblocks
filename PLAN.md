@@ -16,8 +16,8 @@ inglés (ver `AGENTS.md`). Este documento va en español por comodidad.
   entrega como una rebanada revisable en `git`.
 - **Secciones 13–15**: variables de entorno, lo aplazado y los riesgos.
 
-**Estado (oct 2026)**: fases **0–10 hechas** y en `git`; la **11 en curso**, y su
-primera rebanada (11a, los checks estáticos) entregada. La 9 se entregó en tres
+**Estado (oct 2026)**: fases **0–11 hechas** y en `git`. La 11 se entregó en
+cuatro rebanadas: checks estáticos, cupo mensual, moderación y caché por brief. La 9 se entregó en tres
 rebanadas y la 10 cerró con la capa de vectores, el guard de duplicados, el reúso
 de imágenes, el routing de taxonomía y las propuestas en el chat. Las fases
 anteriores se quedan escritas como se entregaron: son el registro de lo
@@ -325,6 +325,28 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     Es un chequeo de texto y lo dice: una URL construida en ejecución se le escapa,
     y para eso está el juez. Un comentario que menciona `fetch(` no es una llamada.
     Un proyecto bloqueado tampoco pide imágenes: primero se arregla, luego se paga.
+42. **El cupo es producto, no factura.** 10 bloques por mes natural (UTC) y
+    persona. Cuenta la tarea creada, falle o no: el fallo gastó sandbox e imágenes,
+    y devolverlo al cupo sería regalar la corrida. No hay cortacircuitos global en
+    código a propósito: el gasto se corta en los dashboards que facturan (Modal,
+    OpenAI), y un segundo número aquí sería una copia que se desvía de la real. Las
+    tres puertas —API, MCP, conversación— pasan por `enqueue_task` y dicen la misma
+    frase. Un brief cacheado no consume cupo, porque no encoló trabajo.
+43. **La moderación es una puerta, no una puntuación.** El brief se modera antes
+    de que exista la tarea; el artefacto, después del harness y antes de las
+    imágenes, del render y del juez. Un rechazo de entrada no escribe nada (422);
+    uno de salida deja la tarea fallida con el motivo y sin intento, porque un
+    intento es un artefacto y el artefacto no se publica. Sin clave la comprobación
+    está apagada y lo dice en el log; con clave y proveedor caído **falla cerrada**:
+    "no pudimos comprobar" y "pasó" no pueden tener la misma forma.
+44. **La caché es exacta y es un recibo.** El brief normalizado (minúsculas,
+    espacios colapsados) apunta al bloque que lo respondió. Un acierto no es una
+    decisión de producto: no pregunta, no modera, no gasta cupo y no construye;
+    devuelve una tarea `succeeded` con `cached` y un paso que lo dice, para que el
+    contrato de la UI —encolar y seguir una tarea— siga siendo el mismo. Se escribe
+    en la transacción que publica, se reescribe si el brief se construye dos veces,
+    y un bloque borrado es un fallo de caché. La paráfrasis no entra aquí: para eso
+    está el guard, que sí pregunta.
 
 ---
 
@@ -884,6 +906,33 @@ publicarse. El host permitido es configuración (`allowed_asset_hosts`), no un
 literal enterrado. Tests: las cuatro formas de cargar (atributo, `<link>`, `url()`,
 `@import`), `srcset` candidato a candidato, `//host`, puerto y credenciales,
 comentarios que mencionan `fetch(` sin llamarlo, y el sandbox que no se llama.
+
+**Entregado (11b).** `app/tasks/limits.py` y `enqueue_task`: **10 bloques por mes
+natural** (UTC) y persona, contados sobre `tasks`. Falle o no una tarea, cuenta: un
+fallo gastó sandbox e imágenes. La negativa es 429 en la API, un `ValueError` en
+MCP y un texto en la tool del agente — las tres puertas dicen lo mismo. No hay
+tope global en código: el gasto se corta en los dashboards de Modal y OpenAI, y un
+segundo número aquí sería una copia que se desvía del real. Tests: el borde del
+mes, diciembre que cruza de año, el mes pasado, las tareas de otra persona, una
+tarea borrada que devuelve el cupo, y que la negativa no escribe fila.
+
+**Entregado (11c).** `app/moderation/service.py`: Groq
+`openai/gpt-oss-safeguard-20b`, JSON estricto. **Entrada**: el brief antes de que
+exista la tarea (422, nada se escribe). **Salida**: el proyecto recién escrito,
+antes de las imágenes, del render y del juez (tarea fallida, sin intento, sin
+gasto). Sin clave está **apagada** y lo dice en el log; con clave y proveedor
+caído **falla cerrada**, porque "no pudimos comprobar" no puede parecerse a "pasó".
+Verificado contra Groq real: permite una pricing page y rechaza un clon de login
+bancario con su motivo.
+
+**Entregado (11d).** `app/briefs`: tabla `brief_cache` (clave normalizada a
+minúsculas y espacios, única) y `tasks.cached`. El acierto devuelve una tarea
+**ya terminada** con un paso "Found in the registry" y el bloque enlazado: el
+contrato de la UI no cambia, cambia el estado en que nace. No gasta cupo, no
+modera y no construye. La entrada se escribe en la **misma transacción** que
+publica el bloque, y se reescribe si el mismo brief se construye dos veces. La
+paráfrasis no es asunto suyo: eso es el guard, que pregunta. La API responde 200
+en vez de 202 cuando la tarea nace terminada, y el diálogo lo dice.
 
 **Fuera**: nada de features nuevas.
 

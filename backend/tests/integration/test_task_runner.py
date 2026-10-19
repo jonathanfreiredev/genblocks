@@ -21,6 +21,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.briefs import service as briefs
 from app.categories import service as categories_service
 from app.components.models import Component, ComponentAsset
 from app.db.models import utcnow
@@ -556,6 +557,60 @@ async def test_a_block_that_loads_from_elsewhere_is_refused_before_the_sandbox(
     assert attempt.screenshot_path is None
 
     assert await runner_session.scalar(select(Component)) is None
+
+
+async def test_a_block_the_moderator_refuses_is_not_rendered_judged_or_published(
+    runner_session, harness, judge, monkeypatch
+):
+    from app.moderation import service as moderation
+
+    async def refused(text, *, client=None):
+        return "the copy is not something we publish"
+
+    monkeypatch.setattr(moderation, "refusal", refused)
+    await create_category(runner_session, slug="hero")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    failed = await get_task(runner_session, task_id=task_id)
+    assert failed is not None
+    assert failed.status == TaskStatus.FAILED
+    assert "refused by moderation" in (failed.error or "")
+    assert "the copy is not something we publish" in (failed.error or "")
+
+    # The order is the point: no pictures were kept, no container was asked to
+    # render it, and the judge never saw a block nobody will publish.
+    assert harness.uploaded == []
+    assert harness.checked == []
+    assert judge.shown == []
+    assert await _attempts(runner_session, task_id) == []
+    assert await runner_session.scalar(select(Component)) is None
+
+
+async def test_a_published_block_answers_its_brief_from_then_on(runner_session, harness, judge):
+    await create_category(runner_session, slug="hero")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    done = await get_task(runner_session, task_id=task_id)
+    found = await briefs.find(runner_session, brief=BRIEF)
+
+    # Written in the transaction that publishes: the brief and the block it became
+    # are one fact, or neither is true.
+    assert done is not None
+    assert done.component_id is not None
+    assert found is not None
+    assert found.id == done.component_id
 
 
 async def test_the_pictures_a_block_asks_for_are_filed_and_linked(runner_session, harness, judge):

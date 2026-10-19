@@ -96,3 +96,22 @@ async def test_a_brief_the_registry_already_has_is_not_queued(monkeypatch):
     assert answer["queued"] is False
     assert answer["already"]["slug"] == "tiered-pricing"
     assert [one.id for one in suggested.items] == [found.id]
+
+
+async def test_a_month_that_is_spent_is_told_to_the_person(monkeypatch):
+    """The tool does not raise at the person: it answers, and the agent speaks."""
+    from datetime import UTC, datetime
+
+    from app.tasks import service as tasks_service
+    from app.tasks.limits import MonthlyQuotaReached
+
+    async def spent(*args, **kwargs):
+        raise MonthlyQuotaReached(used=10, limit=10, reopens=datetime(2026, 11, 1, tzinfo=UTC))
+
+    monkeypatch.setattr(tasks_service, "enqueue_task", spent)
+
+    answer = await _tool("create_component", []).ainvoke({"brief": "A hero with one headline"})
+
+    assert answer["queued"] is False
+    assert "1 November" in answer["limit"]
+    assert "do not retry" in answer["message"]

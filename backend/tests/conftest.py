@@ -7,6 +7,23 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture(autouse=True)
+def no_moderation(monkeypatch):
+    """Keep the suite off the safety model.
+
+    Moderation is a network call behind a key. A suite that reached it would be
+    testing somebody else's uptime and, worse, change its mind about a brief
+    depending on what that service had for breakfast. It is stubbed to allow; a test
+    that wants a refusal writes its own answer.
+    """
+    from app.moderation import service as moderation
+
+    async def allowed(text, *, client=None):
+        return None
+
+    monkeypatch.setattr(moderation, "refusal", allowed)
+
+
+@pytest.fixture(autouse=True)
 def no_vectors(monkeypatch, tmp_path):
     """Keep the suite off the network and out of the real vector store.
 

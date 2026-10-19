@@ -84,6 +84,10 @@ const QUEUED_LINES: Record<TaskStatus, string> = {
     "The worker went away mid-run, so this one is unfinished. The record is kept.",
 };
 
+/** What a repeated brief says: the registry answered it, nobody built it again. */
+const CACHED_LINE =
+  "The registry already had this one, so nothing was built again. The block is in the vault.";
+
 /** How a tool call reads while it runs, and once it is over. */
 const TOOL_LINES: Record<string, { running: string; done: string }> = {
   search_components: {
@@ -503,7 +507,7 @@ export function GenerateDialog({
             </div>
 
             <p className="type-body-sm text-ink-muted">
-              {QUEUED_LINES[task.status]}
+              {task.cached ? CACHED_LINE : QUEUED_LINES[task.status]}
             </p>
 
             {task.steps.length > 0 ? (

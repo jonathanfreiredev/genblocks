@@ -171,6 +171,11 @@ export interface Task {
   finished_at: string | null;
   error: string | null;
   langfuse_trace_id: string | null;
+  /**
+   * True when the brief had already been built: the task never ran, and it points
+   * straight at the block that answered it.
+   */
+  cached: boolean;
   steps: TaskStep[];
 }
 

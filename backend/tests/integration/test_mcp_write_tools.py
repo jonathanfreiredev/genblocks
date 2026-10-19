@@ -84,6 +84,26 @@ async def test_create_component_queues_a_task_for_the_caller(tool_session, monke
     assert queued.created_by == me.id
 
 
+async def test_create_component_says_when_the_month_is_spent(tool_session, monkeypatch):
+    from datetime import UTC, datetime
+
+    from app.tasks import limits
+
+    sign_in(monkeypatch, subject=uuid.uuid4())
+
+    async def spent(session, *, user_id, now=None):
+        raise limits.MonthlyQuotaReached(
+            used=10, limit=10, reopens=datetime(2026, 11, 1, tzinfo=UTC)
+        )
+
+    monkeypatch.setattr(limits, "admitted", spent)
+
+    # The third door answers in the same words as the other two: a tool error the
+    # calling agent can read and repeat.
+    with pytest.raises(ValueError, match="10 of your 10 blocks"):
+        await tools.create_component(brief=BRIEF)
+
+
 async def test_create_component_takes_the_same_briefs_as_the_api(tool_session, monkeypatch):
     """One brief, one set of rules: the tool and the endpoint share the type."""
     sign_in(monkeypatch, subject=uuid.uuid4())

@@ -11,9 +11,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.briefs import service as briefs
+from app.components.models import Component
 from app.db.models import utcnow
+from app.moderation import service as moderation
 from app.pagination import ListParams
-from app.tasks.models import StepStatus, Task, TaskStatus
+from app.tasks import limits
+from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
 
 # What the UI is told about a task a restart cut in half. Worded for a reader,
 # because that is where it ends up.
@@ -34,6 +38,76 @@ async def create_task(session: AsyncSession, *, brief: str, created_by: uuid.UUI
     # relationship nobody has loaded cannot be loaded later, outside the event
     # loop, and the response carries it.
     await session.refresh(task, ["steps"])
+    return task
+
+
+async def enqueue_task(
+    session: AsyncSession, *, brief: str, created_by: uuid.UUID, fresh: bool = False
+) -> Task:
+    """The door a person comes through: what we already have, then what it costs.
+
+    The order is the cost model. A brief the registry has answered is returned
+    without spending the month's quota, a safety call or a run — that is what makes
+    a repeat free. Then the quota, which is a count, before the moderator, which is
+    a call. ``create_task`` stays the row primitive: the seed files its tasks
+    without spending anybody's month, and so does a test.
+
+    ``fresh`` is somebody who has seen what the registry has and wants their own
+    anyway: the cache is skipped, and the run is paid for like any other.
+    """
+    answered = None if fresh else await briefs.find(session, brief=brief)
+    if answered is not None:
+        return await _answered(session, brief=brief, created_by=created_by, component=answered)
+
+    await limits.admitted(session, user_id=created_by)
+
+    why = await moderation.refusal(brief)
+    if why is not None:
+        raise moderation.BriefRejected(why)
+
+    return await create_task(session, brief=brief, created_by=created_by)
+
+
+# What the one step of a cached task is called. The checklist is still a checklist:
+# a reader sees what happened, and what happened is a lookup.
+ANSWERED_STEP = "Found in the registry"
+
+
+async def _answered(
+    session: AsyncSession, *, brief: str, created_by: uuid.UUID, component: Component
+) -> Task:
+    """The receipt for a brief that was built before it was asked again.
+
+    A task rather than a bare block because the UI follows tasks: the dialog opens,
+    polls, and closes on the same contract whether the block took ten minutes or
+    was found in a table. The difference is the status it starts in and the step
+    that says why.
+    """
+    now = utcnow()
+    task = Task(
+        brief=brief,
+        created_by=created_by,
+        status=TaskStatus.SUCCEEDED,
+        component_id=component.id,
+        finished_at=now,
+        cached=True,
+    )
+    session.add(task)
+    await session.flush()
+
+    session.add(
+        TaskStep(
+            task_id=task.id,
+            index=0,
+            name=ANSWERED_STEP,
+            status=StepStatus.SUCCEEDED,
+            started_at=now,
+            finished_at=now,
+        )
+    )
+    await session.commit()
+    await session.refresh(task, ["steps"])
+
     return task
 
 

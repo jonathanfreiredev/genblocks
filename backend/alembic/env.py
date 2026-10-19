@@ -6,6 +6,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+from app.briefs import models as briefs_models  # noqa: F401  (register tables)
 from app.categories import models as categories_models  # noqa: F401  (register tables)
 from app.components import models as components_models  # noqa: F401  (register tables)
 from app.db.models import Base

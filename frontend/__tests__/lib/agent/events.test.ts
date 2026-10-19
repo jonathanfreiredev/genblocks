@@ -13,6 +13,7 @@ const TASK: Task = {
   finished_at: null,
   error: null,
   langfuse_trace_id: null,
+  cached: false,
   steps: [],
 };
 

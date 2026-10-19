@@ -28,7 +28,9 @@ from app.components.models import Component
 from app.db.session import async_session_maker
 from app.images import service as images_service
 from app.images.models import Image
+from app.moderation import service as moderation
 from app.pagination import ListParams
+from app.tasks import limits
 from app.tasks import service as tasks_service
 from app.tasks.models import Task
 from app.tasks.schemas import Brief, TaskCreate, TaskRead
@@ -166,9 +168,28 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
                     ),
                 }
 
-            task = await tasks_service.create_task(
-                session, brief=payload.brief, created_by=caller.id
-            )
+            try:
+                task = await tasks_service.enqueue_task(
+                    session, brief=payload.brief, created_by=caller.id, fresh=force
+                )
+            except limits.MonthlyQuotaReached as reached:
+                return {
+                    "queued": False,
+                    "limit": str(reached),
+                    "message": (
+                        "Nothing was queued: the person has used this month's blocks. "
+                        "Tell them when the next one opens; do not retry."
+                    ),
+                }
+            except moderation.BriefRejected as refused:
+                return {
+                    "queued": False,
+                    "refused": refused.reason,
+                    "message": (
+                        "Nothing was queued: the brief was refused. Say why, briefly, "
+                        "and offer to write a different one."
+                    ),
+                }
 
         queued.append(task)
         return TaskRead.model_validate(task).model_dump(mode="json")

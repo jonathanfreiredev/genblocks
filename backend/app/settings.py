@@ -110,6 +110,12 @@ class Settings(BaseSettings):
     # How many pictures one block may ask the library for, in one pass near the end
     # of its run. Images are the priciest part of a task by a distance.
     images_per_block: int = 4
+    # How many blocks one person may queue in a calendar month (UTC). A product
+    # decision, not a calibration: it protects the bill and keeps a single account
+    # from spending the month's budget by accident. There is no global breaker in
+    # code on purpose — Modal and OpenAI are capped where they are billed, and a
+    # second number here would be a copy that drifts from the real one.
+    tasks_per_month: int = 10
     # The hosts a block may load a picture or a stylesheet from, comma-separated.
     # Everything else it shows has to travel with it — a relative path or a
     # ``data:`` URL — because a block is copied into somebody else's page, and a

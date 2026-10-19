@@ -66,6 +66,8 @@ class TaskRead(BaseModel):
     finished_at: datetime | None
     error: str | None
     langfuse_trace_id: str | None
+    # True when the brief had already been built: the task never ran.
+    cached: bool = False
     steps: list[TaskStepRead] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)

@@ -26,6 +26,7 @@ def task() -> Task:
         status="pending",
         brief=BRIEF,
         created_at=datetime.now(UTC),
+        cached=False,
     )
 
 
