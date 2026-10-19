@@ -86,6 +86,15 @@ class Settings(BaseSettings):
     chroma_database: str | None = None
     chroma_path: str = ".chroma"
 
+    # --- Observability -------------------------------------------------------
+    # Langfuse is a copy of what happened, never the source of truth: the ledger
+    # is Postgres. Without both keys nothing is sent and every trace id stays
+    # null. With them, the SDK buffers spans and exports them in the background,
+    # so a slow or unavailable Langfuse costs a warning, not a task.
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
+    langfuse_host: str = "https://cloud.langfuse.com"
+
     # How close is too close. Retrieval answers with cosine distance, so smaller
     # is nearer: a brief within ``duplicate_distance`` of a published block is
     # that block again, and the library already has it. A picture within

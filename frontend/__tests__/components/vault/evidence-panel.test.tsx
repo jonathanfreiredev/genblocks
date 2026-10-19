@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { EvidencePanel } from "@/components/vault/evidence-panel";
 import type { Judged } from "@/lib/vault/judged";
@@ -90,6 +90,22 @@ describe("EvidencePanel", () => {
     render(<EvidencePanel kind="component" judged={JUDGED} />);
 
     expect(screen.getByText("Not recorded")).toBeInTheDocument();
+  });
+
+  test("links the trace when the project's host is configured", () => {
+    vi.stubEnv("NEXT_PUBLIC_LANGFUSE_HOST", "https://cloud.langfuse.com/");
+    render(
+      <EvidencePanel
+        kind="component"
+        judged={{ ...JUDGED, traceId: "abc123def456" }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Open the trace in Langfuse" }),
+    ).toHaveAttribute("href", "https://cloud.langfuse.com/trace/abc123def456");
+
+    vi.unstubAllEnvs();
   });
 
   test("says when no model ran, rather than calling it unknown", () => {

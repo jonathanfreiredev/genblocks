@@ -7,6 +7,22 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture(autouse=True)
+def no_tracing(monkeypatch):
+    """Keep the suite off Langfuse.
+
+    Tracing is a network call behind two keys. A suite that reached it would be
+    testing somebody else's uptime and would leave traces of test runs in a real
+    project. The keys are emptied here, so ``start`` answers with the disabled
+    trace exactly the way a deployment that has not configured it does; the tests
+    that care about a trace patch ``start`` themselves.
+    """
+    from app.settings import settings
+
+    monkeypatch.setattr(settings, "langfuse_public_key", None)
+    monkeypatch.setattr(settings, "langfuse_secret_key", None)
+
+
+@pytest.fixture(autouse=True)
 def no_moderation(monkeypatch):
     """Keep the suite off the safety model.
 

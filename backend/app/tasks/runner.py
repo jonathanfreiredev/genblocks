@@ -50,6 +50,7 @@ from app.images.models import Image
 from app.judge import scoring as judge
 from app.judge.schemas import Judged
 from app.moderation import service as moderation
+from app.observability import service as observability
 from app.settings import settings
 from app.tasks import service
 from app.tasks import spec as block_spec
@@ -57,6 +58,10 @@ from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
 from app.vectors import service as vectors
 
 logger = structlog.get_logger("app.tasks.runner")
+
+# What a run's trace is called in Langfuse. The same word as the task's kind, so a
+# trace can be found by the thing it describes.
+TRACE_NAME = "generate_component"
 
 STEP_NAMES = (
     "Retrieving references",
@@ -173,17 +178,44 @@ async def run_task(task_id: uuid.UUID) -> None:
             # Deleted between the claim and the run; nothing to report.
             return
 
+        trace = observability.start(
+            name=TRACE_NAME,
+            input={"brief": task.brief},
+            metadata={"task_id": str(task.id), "model": settings.llm_model},
+        )
+        # The id goes in before the checklist's commit, so a reader can follow the
+        # trace of a run that is still going. A deployment without Langfuse keeps
+        # it null, which is what the panel says out loud.
+        task.langfuse_trace_id = trace.id
+
         steps = await _open_checklist(session, task_id=task.id)
 
         try:
-            spec = await _retrieve(session, task=task, step=steps[0])
-            made = await _build(session, task=task, step=steps[1], spec=spec)
+            spec = await _retrieve(session, task=task, step=steps[0], trace=trace)
+            made = await _build(session, task=task, step=steps[1], spec=spec, trace=trace)
             await _judge(
-                session, step=steps[2], attempt=made.attempt, found=made.found, brief=task.brief
+                session,
+                step=steps[2],
+                attempt=made.attempt,
+                found=made.found,
+                brief=task.brief,
+                trace=trace,
             )
-            await _publish(session, task=task, step=steps[3], spec=spec, made=made)
+            published = await _publish(
+                session, task=task, step=steps[3], spec=spec, made=made, trace=trace
+            )
         except Exception as error:  # noqa: BLE001 - the task row is where this is kept
             await _fail(session, task_id=task.id, error=error)
+            trace.finish(error=str(error) or type(error).__name__)
+        else:
+            trace.finish(
+                output={"slug": published.slug, "component_id": str(published.id)},
+                metadata={"iterations": made.built.iterations, "skills": made.built.skills},
+            )
+        finally:
+            # Always after the row has committed: a trace of work Postgres never
+            # recorded would be a story about nothing.
+            trace.end()
 
 
 async def run_worker(stop: asyncio.Event, *, poll_seconds: float = POLL_SECONDS) -> None:
@@ -215,7 +247,9 @@ async def _open_checklist(session: AsyncSession, *, task_id: uuid.UUID) -> list[
     return steps
 
 
-async def _retrieve(session: AsyncSession, *, task: Task, step: TaskStep) -> block_spec.BlockSpec:
+async def _retrieve(
+    session: AsyncSession, *, task: Task, step: TaskStep, trace: observability.Trace
+) -> block_spec.BlockSpec:
     """Decide what to build: the type it is filed under, and the copy.
 
     The type comes from the taxonomy, read by the model against the blocks the
@@ -223,13 +257,22 @@ async def _retrieve(session: AsyncSession, *, task: Task, step: TaskStep) -> blo
     first place a model is asked anything other than the artifact itself.
     """
     await _begin(session, step)
-    decided = await block_spec.build_spec(session, brief=task.brief)
-    await _finish(session, step, detail={"category": decided.category_slug})
+
+    async with trace.step(STEP_NAMES[0], input={"brief": task.brief}) as span:
+        decided = await block_spec.build_spec(session, brief=task.brief)
+        await _finish(session, step, detail={"category": decided.category_slug})
+        span.update(output={"category": decided.category_slug, "title": decided.title})
+
     return decided
 
 
 async def _build(
-    session: AsyncSession, *, task: Task, step: TaskStep, spec: block_spec.BlockSpec
+    session: AsyncSession,
+    *,
+    task: Task,
+    step: TaskStep,
+    spec: block_spec.BlockSpec,
+    trace: observability.Trace,
 ) -> Made:
     """Build the block with the harness, and turn the result into an attempt.
 
@@ -241,60 +284,88 @@ async def _build(
     """
     await _begin(session, step)
 
-    picture_types = await _picture_categories(session)
-    built = await harness.build(
-        brief=task.brief,
-        category=spec.category_slug,
-        image_categories=list(picture_types),
-        library=_picture_library(session, types=picture_types),
-    )
-    # Moderation before the pictures and the render: an artifact that will not be
-    # published should not be photographed first. The brief was checked before the
-    # task existed; this is the copy the block actually grew, which can differ.
-    why = await moderation.refusal(_project_text(built.files))
-    if why is not None:
-        raise ModerationRefused(why)
+    async with trace.step(
+        STEP_NAMES[1],
+        input={"brief": task.brief, "category": spec.category_slug, "model": settings.llm_model},
+    ) as span:
+        picture_types = await _picture_categories(session)
+        built = await harness.build(
+            brief=task.brief,
+            category=spec.category_slug,
+            image_categories=list(picture_types),
+            library=_picture_library(session, types=picture_types),
+        )
+        # Moderation before the pictures and the render: an artifact that will not be
+        # published should not be photographed first. The brief was checked before the
+        # task existed; this is the copy the block actually grew, which can differ.
+        why = await moderation.refusal(moderation.copy_of(built.files))
+        if why is not None:
+            raise ModerationRefused(why)
 
-    pictures = await _keep(session, task=task, built=built, types=picture_types)
+        pictures = await _keep(session, task=task, built=built, types=picture_types, trace=trace)
 
-    found = await checks.check(
-        [SandboxFile(path=path, content=content) for path, content in sorted(built.files.items())]
-    )
-    stored = await _store(found, task=task)
-    attempt = Generation(
-        task_id=task.id,
-        # One artifact per run: the number is the invariant the table enforces
-        # rather than a counter of tries.
-        attempt_no=1,
-        # The project, and which file of it is the block. No copy of the entry
-        # file beside it: the text lives in ``files`` and nowhere else.
-        files=built.files,
-        entry=harness.ENTRY,
-        model=settings.llm_model,
-        screenshot_path=stored,
-        checks=found.record(),
-        verdict=Verdict.REJECTED if found.blocked else Verdict.CANDIDATE,
-    )
-    session.add(attempt)
-    # Committed before the refusal is acted on: a failure reaches the failure path,
-    # which rolls the session back, and the attempt has to survive that.
-    await session.commit()
+        found = await checks.check(
+            [
+                SandboxFile(path=path, content=content)
+                for path, content in sorted(built.files.items())
+            ]
+        )
+        stored = await _store(found, task=task)
+        attempt = Generation(
+            task_id=task.id,
+            # One artifact per run: the number is the invariant the table enforces
+            # rather than a counter of tries.
+            attempt_no=1,
+            # The project, and which file of it is the block. No copy of the entry
+            # file beside it: the text lives in ``files`` and nowhere else.
+            files=built.files,
+            entry=harness.ENTRY,
+            model=settings.llm_model,
+            screenshot_path=stored,
+            checks=found.record(),
+            verdict=Verdict.REJECTED if found.blocked else Verdict.CANDIDATE,
+            langfuse_trace_id=trace.id,
+        )
+        session.add(attempt)
+        # Committed before the refusal is acted on: a failure reaches the failure path,
+        # which rolls the session back, and the attempt has to survive that.
+        await session.commit()
 
-    await _finish(
-        session,
-        step,
-        detail={
-            "checks": _tally(found),
-            "files": len(built.files),
-            "iterations": built.iterations,
-            "skills": built.skills,
-        },
-    )
+        await _finish(
+            session,
+            step,
+            detail={
+                "checks": _tally(found),
+                "files": len(built.files),
+                "iterations": built.iterations,
+                "skills": built.skills,
+            },
+        )
 
-    if found.blocked:
-        raise HarnessRefused(found)
+        # Recorded before the refusal is acted on: a blocked project is exactly the
+        # one whose rounds are worth reading, and the span closes with the error.
+        span.update(
+            output={
+                "files": sorted(built.files),
+                "pictures": [
+                    {
+                        "slot": placed.slot,
+                        "category": placed.category,
+                        "url": placed.url,
+                        "scores": picture.scores,
+                    }
+                    for placed, picture in zip(built.images, pictures, strict=True)
+                ],
+                "iterations": built.iterations,
+                "skills": built.skills,
+            },
+            metadata={"checks": _tally(found), "rounds": built.rounds},
+        )
 
-    return Made(attempt=attempt, found=found, built=built, pictures=pictures)
+        if found.blocked:
+            raise HarnessRefused(found)
+
+        return Made(attempt=attempt, found=found, built=built, pictures=pictures)
 
 
 async def _keep(
@@ -303,6 +374,7 @@ async def _keep(
     task: Task,
     built: harness.Built,
     types: dict[str, uuid.UUID],
+    trace: observability.Trace,
 ) -> list[Image]:
     """File the pictures the harness asked for in the library, and score each one.
 
@@ -349,6 +421,7 @@ async def _keep(
             model=settings.image_model,
             scores=judged.scores,
             rubric_version=judged.version,
+            langfuse_trace_id=trace.id,
         )
         session.add(picture)
         pictures.append(picture)
@@ -404,11 +477,6 @@ async def _store(result: SandboxResult, *, task: Task) -> str | None:
     )
 
 
-def _project_text(files: dict[str, str]) -> str:
-    """The project as one text for the moderator: each path, then its contents."""
-    return "\n\n".join(f"{path}\n{content}" for path, content in sorted(files.items()))
-
-
 def _tally(result: SandboxResult) -> str:
     """The checks as one line, for the checklist a reader follows."""
     return f"{sum(1 for check in result.checks if check.ok)}/{len(result.checks)}"
@@ -421,6 +489,7 @@ async def _judge(
     attempt: Generation,
     found: SandboxResult,
     brief: str,
+    trace: observability.Trace,
 ) -> Judged:
     """Score the attempt once, and stop the run if it does not clear every bar.
 
@@ -432,27 +501,46 @@ async def _judge(
     """
     await _begin(session, step)
 
-    judged = await judge.score_component(
-        brief=brief,
-        files=attempt.files,
-        found=found,
-    )
+    async with trace.step(STEP_NAMES[2], input={"brief": brief}) as span:
+        judged = await judge.score_component(
+            brief=brief,
+            files=attempt.files,
+            found=found,
+        )
 
-    attempt.scores = judged.scores
-    attempt.rubric_version = judged.version
-    if not judged.passed:
-        attempt.verdict = Verdict.REJECTED
-    await session.commit()
+        attempt.scores = judged.scores
+        attempt.rubric_version = judged.version
+        if not judged.passed:
+            attempt.verdict = Verdict.REJECTED
+        await session.commit()
 
-    detail = {"weakest": _weakest(judged)}
-    if judged.below:
-        detail["below"] = ", ".join(judged.below)
-    await _finish(session, step, detail=detail)
+        # After the commit: a number in Langfuse that Postgres does not have is a
+        # score with no artifact behind it.
+        for dimension, value in judged.scores.items():
+            trace.score(dimension, value)
+        trace.score("published", 1 if judged.passed else 0, data_type="BOOLEAN")
 
-    if not judged.passed:
-        raise JudgeRejected(judged)
+        detail = {"weakest": _weakest(judged)}
+        if judged.below:
+            detail["below"] = ", ".join(judged.below)
+        await _finish(session, step, detail=detail)
 
-    return judged
+        # The words the ledger does not keep: why each dimension scored what it
+        # did, which ones missed, and the judge's own summary.
+        span.update(
+            output={
+                "scores": judged.scores,
+                "notes": judged.notes,
+                "summary": judged.summary,
+                "below": list(judged.below),
+                "rubric_version": judged.version,
+            }
+        )
+
+        if not judged.passed:
+            raise JudgeRejected(judged)
+
+        return judged
 
 
 def _weakest(judged: Judged) -> str:
@@ -474,7 +562,8 @@ async def _publish(
     step: TaskStep,
     spec: block_spec.BlockSpec,
     made: Made,
-) -> None:
+    trace: observability.Trace,
+) -> Component:
     """Commit: the block is created, and the task's attempts point at it.
 
     The block row goes in first without a winner, because the two tables point
@@ -485,71 +574,79 @@ async def _publish(
     """
     await _begin(session, step)
 
-    slug = slug_for(title=spec.title, task_id=task.id)
-    component = Component(
-        slug=slug,
-        title=spec.title,
-        description=spec.description,
-        category_id=spec.category_id,
-        files=made.attempt.files,
-        entry=made.attempt.entry,
-        # What the sandbox read from the project itself: the install line a visitor
-        # needs, and the only version of it that cannot be a model's guess.
-        dependencies=made.found.dependencies,
-        delivery_prompt=task.brief,
-        spec=spec.spec,
-        created_by=task.created_by,
-        license=DEFAULT_LICENSE,
-    )
-    session.add(component)
-    await session.flush()
+    async with trace.step(STEP_NAMES[3], input={"category": spec.category_slug}) as span:
+        slug = slug_for(title=spec.title, task_id=task.id)
+        component = Component(
+            slug=slug,
+            title=spec.title,
+            description=spec.description,
+            category_id=spec.category_id,
+            files=made.attempt.files,
+            entry=made.attempt.entry,
+            # What the sandbox read from the project itself: the install line a visitor
+            # needs, and the only version of it that cannot be a model's guess.
+            dependencies=made.found.dependencies,
+            delivery_prompt=task.brief,
+            spec=spec.spec,
+            created_by=task.created_by,
+            license=DEFAULT_LICENSE,
+        )
+        session.add(component)
+        await session.flush()
 
-    # Every attempt of the task points at the block — one row, and the shape is
-    # the same whether a run makes one artifact or several (PLAN.md, decision 21).
-    for also in await list_generations(session, task_id=task.id):
-        also.component_id = component.id
+        # Every attempt of the task points at the block — one row, and the shape is
+        # the same whether a run makes one artifact or several (PLAN.md, decision 21).
+        for also in await list_generations(session, task_id=task.id):
+            also.component_id = component.id
 
-    # The pictures, in the slots the block put them in: what a visitor needs to
-    # know which assets came with the code (PLAN.md, decision 36).
-    for placed, picture in zip(made.built.images, made.pictures, strict=True):
-        session.add(
-            ComponentAsset(component_id=component.id, image_id=picture.id, slot=placed.slot)
+        # The pictures, in the slots the block put them in: what a visitor needs to
+        # know which assets came with the code (PLAN.md, decision 36).
+        for placed, picture in zip(made.built.images, made.pictures, strict=True):
+            session.add(
+                ComponentAsset(component_id=component.id, image_id=picture.id, slot=placed.slot)
+            )
+
+        # The brief and the block it became, in the same transaction: a cache entry
+        # that survives a publish which did not would answer with something that is
+        # not there.
+        await briefs.remember(session, brief=task.brief, component_id=component.id)
+
+        made.attempt.verdict = Verdict.PUBLISHED
+        component.winning_generation_id = made.attempt.id
+        task.component_id = component.id
+        task.status = TaskStatus.SUCCEEDED
+        task.finished_at = utcnow()
+        task.error = None
+
+        await _finish(
+            session,
+            step,
+            detail={
+                "slug": slug,
+                "files": len(made.attempt.files or {}),
+                "pictures": len(made.pictures),
+            },
         )
 
-    # The brief and the block it became, in the same transaction: a cache entry
-    # that survives a publish which did not would answer with something that is
-    # not there.
-    await briefs.remember(session, brief=task.brief, component_id=component.id)
+        # Remembered after the block is committed, and after the step is closed: the
+        # registry is the truth and the index is a way to find it again, so a store
+        # that is having a bad day costs a search result, not a published block.
+        remembered = await vectors.remember_component(
+            component_id=component.id,
+            text=_remembered_as(component),
+            screenshot=made.found.screenshot,
+            slug=component.slug,
+            category=spec.category_slug,
+        )
+        if not remembered:
+            logger.warning("published block is not searchable", slug=component.slug)
 
-    made.attempt.verdict = Verdict.PUBLISHED
-    component.winning_generation_id = made.attempt.id
-    task.component_id = component.id
-    task.status = TaskStatus.SUCCEEDED
-    task.finished_at = utcnow()
-    task.error = None
+        span.update(
+            output={"slug": slug, "pictures": len(made.pictures)},
+            metadata={"category": spec.category_slug},
+        )
 
-    await _finish(
-        session,
-        step,
-        detail={
-            "slug": slug,
-            "files": len(made.attempt.files or {}),
-            "pictures": len(made.pictures),
-        },
-    )
-
-    # Remembered after the block is committed, and after the step is closed: the
-    # registry is the truth and the index is a way to find it again, so a store
-    # that is having a bad day costs a search result, not a published block.
-    remembered = await vectors.remember_component(
-        component_id=component.id,
-        text=_remembered_as(component),
-        screenshot=made.found.screenshot,
-        slug=component.slug,
-        category=spec.category_slug,
-    )
-    if not remembered:
-        logger.warning("published block is not searchable", slug=component.slug)
+        return component
 
 
 def _picture_library(

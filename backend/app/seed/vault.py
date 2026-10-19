@@ -1096,7 +1096,9 @@ async def _seed_component_attempts(
             generation.attempt_no = attempt_no
             generation.files = {ENTRY: code}
             generation.entry = ENTRY
-            generation.screenshot_path = None
+            # The render and the checks are deliberately not reset: a screenshot
+            # costs a container and a cloud upload, and re-seeding is a reset of
+            # the text, not of the artifacts that were captured.
             generation.scores = scores
             generation.verdict = verdict
             generation.rubric_version = COMPONENT_RUBRIC_VERSION
@@ -1181,7 +1183,6 @@ async def _seed_candidate_attempt(
     generation.attempt_no = 1
     generation.files = {ENTRY: spec.candidate_code}
     generation.entry = ENTRY
-    generation.screenshot_path = None
     generation.scores = None
     generation.verdict = Verdict.CANDIDATE
     generation.rubric_version = None
@@ -1197,11 +1198,13 @@ async def _seed_images(session: AsyncSession, *, categories: dict[str, Category]
         image_id = _seed_id(f"image/{spec.key}")
         image = await session.get(Image, image_id)
         if image is None:
+            # The path is the asset's public id. Once a generated picture has
+            # replaced the seed's readable placeholder, re-seeding keeps the real
+            # one: the bytes were paid for and the row already points at them.
             image = Image(id=image_id, path=spec.path)
             session.add(image)
 
         image.prompt = spec.prompt
-        image.path = spec.path
         image.width = spec.width
         image.height = spec.height
         image.category_id = categories[spec.category_slug].id

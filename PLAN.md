@@ -16,11 +16,14 @@ inglés (ver `AGENTS.md`). Este documento va en español por comodidad.
   entrega como una rebanada revisable en `git`.
 - **Secciones 13–15**: variables de entorno, lo aplazado y los riesgos.
 
-**Estado (oct 2026)**: fases **0–11 hechas** y en `git`. La 11 se entregó en
-cuatro rebanadas: checks estáticos, cupo mensual, moderación y caché por brief. La 9 se entregó en tres
-rebanadas y la 10 cerró con la capa de vectores, el guard de duplicados, el reúso
-de imágenes, el routing de taxonomía y las propuestas en el chat. Las fases
-anteriores se quedan escritas como se entregaron: son el registro de lo
+**Estado (oct 2026)**: fases **0–12 hechas**. La 11 se entregó en cuatro
+rebanadas (checks estáticos, cupo mensual, moderación y caché por brief) y la 12
+en una (traza opcional). La 9 se entregó en tres rebanadas y la 10 cerró con la
+capa de vectores, el guard de duplicados, el reúso de imágenes, el routing de
+taxonomía y las propuestas en el chat. La 13 es contenido, no código. El historial
+de migraciones se consolidó en dos (initial schema + consolidada) antes de
+sembrar: las vueltas de ideas no valían como historia. Las fases anteriores se
+quedan escritas como se entregaron: son el registro de lo
 construido, no una promesa pendiente. Las decisiones antiguas tampoco se
 reescriben: cuando una cambia, la nueva dice a cuál sustituye.
 
@@ -333,12 +336,16 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     tres puertas —API, MCP, conversación— pasan por `enqueue_task` y dicen la misma
     frase. Un brief cacheado no consume cupo, porque no encoló trabajo.
 43. **La moderación es una puerta, no una puntuación.** El brief se modera antes
-    de que exista la tarea; el artefacto, después del harness y antes de las
+    de que exista la tarea; la **copia que el bloque muestra** (nodos de texto y
+    cadenas que leen como prosa, no el código), después del harness y antes de las
     imágenes, del render y del juez. Un rechazo de entrada no escribe nada (422);
     uno de salida deja la tarea fallida con el motivo y sin intento, porque un
     intento es un artefacto y el artefacto no se publica. Sin clave la comprobación
     está apagada y lo dice en el log; con clave y proveedor caído **falla cerrada**:
-    "no pudimos comprobar" y "pasó" no pueden tener la misma forma.
+    "no pudimos comprobar" y "pasó" no pueden tener la misma forma. La copia se
+    recorta a 2.500 caracteres: el free tier del modelo son 2.000 tokens por
+    minuto, y un proyecto entero no cabe — un 413 no es una negativa, es una
+    puerta que nunca se abre.
 44. **La caché es exacta y es un recibo.** El brief normalizado (minúsculas,
     espacios colapsados) apunta al bloque que lo respondió. Un acierto no es una
     decisión de producto: no pregunta, no modera, no gasta cupo y no construye;
@@ -347,6 +354,16 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     en la transacción que publica, se reescribe si el brief se construye dos veces,
     y un bloque borrado es un fallo de caché. La paráfrasis no entra aquí: para eso
     está el guard, que sí pregunta.
+45. **La traza es una copia, y se escribe después del commit.** Postgres decide
+    qué pasó; Langfuse lo cuenta. El id de la traza es nuestro (32 hex), se guarda
+    en la tarea antes de que el run termine y en el intento y las imágenes al
+    crearse, así que el enlace del panel resuelve aunque la corrida siga. Los
+    scores se empujan después del commit del intento; los spans, mientras ocurren,
+    porque el SDK los bufferiza y los exporta en un hilo de fondo. Sin las dos
+    claves no hay cliente ni ids; con ellas y el proveedor caído, un warning y
+    nada más. Se usa el **SDK v5 sobre OTel** porque la API de ingesta v3 de
+    Langfuse Cloud se apaga el 16/11/2026 para todo lo que no sean scores: escribir
+    OTLP a mano habría sido una dependencia con fecha de caducidad.
 
 ---
 
@@ -577,8 +594,9 @@ vistas: a la derecha, los scores de la generación y el enlace a su trace.
 Cada fase es una rebanada revisable. Formato: **Objetivo**, **Cambios**,
 **Verificación** y **Fuera de este paso**.
 
-**Estado**: **0–8 hechas** (cada una, un commit); la **9 en curso**, larga y en tres
-rebanadas. La 10 es la siguiente. Las fases 0–8 se quedan como se entregaron.
+**Estado**: **0–12 hechas** (cada una, un commit). La 13 —sembrar y curar la
+galería— es contenido, no código, y va después. Todas se quedan como se
+entregaron.
 
 ### Fase 0 — Preparación: settings y entorno
 
@@ -918,9 +936,9 @@ tarea borrada que devuelve el cupo, y que la negativa no escribe fila.
 
 **Entregado (11c).** `app/moderation/service.py`: Groq
 `openai/gpt-oss-safeguard-20b`, JSON estricto. **Entrada**: el brief antes de que
-exista la tarea (422, nada se escribe). **Salida**: el proyecto recién escrito,
-antes de las imágenes, del render y del juez (tarea fallida, sin intento, sin
-gasto). Sin clave está **apagada** y lo dice en el log; con clave y proveedor
+exista la tarea (422, nada se escribe). **Salida**: la copia que el bloque muestra
+—nodos de texto y cadenas que leen como prosa, no el código—, antes de las
+imágenes, del render y del juez (tarea fallida, sin intento, sin gasto). Sin clave está **apagada** y lo dice en el log; con clave y proveedor
 caído **falla cerrada**, porque "no pudimos comprobar" no puede parecerse a "pasó".
 Verificado contra Groq real: permite una pricing page y rechaza un clon de login
 bancario con su motivo.
@@ -952,6 +970,39 @@ funciona igual cuando no lo está.
 
 **Fuera**: Langfuse no es fuente de verdad de nada.
 
+**Entregado (12).** El SDK **v5 de Langfuse** sobre OpenTelemetry, no la API de
+ingesta: Langfuse Cloud deja de aceptar trazas por `/api/public/ingestion` el 16
+de noviembre de 2026 y solo mantiene los scores, así que el SDK es el único camino
+que sigue vivo sin escribir OTLP a mano. `app/observability/service.py` envuelve
+el cliente para que el resto del código no sepa que existe:
+
+- **La traza es una copia y se escribe después.** El id lo generamos nosotros y se
+  guarda en `tasks.langfuse_trace_id` (antes del commit de la checklist, para que
+  un lector pueda seguir una corrida en marcha), en el intento y en cada imagen.
+  Los scores se empujan **después** del commit del intento: un número en Langfuse
+  que Postgres no tiene es un score sin artefacto detrás.
+- **Lo que el ledger no guarda.** Cada paso es un span; el del juez lleva sus
+  notas, su resumen, los umbrales que falló y la versión de la rúbrica, y el del
+  harness lleva **las vueltas** (una por look, con el informe del sandbox y lo que
+  el proyecto tenía entonces). El checklist guarda `iterations`; la traza guarda
+  el porqué.
+- **No puede tumbar nada.** Sin las dos claves no se construye cliente y todos los
+  ids quedan nulos; el SDK exporta desde un hilo de fondo, y cada llamada de la
+  envoltura está guardada: un span que no se puede serializar deja una línea en el
+  log y el paso sigue. Verificado con un colector local: el SDK manda el lote a
+  `/api/public/otel/v1/traces` (cabecera `x-langfuse-ingestion-version: 4`) y los
+  scores a `/api/public/scores`.
+- **La UI.** El panel de evidencia ya enseñaba el id o "Not recorded"; con
+  `NEXT_PUBLIC_LANGFUSE_HOST` el id es un enlace a `/trace/{id}`. Sin host, el id y
+  el botón de copiar, que es lo que hay que hacer igual.
+
+**Verificación hecha**: la suite entera corre con las claves vacías y publica
+igual; con claves (contra un colector que acepta y registra) salen la traza y los
+scores con el id de la tarea.
+
+**Fuera**: nada de features nuevas; la conversación del agente no se traza, solo
+la corrida que construye.
+
 ### Fase 13 — Siembra y lanzamiento
 
 **Objetivo**: abrir la galería con archivo, no vacía.
@@ -965,6 +1016,11 @@ funciona igual cuando no lo está.
 **Verificación**: galería poblada y navegable.
 
 **Fuera**: features nuevas.
+
+**Herramientas de siembra**: `python -m app.seed.screenshots` renderiza los bloques
+sembrados por el sandbox real y guarda la captura en Cloudinary; `python -m
+app.seed.stock` genera las imágenes que el seed solo describe. Las dos son
+idempotentes y se saltan lo que ya existe.
 
 ### Después (no en este plan)
 
@@ -987,10 +1043,13 @@ frontend solo pinta.
 | `OPENAI_API_KEY` | `gpt-6-luna` (agente, spec, harness, juez) |
 | `BFL_API_KEY` | imágenes del stock (`flux-2-pro`) |
 | `GROQ_API_KEY` | moderación (Safety GPT OSS 20B) |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | traza opcional; sin ambas no se envía nada |
+| `LANGFUSE_HOST` | host de Langfuse (Cloud EU por defecto) |
 | `VOYAGE_API_KEY` | embeddings (`voyage-multimodal-3`) |
 | `CLOUDINARY_CLOUD_NAME` | storage (y `NEXT_PUBLIC_...` en el frontend, para leer) |
 | `CLOUDINARY_API_KEY` | storage |
 | `CLOUDINARY_API_SECRET` | storage |
+| `NEXT_PUBLIC_LANGFUSE_HOST` | frontend: enlace al trace en el panel (opcional) |
 | `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` | invocar el sandbox |
 | `CHROMA_HOST` / `CHROMA_API_KEY` / `CHROMA_TENANT` / `CHROMA_DATABASE` | vectores (Chroma Cloud en prod) |
 

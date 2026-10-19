@@ -164,7 +164,13 @@ class Harness:
         # A test that needs the sandbox to answer differently on a later call
         # writes the whole script; its last answer is repeated after that.
         self.script: list[SandboxResult] = []
-        self.built = Built(files=dict(PROJECT), images=[], iterations=3, skills="1a2b3c4d")
+        self.built = Built(
+            files=dict(PROJECT),
+            images=[],
+            iterations=3,
+            skills="1a2b3c4d",
+            rounds=[{"iteration": number, "report": "- typecheck: ok"} for number in (1, 2, 3)],
+        )
 
     def fails(self, *names: str) -> None:
         """Make the named checks fail, the way the sandbox would report it."""
@@ -922,3 +928,133 @@ async def test_the_worker_drains_the_queue_and_stops(runner_session, harness, ju
     drained = await get_task(runner_session, task_id=task_id)
     assert drained is not None
     assert drained.component_id is not None
+
+
+class RecordedSpan:
+    """One span the runner opened, kept instead of sent."""
+
+    def __init__(self, name: str, input: object = None) -> None:
+        self.name = name
+        self.input = input
+        self.updates: list[dict] = []
+        self.error: str | None = None
+
+    def update(self, **fields: object) -> None:
+        self.updates.append(fields)
+
+    def end(self, *, error: str | None = None) -> None:
+        self.error = error
+
+
+class Recorder:
+    """The trace, answered without a Langfuse project."""
+
+    def __init__(self) -> None:
+        self.id = "b" * 32
+        self.spans: list[RecordedSpan] = []
+        self.scores: dict[str, float] = {}
+        self.finished: dict = {}
+        self.ended = False
+
+    @contextlib.asynccontextmanager
+    async def step(self, name: str, *, input: object = None) -> AsyncIterator[RecordedSpan]:
+        span = RecordedSpan(name, input)
+        self.spans.append(span)
+        try:
+            yield span
+        except BaseException as error:
+            span.end(error=str(error))
+            raise
+        else:
+            span.end()
+
+    def score(self, name: str, value: float, **kwargs: object) -> None:
+        self.scores[name] = value
+
+    def finish(self, **kwargs: object) -> None:
+        self.finished = kwargs
+
+    def end(self) -> None:
+        self.ended = True
+
+
+async def test_a_run_keeps_the_words_the_ledger_does_not(
+    runner_session, harness, judge, monkeypatch
+):
+    recorder = Recorder()
+    monkeypatch.setattr(runner.observability, "start", lambda **kwargs: recorder)
+    await create_category(runner_session, slug="hero")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    done = await get_task(runner_session, task_id=task_id)
+    attempts = await _attempts(runner_session, task_id)
+    assert done is not None and done.status == TaskStatus.SUCCEEDED
+    assert done.langfuse_trace_id == recorder.id
+    assert attempts[0].langfuse_trace_id == recorder.id
+
+    assert [span.name for span in recorder.spans] == list(runner.STEP_NAMES)
+
+    # The rounds: what the agent was shown on each look, and what it changed.
+    building = recorder.spans[1]
+    assert building.updates[-1]["metadata"]["rounds"] == harness.built.rounds
+
+    # The judge's own words, which no column keeps: the notes behind each number,
+    # the summary, and the dimensions that missed.
+    judging = recorder.spans[2]
+    output = judging.updates[-1]["output"]
+    assert output["scores"] == GOOD
+    assert output["notes"]["render"] == "render earned this"
+    assert output["summary"] == "What the judge said in full."
+    assert output["below"] == []
+
+    # Scores go to the trace after the attempt's commit, with the verdict.
+    assert recorder.scores == {**GOOD, "published": 1}
+    assert recorder.finished["output"]["component_id"] == str(done.component_id)
+    assert recorder.ended is True
+
+
+async def test_a_rejected_run_traces_why_and_ends_as_an_error(
+    runner_session, harness, judge, monkeypatch
+):
+    recorder = Recorder()
+    monkeypatch.setattr(runner.observability, "start", lambda **kwargs: recorder)
+    judge.script = [WEAK]
+    await create_category(runner_session, slug="hero")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    done = await get_task(runner_session, task_id=task_id)
+    assert done is not None and done.status == TaskStatus.FAILED
+    assert "did not publish it" in recorder.finished["error"]
+    assert recorder.spans[2].error is not None
+    assert "copy 41" in recorder.spans[2].error
+    assert recorder.ended is True
+
+
+async def test_a_run_without_langfuse_is_the_same_run(runner_session, harness, judge):
+    """The phase's verification: nothing configured, nothing different."""
+    await create_category(runner_session, slug="hero")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    done = await get_task(runner_session, task_id=task_id)
+    attempts = await _attempts(runner_session, task_id)
+    assert done is not None and done.status == TaskStatus.SUCCEEDED
+    assert done.langfuse_trace_id is None
+    assert attempts[0].langfuse_trace_id is None

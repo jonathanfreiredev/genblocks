@@ -106,6 +106,10 @@ class Built:
     # The version of the shelf it worked against, so a score can be read back
     # against the standard of its day.
     skills: str
+    # One entry per look: the sandbox's own report, so a trace can show what the
+    # agent saw and what it changed between rounds. The registry has no column for
+    # it and does not want one; the ledger keeps scores, the trace keeps the why.
+    rounds: list[dict] = field(default_factory=list)
 
 
 def harness_model() -> BaseChatModel:
@@ -155,6 +159,7 @@ class _Draft:
     looks: int = 0
     shown: SandboxResult | None = None
     digest: str | None = None
+    rounds: list[dict] = field(default_factory=list)
     library: Callable[[str, str], Awaitable[Reused | None]] | None = None
 
     @property
@@ -221,6 +226,7 @@ async def build(
         images=list(draft.pictures),
         iterations=draft.looks,
         skills=skills.version(),
+        rounds=list(draft.rounds),
     )
 
 
@@ -300,6 +306,17 @@ def _tools(draft: _Draft) -> list[Any]:
 
         draft.shown = await checks.check(draft.project)
         draft.digest = digest
+        draft.rounds.append(
+            {
+                "iteration": draft.looks,
+                "files": len(draft.files),
+                "pictures": len(draft.pictures),
+                "blocked": draft.shown.blocked,
+                "passed": sum(1 for check in draft.shown.checks if check.ok),
+                "total": len(draft.shown.checks),
+                "report": draft.shown.report(),
+            }
+        )
 
         return _seen(draft.shown)
 

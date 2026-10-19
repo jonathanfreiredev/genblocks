@@ -1,8 +1,8 @@
-"""vault schema
+"""consolidate the vault schema
 
-Revision ID: 69a7f09b8eac
+Revision ID: d18b9f8ce2ea
 Revises: cfa123659387
-Create Date: 2026-10-16 13:46:48.990606
+Create Date: 2026-10-19 16:05:24.874647
 
 """
 
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "69a7f09b8eac"
+revision: str = "d18b9f8ce2ea"
 down_revision: str | Sequence[str] | None = "cfa123659387"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -63,7 +63,9 @@ def upgrade() -> None:
         sa.Column("title", sa.String(), nullable=False),
         sa.Column("description", sa.String(), nullable=False),
         sa.Column("category_id", sa.UUID(), nullable=False),
-        sa.Column("code", sa.String(), nullable=False),
+        sa.Column("files", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("entry", sa.String(), nullable=False),
+        sa.Column("dependencies", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("delivery_prompt", sa.String(), nullable=False),
         sa.Column("spec", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("winning_generation_id", sa.UUID(), nullable=True),
@@ -151,6 +153,36 @@ def upgrade() -> None:
     op.create_index(op.f("ix_images_created_by"), "images", ["created_by"], unique=False)
     op.create_index(op.f("ix_images_path"), "images", ["path"], unique=True)
     op.create_table(
+        "brief_cache",
+        sa.Column("key", sa.String(), nullable=False),
+        sa.Column("component_id", sa.UUID(), nullable=False),
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["component_id"],
+            ["components.id"],
+            name=op.f("fk_brief_cache_component_id_components"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_brief_cache")),
+    )
+    op.create_index(
+        op.f("ix_brief_cache_component_id"), "brief_cache", ["component_id"], unique=False
+    )
+    op.create_index(op.f("ix_brief_cache_key"), "brief_cache", ["key"], unique=True)
+    op.create_table(
         "component_assets",
         sa.Column("component_id", sa.UUID(), nullable=False),
         sa.Column("image_id", sa.UUID(), nullable=False),
@@ -200,6 +232,7 @@ def upgrade() -> None:
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error", sa.String(), nullable=True),
         sa.Column("langfuse_trace_id", sa.String(), nullable=True),
+        sa.Column("cached", sa.Boolean(), server_default="false", nullable=False),
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column(
             "created_at",
@@ -242,8 +275,10 @@ def upgrade() -> None:
         sa.Column("task_id", sa.UUID(), nullable=True),
         sa.Column("component_id", sa.UUID(), nullable=True),
         sa.Column("attempt_no", sa.Integer(), nullable=False),
-        sa.Column("code", sa.String(), nullable=False),
+        sa.Column("files", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("entry", sa.String(), nullable=False),
         sa.Column("screenshot_path", sa.String(), nullable=True),
+        sa.Column("checks", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("scores", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("verdict", sa.String(), nullable=False),
         sa.Column("rubric_version", sa.String(), nullable=True),
@@ -287,17 +322,6 @@ def upgrade() -> None:
         op.f("ix_generations_component_id"), "generations", ["component_id"], unique=False
     )
     op.create_index(op.f("ix_generations_task_id"), "generations", ["task_id"], unique=False)
-    # ``components`` and ``generations`` point at each other, so this constraint
-    # waits until both tables exist (the model marks it ``use_alter``, which
-    # makes it invisible to ``create_table`` above).
-    op.create_foreign_key(
-        op.f("fk_components_winning_generation_id_generations"),
-        "components",
-        "generations",
-        ["winning_generation_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
     op.create_table(
         "task_steps",
         sa.Column("task_id", sa.UUID(), nullable=False),
@@ -333,16 +357,30 @@ def upgrade() -> None:
         sa.UniqueConstraint("task_id", "index", name="uq_task_steps_task_index"),
     )
     op.create_index(op.f("ix_task_steps_task_id"), "task_steps", ["task_id"], unique=False)
+    # The one circular reference: a block points at its winning attempt and the
+    # attempt points back at the block, so the constraint waits until both tables
+    # exist. Autogenerate writes it inside ``create_table`` with ``use_alter`` and
+    # Alembic then skips it; written here it is actually created (``alembic check``
+    # says so).
+    op.create_foreign_key(
+        op.f("fk_components_winning_generation_id_generations"),
+        "components",
+        "generations",
+        ["winning_generation_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
-    # Dropped first: it is the one constraint crossing between two tables, and
-    # ``generations`` is dropped further down.
+    # The circular reference goes first, or dropping its target cannot happen.
     op.drop_constraint(
-        op.f("fk_components_winning_generation_id_generations"), "components", type_="foreignkey"
+        op.f("fk_components_winning_generation_id_generations"),
+        "components",
+        type_="foreignkey",
     )
     op.drop_index(op.f("ix_task_steps_task_id"), table_name="task_steps")
     op.drop_table("task_steps")
@@ -357,6 +395,9 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_component_assets_image_id"), table_name="component_assets")
     op.drop_index(op.f("ix_component_assets_component_id"), table_name="component_assets")
     op.drop_table("component_assets")
+    op.drop_index(op.f("ix_brief_cache_key"), table_name="brief_cache")
+    op.drop_index(op.f("ix_brief_cache_component_id"), table_name="brief_cache")
+    op.drop_table("brief_cache")
     op.drop_index(op.f("ix_images_path"), table_name="images")
     op.drop_index(op.f("ix_images_created_by"), table_name="images")
     op.drop_index(op.f("ix_images_category_id"), table_name="images")

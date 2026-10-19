@@ -140,6 +140,12 @@ async def test_the_builder_writes_looks_and_fixes_what_it_saw(sandbox):
     assert built.files == {agent.ENTRY: FIXED}
     assert built.iterations == 2
     assert built.skills == skills.version()
+    # Each look is a round a trace can read back: the sandbox's own words, and
+    # what the project looked like when it said them.
+    assert [one["iteration"] for one in built.rounds] == [1, 2]
+    assert all("typecheck: ok" in one["report"] for one in built.rounds)
+    assert built.rounds[1]["files"] == 1
+    assert built.rounds[0]["blocked"] is False
     # It looked at the version it had written, and then at the fixed one: the loop
     # is what makes the second look worth anything.
     assert [project[agent.ENTRY] for project in sandbox.seen] == [FIRST, FIXED]

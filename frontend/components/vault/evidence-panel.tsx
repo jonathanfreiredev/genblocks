@@ -53,6 +53,11 @@ export function EvidencePanel({
   const stamp = stampFor(judged.verdict);
   const rows = scoresFor(kind, judged.scores);
   const harness = checkRows(judged.checks);
+  // Read at render time, not at module load: the panel is built once and the
+  // host is a build-time value, and a test that stubs it should see the link.
+  const traceHost = process.env.NEXT_PUBLIC_LANGFUSE_HOST?.replace(/\/+$/, "");
+  const traceUrl =
+    traceHost && judged.traceId ? `${traceHost}/trace/${judged.traceId}` : null;
 
   return (
     <div className="bg-panel flex flex-col gap-8 p-6">
@@ -100,9 +105,21 @@ export function EvidencePanel({
 
       <Group label="Trace">
         <div className="mt-2 flex items-center justify-between gap-4">
-          <p className="type-meta text-ink-soft truncate">
-            {judged.traceId ?? "Not recorded"}
-          </p>
+          {traceUrl ? (
+            <a
+              href={traceUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open the trace in Langfuse"
+              className="type-meta text-ink-soft hover:text-ink truncate underline-offset-4 hover:underline"
+            >
+              {judged.traceId}
+            </a>
+          ) : (
+            <p className="type-meta text-ink-soft truncate">
+              {judged.traceId ?? "Not recorded"}
+            </p>
+          )}
           {judged.traceId ? (
             <CopyButton text={judged.traceId} idleLabel="Copy the trace id" />
           ) : null}

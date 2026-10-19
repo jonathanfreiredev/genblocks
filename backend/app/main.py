@@ -13,6 +13,7 @@ from app.db.session import async_session_maker
 from app.health.router import health_router
 from app.logging_config import configure_logging
 from app.middleware.request_id import RequestIdMiddleware
+from app.observability import service as observability
 from app.organizations.service import OrganizationSlugConflict
 from app.settings import settings
 from app.tasks.runner import run_worker
@@ -53,6 +54,11 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         worker.cancel()
         with suppress(asyncio.CancelledError):
             await worker
+
+        # Whatever the SDK still has buffered goes out now. The task the worker was
+        # on is already interrupted and will be reconciled next boot; its trace ends
+        # here with what was written, which is the honest half of a cut run.
+        observability.shutdown()
 
 
 app = FastAPI(lifespan=lifespan)

@@ -137,3 +137,61 @@ def test_the_brief_refusal_says_what_it_is():
     refused = moderation.BriefRejected("it impersonates a real bank")
 
     assert str(refused) == "The brief cannot be built: it impersonates a real bank"
+
+
+def test_only_the_copy_is_sent_to_the_moderator():
+    files = {
+        "src/Block.tsx": """
+import { useState } from "react";
+
+const shell = "mt-4 flex items-baseline justify-between gap-6 border-t";
+
+export default function Block() {
+  return (
+    <section className={shell}>
+      <h1>One headline, kept short</h1>
+      <p>No sign-up · MIT licensed</p>
+      <a href="/blocks">Browse the vault</a>
+    </section>
+  );
+}
+"""
+    }
+
+    text = moderation.copy_of(files)
+
+    assert "One headline, kept short" in text
+    assert "No sign-up · MIT licensed" in text
+    assert "Browse the vault" in text
+    # The machinery is not the question: no imports, no class lists, no paths.
+    assert "useState" not in text
+    assert "mt-4" not in text
+    assert "/blocks" not in text
+
+
+def test_copy_sitting_in_a_data_array_is_included():
+    files = {
+        "src/Block.tsx": (
+            'const quotes = [{ author: "Marisol Vega", words: "It shipped in a day." }];'
+        )
+    }
+
+    text = moderation.copy_of(files)
+
+    assert "It shipped in a day." in text
+    assert "Marisol Vega" in text
+
+
+def test_the_same_line_twice_is_asked_once():
+    files = {"src/Block.tsx": "<p>One line of copy.</p><p>One line of copy.</p>"}
+
+    assert moderation.copy_of(files) == "One line of copy."
+
+
+async def test_a_huge_copy_is_capped_before_it_is_sent():
+    groq = Groq()
+
+    await moderation.review("word " * 10_000, client=groq)
+
+    sent = groq.asked["body"]["messages"][-1]["content"]
+    assert len(sent) == moderation.MAX_CHARS

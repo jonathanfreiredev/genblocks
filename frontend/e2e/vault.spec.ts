@@ -106,7 +106,14 @@ test("the code is a tab away, with both columns open and both collapsible", asyn
   await expect(dialog.getByRole("button", { name: /^src\// })).toBeVisible();
 });
 
-test("images wait for their asset rather than breaking", async ({ page }) => {
+test("an image whose asset cannot arrive says so rather than breaking", async ({
+  page,
+}) => {
+  // The rows have real assets now, so the fallback is exercised the only way it
+  // happens in production: the delivery fails. The plate must say what it is
+  // instead of leaving a broken image behind.
+  await page.route("**/_next/image**", (route) => route.abort());
+
   await page.goto("/?kind=image");
 
   await expect(page.locator('[data-slot="item-cell"]').first()).toBeVisible();

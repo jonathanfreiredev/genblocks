@@ -1,10 +1,16 @@
 """Whether a text may become a block, asked of a safety model.
 
 Two doors ask the same question at different moments. The **brief** is asked before
-it becomes a task, so a refusal costs nothing; the **artifact** is asked after the
-harness has written it, so a block that is unsafe never reaches the judge or the
-registry. Neither replaces the other: a brief can be harmless and the copy it grows
-can still be the thing that should not be published.
+it becomes a task, so a refusal costs nothing; the **copy** the block shows is asked
+after the harness has written it, so a block that is unsafe never reaches the judge
+or the registry. Neither replaces the other: a brief can be harmless and the copy it
+grows can still be the thing that should not be published.
+
+What the artifact door is sent is the copy, not the project: text nodes and the
+quoted strings that read like prose. Sending the source would be sending mostly
+code, and the free safety model is limited by the token (2,000 a minute on Groq's
+free tier) — a request that large is refused before it is read, which is a gate
+that never opens.
 
 With no key the check is **off**, not guessed: the log says so on every call, and a
 deployment that forgot the key is told rather than silently trusting everything. A
@@ -14,6 +20,8 @@ where "we could not check" and "it passed" must not look the same.
 """
 
 import json
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import httpx
@@ -26,9 +34,16 @@ logger = structlog.get_logger("app.moderation")
 ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 TIMEOUT_SECONDS = 15.0
 
-# How much of a project is sent. A block is a few files of a few kilobytes; the
-# bound is there so a runaway project cannot turn one call into a bill.
-MAX_CHARS = 20_000
+# How much of the copy is sent. The safety model's free tier allows 2,000 tokens a
+# minute, and the frame below takes a couple of hundred of them; what is left is a
+# few hundred words of copy, which is more than a block shows. The bound is also a
+# bill: a runaway project cannot turn one call into a request the provider refuses.
+MAX_CHARS = 2_500
+
+# What a block says, rather than what it is written in: the text between tags, and
+# the quoted strings that read like prose (copy in data arrays, alternates, labels).
+TEXT_NODE = re.compile(r">([^<>{}]{2,})<")
+QUOTED = re.compile(r"""["']([^"'\\\n]{3,})["']""")
 
 # The question, worded once. A UI brief is ordinary: pricing, heroes, forms and
 # dashboards are the product, and a classifier that refuses them is worse than no
@@ -45,6 +60,41 @@ dashboards, menus, and marketing copy about products — is allowed.
 Answer with JSON only, no prose around it:
 {"allowed": true or false, "reason": "one sentence"}
 """
+
+
+def copy_of(files: Mapping[str, str]) -> str:
+    """The words a block shows, one per line, for the moderator.
+
+    A JSX project is mostly machinery: imports, class lists, handlers. The part a
+    safety model can judge is the copy that ends up on somebody's page, so that is
+    what is extracted — text nodes, and quoted strings that read like sentences
+    rather than like a Tailwind class list.
+    """
+    said: list[str] = []
+
+    for content in files.values():
+        said.extend(TEXT_NODE.findall(content))
+        said.extend(part for part in QUOTED.findall(content) if _reads_like_copy(part))
+
+    # The same line twice is the same question. Keep the order the block has.
+    seen: set[str] = set()
+    unique: list[str] = []
+    for part in said:
+        text = " ".join(part.split())
+        if text and text not in seen:
+            seen.add(text)
+            unique.append(text)
+
+    return "\n".join(unique)
+
+
+def _reads_like_copy(text: str) -> bool:
+    """A quoted string that is prose: not a class list, a path, or a URL."""
+    return (
+        " " in text
+        and any(character.isupper() for character in text)
+        and not text.startswith(("http://", "https://", "/", "./"))
+    )
 
 
 class ModerationUnavailable(Exception):
