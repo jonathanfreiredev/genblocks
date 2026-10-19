@@ -15,8 +15,8 @@ const COMPONENT: Component = {
   description: "A signup band for a changelog.",
   category_id: "hero",
   created_at: "2026-10-17T09:12:00Z",
-  code: "export default function Block() { return null }",
-  files: null,
+  files: { "src/Block.tsx": "export default function Block() { return null }" },
+  entry: "src/Block.tsx",
   dependencies: null,
   delivery_prompt: "A newsletter band",
   spec: null,
@@ -32,8 +32,10 @@ function run(overrides: Partial<Generation>): Generation {
     task_id: "task",
     component_id: "component",
     attempt_no: 1,
-    code: "export default function Block() { return null }",
-    files: null,
+    files: {
+      "src/Block.tsx": "export default function Block() { return null }",
+    },
+    entry: "src/Block.tsx",
     screenshot_path: null,
     checks: null,
     scores: null,
@@ -47,43 +49,63 @@ function run(overrides: Partial<Generation>): Generation {
 }
 
 const RENDERED = [
-  run({ screenshot_path: "genblocks/screenshots/0123456789ab-1" }),
+  run({
+    screenshot_path: "genblocks/screenshots/0123456789ab-1",
+    scores: {
+      render: 92,
+      accessibility: 88,
+      visual: 86,
+      copy: 90,
+      compliance: 94,
+    },
+  }),
 ];
 
+function open(generations: Generation[] = RENDERED, component = COMPONENT) {
+  render(
+    <ComponentDialog
+      component={component}
+      generations={generations}
+      typeName="Hero"
+      closeHref="/"
+    />,
+  );
+}
+
 describe("ComponentDialog", () => {
-  test("shows the render of the run that made it", () => {
-    render(
-      <ComponentDialog
-        component={COMPONENT}
-        generations={RENDERED}
-        typeName="Hero"
-        closeHref="/"
-      />,
-    );
+  test("opens on the render, with the scores already beside it", () => {
+    open();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Render" }));
-
-    // The plate carries the block's name, and the panel beside it names what made
-    // the run and which rubric scored it.
+    // Somebody browsing came to see the block; the numbers are there without a
+    // second click, and the code is one tab away.
     expect(
       screen.getByAltText("The rendered block: Newsletter band"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Judge")).toBeInTheDocument();
+    expect(screen.getByText("94")).toBeInTheDocument();
+  });
+
+  test("does not stamp PASS on an item that is in the library", () => {
+    open();
+
+    // Everything here has already cleared its bar; the item being on show is the
+    // verdict, and the stamp would be the same word on every row.
+    expect(screen.queryByText("PASS")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Hide the scores" }),
+    ).toBeInTheDocument();
+  });
+
+  test("names what made the run and which rubric scored it", () => {
+    open();
+
     expect(
       screen.getByText("gpt-6-luna · components-1a2b3c4d"),
     ).toBeInTheDocument();
   });
 
   test("says a run has no render rather than drawing an empty frame", () => {
-    render(
-      <ComponentDialog
-        component={COMPONENT}
-        generations={[run({})]}
-        typeName="Hero"
-        closeHref="/"
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Render" }));
+    open([run({})]);
 
     expect(screen.getByText("Awaiting asset")).toBeInTheDocument();
     expect(
@@ -91,42 +113,20 @@ describe("ComponentDialog", () => {
     ).toBeInTheDocument();
   });
 
-  test("keeps the code as the specimen it opens on", () => {
-    render(
-      <ComponentDialog
-        component={COMPONENT}
-        generations={RENDERED}
-        typeName="Hero"
-        closeHref="/"
-      />,
-    );
-
-    expect(screen.getByRole("tab", { name: "Code" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("tab", { name: "Delivery prompt" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(COMPONENT.code)).toBeInTheDocument();
-  });
-
-  test("reads a block that is several files, one file at a time", () => {
-    const block = {
-      ...COMPONENT,
-      code: "export default function Block() { return <Rule /> }",
-      files: {
-        "src/Block.tsx": "export default function Block() { return <Rule /> }",
-        "src/parts/Rule.tsx":
-          "export default function Rule() { return <hr /> }",
-      },
+  test("reads the code one file at a time, once the tab is opened", () => {
+    // The project the pane reads is the run's: the component's copy is the same
+    // project, and the run is where it came from.
+    const project = {
+      "src/Block.tsx": "export default function Block() { return <Rule /> }",
+      "src/parts/Rule.tsx": "export default function Rule() { return <hr /> }",
     };
 
-    render(
-      <ComponentDialog
-        component={block}
-        generations={RENDERED}
-        typeName="Hero"
-        closeHref="/"
-      />,
-    );
+    open([run({ files: project })]);
+
+    // Not on screen until asked for: the render is what the dialog opens on.
+    expect(screen.queryByText(/function Rule/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Code" }));
 
     // Both files are named, and the entry point is the one on screen: it is the
     // file the page imports, so it is the one a reader opens first.
@@ -142,6 +142,23 @@ describe("ComponentDialog", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
+  test("opens the file the block names, not the alphabetically first one", () => {
+    // `src/App.tsx` sorts before `src/Block.tsx`; the block is `Block`, and the
+    // entry is what says so. Without it the pane would open the wrong file.
+    const project = {
+      "src/App.tsx": "export default function App() { return null }",
+      "src/Block.tsx": "export default function Block() { return <main /> }",
+    };
+
+    open([run({ files: project, entry: "src/Block.tsx" })]);
+    fireEvent.click(screen.getByRole("tab", { name: "Code" }));
+
+    expect(
+      screen.getByRole("button", { name: "src/Block.tsx" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/function Block/)).toBeInTheDocument();
+  });
+
   test("says what to install beside a block, and nothing when there is nothing", () => {
     const block = {
       ...COMPONENT,
@@ -152,30 +169,53 @@ describe("ComponentDialog", () => {
       },
     };
 
-    const { unmount } = render(
-      <ComponentDialog
-        component={block}
-        generations={RENDERED}
-        typeName="Hero"
-        closeHref="/"
-      />,
-    );
+    open(RENDERED, block);
+    fireEvent.click(screen.getByRole("tab", { name: "Code" }));
 
     expect(screen.getByText(/pnpm add motion@\^13\.0\.0/)).toBeInTheDocument();
     // React is what a block is written in, not something it asks anyone to add.
     expect(screen.queryByText(/react@/)).toBeNull();
+  });
 
-    unmount();
-
-    render(
-      <ComponentDialog
-        component={COMPONENT}
-        generations={RENDERED}
-        typeName="Hero"
-        closeHref="/"
-      />,
-    );
+  test("has no install line when the block adds nothing", () => {
+    open();
+    fireEvent.click(screen.getByRole("tab", { name: "Code" }));
 
     expect(screen.queryByText(/pnpm add/)).toBeNull();
+  });
+
+  test("puts the scores away and brings them back from the same spot", () => {
+    open();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide the scores" }));
+
+    expect(screen.queryByText("Judge")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Show the scores" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show the scores" }));
+
+    expect(screen.getByText("Judge")).toBeInTheDocument();
+  });
+
+  test("puts the files away without putting the code away", () => {
+    const project = {
+      "src/Block.tsx": "export default function Block() { return null }",
+      "src/parts/Rule.tsx": "export default function Rule() { return <hr /> }",
+    };
+
+    open([run({ files: project })]);
+    fireEvent.click(screen.getByRole("tab", { name: "Code" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide the files" }));
+
+    expect(
+      screen.queryByRole("button", { name: "src/parts/Rule.tsx" }),
+    ).toBeNull();
+    expect(screen.getByText(/function Block/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show the files" }),
+    ).toBeInTheDocument();
   });
 });

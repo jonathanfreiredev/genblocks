@@ -240,8 +240,13 @@ Supabase Auth, Postgres, multi-tenancy por organización).
 34. **El bloque es un proyecto, no un fichero.** El agente trabaja sobre varios
     ficheros (`write_file`/`read_file`) con `src/Block.tsx` como entrada, así que un
     formulario puede componetizarse. Se guarda `files` (jsonb) en `components` y en
-    `generations`, y `code` se queda como el fichero de entrada: aditivo, la lectura
-    y la puerta MCP no se rompen. El panel del item gana pestañas por fichero.
+    `generations`, y `entry` dice cuál de esos ficheros es el bloque: una ruta, no
+    una copia del texto. El panel del item gana pestañas por fichero.
+    → *Primero se guardó además `code`, el texto de la entrada copiado al lado, para
+    no romper la lectura publicada. Al no haber clientes fuera del repo se retiró:
+    `code` era `files[entry]` duplicado, y la UI ordenaba las claves para elegir
+    fichero (y abría `src/App.tsx` antes que `src/Block.tsx`). Hoy `files` + `entry`
+    es la única forma.*
 35. **Motion con dependencia y con reglas.** `motion` más CSS nativo cuando basta.
     Dos cosas que son de checks y no de gusto: el screenshot **espera a que la
     animación aterrice** (`document.getAnimations()`, o la foto del ledger saldrá a
@@ -315,8 +320,8 @@ paso): lo que un lector sigue es el trabajo, no cada guardado.
 | Tabla | Campos clave |
 |---|---|
 | `categories` | id, parent_id, kind(component\|image), slug, name, level |
-| `components` | id, slug, title, description, category_id, `code` (fichero de entrada), `files` jsonb, `dependencies` jsonb, delivery_prompt, spec, winning_generation_id, created_by, license, created_at |
-| `generations` | id, task_id, component_id, attempt_no, `code` (entrada), `files` jsonb, screenshot_path, scores jsonb, verdict, rubric_version, model, langfuse_trace_id |
+| `components` | id, slug, title, description, category_id, `files` jsonb, `entry` (ruta del fichero del bloque), `dependencies` jsonb, delivery_prompt, spec, winning_generation_id, created_by, license, created_at |
+| `generations` | id, task_id, component_id, attempt_no, `files` jsonb, `entry`, screenshot_path, scores jsonb, verdict, rubric_version, model, langfuse_trace_id |
 | `images` | id, prompt, path, width, height, category_id, created_by, license, model, scores jsonb, rubric_version, langfuse_trace_id |
 | `component_assets` | component_id, image_id, slot |
 | `tasks` | id, kind, status, brief, component_id, created_by, created_at, finished_at, error, langfuse_trace_id |
@@ -731,9 +736,9 @@ sea la puerta, no el volante.
 #### 9b — Multi-fichero y motion fino
 
 - El agente trabaja sobre un **proyecto** (`write_file`/`read_file`): un formulario
-  puede componetizarse en `Field`, `Label`, `Error`. `files` (jsonb) en `components`
-  y en `generations`, `code` como fichero de entrada, y pestañas por fichero en el
-  panel del item (decisión 34).
+  puede componetizarse en `Field`, `Label`, `Error`. `files` (jsonb) y `entry` en
+  `components` y en `generations`, y pestañas por fichero en el panel del item
+  (decisión 34).
 - El screenshot **espera a que la animación aterrice** y `prefers-reduced-motion` es
   criterio de accesibilidad. El motion se puntúa dentro de `visual` (decisión 35).
 

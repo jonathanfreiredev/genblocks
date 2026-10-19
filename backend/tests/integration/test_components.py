@@ -3,8 +3,9 @@ from fastapi import HTTPException
 
 from app.components.models import Component
 from app.components.service import get_component_by_slug, list_components
+from app.harness.agent import ENTRY
 from app.pagination import ListParams
-from tests.helpers import create_category
+from tests.helpers import BLOCK, create_category
 
 pytestmark = pytest.mark.anyio
 
@@ -22,7 +23,8 @@ async def _component(
         title=title or slug.title(),
         description=description or f"{slug} block",
         category_id=category_id,
-        code="export function Block() { return null }",
+        files={ENTRY: BLOCK},
+        entry=ENTRY,
         delivery_prompt=f"Build a {slug}",
     )
     session.add(component)

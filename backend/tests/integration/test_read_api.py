@@ -9,6 +9,7 @@ import uuid
 import pytest
 
 from app.generations.models import Generation
+from app.harness.agent import ENTRY
 from tests.helpers import create_category, create_component, create_image
 
 pytestmark = pytest.mark.anyio
@@ -94,7 +95,8 @@ async def test_a_component_is_read_in_full_by_id(client, db_session):
     body = (await client.get(f"/v1/components/{component.id}")).json()
 
     assert body["slug"] == "alpha"
-    assert body["code"] == component.code
+    assert body["entry"] == component.entry
+    assert body["files"] == component.files
     assert body["delivery_prompt"] == component.delivery_prompt
     assert body["license"] == "MIT"
 
@@ -118,8 +120,20 @@ async def test_a_components_attempt_history_is_public_and_oldest_first(client, d
     component = await create_component(db_session, category_id=category.id, slug="alpha")
     db_session.add_all(
         [
-            Generation(component_id=component.id, attempt_no=2, code="b", verdict="published"),
-            Generation(component_id=component.id, attempt_no=1, code="a", verdict="rejected"),
+            Generation(
+                component_id=component.id,
+                attempt_no=2,
+                files={ENTRY: "b"},
+                entry=ENTRY,
+                verdict="published",
+            ),
+            Generation(
+                component_id=component.id,
+                attempt_no=1,
+                files={ENTRY: "a"},
+                entry=ENTRY,
+                verdict="rejected",
+            ),
         ]
     )
     await db_session.commit()

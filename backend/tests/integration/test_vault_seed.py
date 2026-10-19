@@ -61,7 +61,10 @@ async def test_a_seeded_block_points_at_its_own_published_attempt(db_session):
     assert winner.component_id == component.id
     assert winner.attempt_no == 2
     assert winner.verdict == "published"
-    assert winner.code == component.code
+    # The block is the project that run produced, and the attempt says which file
+    # of it the block is.
+    assert winner.entry == component.entry
+    assert winner.files == component.files
 
 
 async def test_every_seeded_block_keeps_two_attempts(db_session):

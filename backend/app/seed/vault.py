@@ -29,6 +29,7 @@ from app.categories.models import Category
 from app.components.models import DEFAULT_LICENSE, Component
 from app.db.session import async_session_maker
 from app.generations.models import Generation, Verdict
+from app.harness.agent import ENTRY
 from app.images.models import Image
 from app.tasks.models import StepStatus, Task, TaskKind, TaskStatus, TaskStep
 from app.users.models import User
@@ -70,7 +71,12 @@ def _component_attempt_key(slug: str, attempt_no: int) -> str:
 
 @dataclass(frozen=True)
 class ComponentSpec:
-    """One seeded block, its final attempt and the rejected pass before it."""
+    """One seeded block, its final attempt and the rejected pass before it.
+
+    ``code`` is the block's single file as it is written here: the seed is
+    authorship, not storage, and what it plants is a project with that file as
+    its entry point.
+    """
 
     slug: str
     category_slug: str
@@ -1012,7 +1018,8 @@ async def _seed_components(
         component.title = spec.title
         component.description = spec.description
         component.category_id = categories[spec.category_slug].id
-        component.code = spec.code
+        component.files = {ENTRY: spec.code}
+        component.entry = ENTRY
         component.delivery_prompt = spec.delivery_prompt
         component.spec = None
         component.license = DEFAULT_LICENSE
@@ -1046,7 +1053,8 @@ async def _seed_component_attempts(
             generation.task_id = None
             generation.component_id = component.id
             generation.attempt_no = attempt_no
-            generation.code = code
+            generation.files = {ENTRY: code}
+            generation.entry = ENTRY
             generation.screenshot_path = None
             generation.scores = scores
             generation.verdict = verdict
@@ -1130,7 +1138,8 @@ async def _seed_candidate_attempt(
     generation.task_id = task_id
     generation.component_id = None
     generation.attempt_no = 1
-    generation.code = spec.candidate_code
+    generation.files = {ENTRY: spec.candidate_code}
+    generation.entry = ENTRY
     generation.screenshot_path = None
     generation.scores = None
     generation.verdict = Verdict.CANDIDATE

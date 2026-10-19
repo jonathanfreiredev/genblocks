@@ -10,8 +10,10 @@ function run(overrides: Partial<Generation>): Generation {
     task_id: "task",
     component_id: null,
     attempt_no: 1,
-    code: "export default function Block() { return null }",
-    files: null,
+    files: {
+      "src/Block.tsx": "export default function Block() { return null }",
+    },
+    entry: "src/Block.tsx",
     screenshot_path: null,
     checks: null,
     scores: null,

@@ -4,7 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.categories.models import Category
 from app.components.models import Component
+from app.harness.agent import ENTRY
 from app.images.models import Image
+
+# What a planted block is made of: one file, at the entry path.
+BLOCK = "export function Block() { return null }"
 
 
 def auth_header(token: str) -> dict[str, str]:
@@ -41,7 +45,8 @@ async def create_component(
         title=title or slug.replace("-", " ").title(),
         description=description or f"{slug} block",
         category_id=category_id,
-        code="export function Block() { return null }",
+        files={ENTRY: BLOCK},
+        entry=ENTRY,
         delivery_prompt=f"Build a {slug}",
     )
     session.add(component)

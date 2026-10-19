@@ -23,7 +23,7 @@ class Verdict(StrEnum):
 
 
 class Generation(BaseModel):
-    """The artifact one task produced: its code, its screenshot and its scores.
+    """The artifact one task produced: its project, its screenshot and its scores.
 
     One per task, and the unique constraint below is what makes that a guarantee
     rather than a habit: a run makes one artifact, the judge scores it once, and
@@ -56,11 +56,13 @@ class Generation(BaseModel):
         ForeignKey("components.id", ondelete="CASCADE"), index=True
     )
     attempt_no: Mapped[int]
-    code: Mapped[str]
-    # The project this attempt produced, and its pictures' slots. Same shape as the
-    # component's, kept on the attempt too: a rejected attempt that cannot be rebuilt
-    # is a record of an opinion rather than of a block.
-    files: Mapped[dict | None] = mapped_column(JSONB)
+    # The project this attempt produced: path → file, always at least the entry
+    # file. Same shape as the component's, kept on the attempt too: a rejected
+    # attempt that cannot be rebuilt is a record of an opinion rather than of a
+    # block.
+    files: Mapped[dict] = mapped_column(JSONB)
+    # Which of those files the block is. A path, never a copy of the file.
+    entry: Mapped[str]
     # Cloudinary public id of the render. Nullable until the upload succeeds.
     screenshot_path: Mapped[str | None]
     # What the sandbox found: one entry per check, with its short detail. Null on

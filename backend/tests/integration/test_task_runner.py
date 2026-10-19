@@ -53,7 +53,8 @@ CATEGORY = "photography"
 # every time.
 CODE = "export default function Block() {\n  return <section>Pricing</section>;\n}\n"
 PART = "export default function Rule() { return <hr />; }\n"
-PROJECT = {"src/Block.tsx": CODE, "src/parts/Rule.tsx": PART}
+ENTRY = "src/Block.tsx"
+PROJECT = {ENTRY: CODE, "src/parts/Rule.tsx": PART}
 
 # What the sandbox finds on a run that went well. One entry per check it makes,
 # in the order it makes them.
@@ -378,9 +379,9 @@ async def test_a_queued_task_runs_towards_a_published_block(runner_session, harn
     attempt = attempts[0]
     assert attempt.attempt_no == 1
     assert attempt.verdict == Verdict.PUBLISHED
-    # The entry file as well as the project: everything that read an attempt's
-    # code before there were projects keeps working.
-    assert attempt.code == CODE
+    # The project, and which file of it is the block: the text is in the project
+    # once, and the entry only names it.
+    assert attempt.entry == ENTRY
     assert attempt.files == PROJECT
     assert attempt.model == settings.llm_model
     assert attempt.scores == GOOD
@@ -398,7 +399,7 @@ async def test_a_queued_task_runs_towards_a_published_block(runner_session, harn
     assert component is not None
     assert component.slug == slug
     assert component.category_id == category_id
-    assert component.code == CODE
+    assert component.entry == ENTRY
     assert component.files == PROJECT
     # The install line, read from the project by the sandbox rather than declared
     # by the model that wrote it.

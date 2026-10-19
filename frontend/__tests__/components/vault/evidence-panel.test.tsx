@@ -75,6 +75,17 @@ describe("EvidencePanel", () => {
     expect(screen.getByText("gpt-6-luna · seed-v0")).toBeInTheDocument();
   });
 
+  test("can leave the verdict out where everything has already passed", () => {
+    render(
+      <EvidencePanel kind="component" judged={JUDGED} showVerdict={false} />,
+    );
+
+    // The library only holds what cleared its bar, so a stamp there would read
+    // PASS on every row; the task page keeps it, because a run can be a refusal.
+    expect(screen.queryByText("PASS")).toBeNull();
+    expect(screen.getByText("gpt-6-luna · seed-v0")).toBeInTheDocument();
+  });
+
   test("says so when no trace was recorded", () => {
     render(<EvidencePanel kind="component" judged={JUDGED} />);
 

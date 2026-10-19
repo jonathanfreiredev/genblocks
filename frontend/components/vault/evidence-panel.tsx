@@ -30,13 +30,25 @@ function Group({
  * The same panel serves a block, an image and a task — the rubric differs, the
  * shape does not — because the whole claim of the product is that every artifact
  * carries the numbers it earned, in one form a reader learns once.
+ *
+ * ``showVerdict`` is for the library, where everything on show has already
+ * passed: a stamp that always says PASS is decoration, and the item being there
+ * is the verdict. A task page keeps it, because a run there can be a refusal.
+ *
+ * ``action`` is the panel's own control, at the head of the panel rather than
+ * floating over the content: the item view puts its collapse there, and the task
+ * page passes nothing.
  */
 export function EvidencePanel({
   kind,
   judged,
+  showVerdict = true,
+  action,
 }: {
   kind: Kind;
   judged: Judged;
+  showVerdict?: boolean;
+  action?: React.ReactNode;
 }) {
   const stamp = stampFor(judged.verdict);
   const rows = scoresFor(kind, judged.scores);
@@ -45,11 +57,16 @@ export function EvidencePanel({
   return (
     <div className="bg-panel flex flex-col gap-8 p-6">
       <div className="flex flex-col gap-2">
-        {stamp ? (
-          <VerdictStamp verdict={stamp} />
-        ) : (
-          <span className="type-label text-ink-faint">Not judged</span>
-        )}
+        <div className="flex items-center gap-2">
+          {action}
+          {showVerdict ? (
+            stamp ? (
+              <VerdictStamp verdict={stamp} />
+            ) : (
+              <span className="type-label text-ink-faint">Not judged</span>
+            )
+          ) : null}
+        </div>
 
         <p className="type-meta text-ink-faint">
           {/* "Unknown" would read as a gap in the record. A null model is not

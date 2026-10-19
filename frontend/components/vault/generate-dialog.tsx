@@ -17,13 +17,12 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Message, MessageContent, MessageGroup } from "@/components/ui/message";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusWord } from "@/components/vault/status-word";
@@ -390,18 +389,15 @@ export function GenerateDialog({
         }
       }}
     >
-      <DialogTrigger render={<Button className={className} />}>
+      <DialogTrigger
+        render={<Button className={cn(className, "cursor-pointer")} />}
+      >
         Generate with AI
       </DialogTrigger>
 
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-4 sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="type-title">Generate a block</DialogTitle>
-          <DialogDescription>
-            Describe what you want and the agent writes the brief, searches the
-            registry for anything close, and queues one task. The conversation
-            is real; the build behind it is still a placeholder.
-          </DialogDescription>
         </DialogHeader>
 
         <div
@@ -507,11 +503,6 @@ export function GenerateDialog({
                   onChange={(event) => setDraft(event.target.value)}
                   placeholder="A pricing page for a developer tool: three tiers, an annual toggle, one comparison row per feature."
                 />
-                <FieldDescription>
-                  What you want built, in your words. The agent writes the brief
-                  from it and asks for what is missing. Up to{" "}
-                  {MESSAGE_MAX_LENGTH} characters.
-                </FieldDescription>
               </Field>
 
               <Button

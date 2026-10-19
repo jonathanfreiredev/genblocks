@@ -237,10 +237,10 @@ async def _build(
         # One artifact per run: the number is the invariant the table enforces
         # rather than a counter of tries.
         attempt_no=1,
-        # The entry file, as well as the whole project: everything that read an
-        # attempt's code before there were projects keeps working.
-        code=built.files.get(harness.ENTRY, ""),
+        # The project, and which file of it is the block. No copy of the entry
+        # file beside it: the text lives in ``files`` and nowhere else.
         files=built.files,
+        entry=harness.ENTRY,
         model=settings.llm_model,
         screenshot_path=stored,
         checks=found.record(),
@@ -370,7 +370,7 @@ async def _judge(
 
     judged = await judge.score_component(
         brief=brief,
-        files=attempt.files or {harness.ENTRY: attempt.code},
+        files=attempt.files,
         found=found,
     )
 
@@ -416,7 +416,7 @@ async def _publish(
     The block row goes in first without a winner, because the two tables point
     at each other and Postgres checks each reference as it is written.
 
-    The code published is the winning attempt's, verbatim: the block is a
+    The project published is the winning attempt's, verbatim: the block is a
     snapshot of what the judge approved, not a copy assembled from the spec.
     """
     await _begin(session, step)
@@ -427,8 +427,8 @@ async def _publish(
         title=spec.title,
         description=spec.description,
         category_id=spec.category_id,
-        code=made.attempt.code,
         files=made.attempt.files,
+        entry=made.attempt.entry,
         # What the sandbox read from the project itself: the install line a visitor
         # needs, and the only version of it that cannot be a model's guess.
         dependencies=made.found.dependencies,

@@ -11,7 +11,7 @@ DEFAULT_LICENSE = "MIT"
 
 
 class Component(BaseModel):
-    """A published UI block: the code a visitor copies, plus the judge's record."""
+    """A published UI block: the project a visitor copies, plus the judge's record."""
 
     __tablename__ = "components"
 
@@ -21,12 +21,13 @@ class Component(BaseModel):
     category_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("categories.id", ondelete="RESTRICT"), index=True
     )
-    code: Mapped[str]
-    # The whole project: path → file, as the harness left it. ``code`` is the entry
-    # file, kept beside it because it is what the read API and the MCP door have
-    # always answered with — a block that grew files must not break a client that
-    # only ever asked for one.
-    files: Mapped[dict | None] = mapped_column(JSONB)
+    # The project, path → file, as the harness left it. A block is always a
+    # project, even when it is one file: the item view has one shape to render.
+    files: Mapped[dict] = mapped_column(JSONB)
+    # Which of those files is the block: the one the scaffold imports and the one
+    # a reader opens first. A path, not a copy of the file — the text lives in
+    # ``files`` and nowhere else.
+    entry: Mapped[str]
     # What it imports from packages, with the version it was built against: the
     # install line a visitor needs, read from the project by the sandbox rather
     # than declared by the model that wrote it.

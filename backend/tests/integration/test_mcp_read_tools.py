@@ -112,7 +112,8 @@ async def test_get_component_takes_either_identifier(tool_session):
 
     assert by_id.id == component.id
     assert by_slug.id == component.id
-    assert by_id.code == component.code
+    assert by_id.entry == component.entry
+    assert by_id.files == component.files
 
 
 async def test_get_component_demands_exactly_one_identifier(tool_session):

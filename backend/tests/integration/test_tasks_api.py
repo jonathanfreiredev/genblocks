@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy import select
 
 from app.generations.models import Generation
+from app.harness.agent import ENTRY
 from app.tasks.models import Task, TaskStep
 from app.users.models import User
 from tests.auth_stub import mint_token
@@ -99,8 +100,8 @@ async def test_a_task_reads_with_its_steps_in_index_order_and_its_attempts(clien
     task_id = task.id
     db_session.add_all(
         [
-            Generation(task_id=task_id, attempt_no=2, code="second pass"),
-            Generation(task_id=task_id, attempt_no=1, code="first pass"),
+            Generation(task_id=task_id, attempt_no=2, files={ENTRY: "second pass"}, entry=ENTRY),
+            Generation(task_id=task_id, attempt_no=1, files={ENTRY: "first pass"}, entry=ENTRY),
         ]
     )
     await db_session.commit()

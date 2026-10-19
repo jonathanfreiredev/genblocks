@@ -50,13 +50,17 @@ export interface ComponentSummary {
 }
 
 export interface Component extends ComponentSummary {
-  code: string;
   /**
-   * The whole project: path → file, as the harness left it, with `code` as the
-   * entry file. A block may be several files; `code` is what every reader that
-   * predates projects still gets.
+   * The project: path → file, as the harness left it. Always at least one file —
+   * a block is a project even when it is one file, so the item view has a single
+   * shape to render.
    */
-  files: Record<string, string> | null;
+  files: Record<string, string>;
+  /**
+   * Which of those files the block is: the one the scaffold imports, and the one
+   * a reader opens first. A path, not a copy of the file.
+   */
+  entry: string;
   /**
    * What it imports from packages, with the version it was built against. Read
    * out of the project by the sandbox rather than declared by whoever wrote it,
@@ -110,9 +114,10 @@ export interface Generation {
   task_id: string | null;
   component_id: string | null;
   attempt_no: number;
-  code: string;
-  /** The project, as the run left it. `code` is its entry file. */
-  files: Record<string, string> | null;
+  /** The project, as the run left it: at least the entry file. */
+  files: Record<string, string>;
+  /** Which of those files the block is. A path, not a copy of the file. */
+  entry: string;
   screenshot_path: string | null;
   checks: HarnessChecks | null;
   scores: Record<string, number> | null;
