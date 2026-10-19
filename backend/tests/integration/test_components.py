@@ -2,10 +2,11 @@ import pytest
 from fastapi import HTTPException
 
 from app.components.models import Component
-from app.components.service import get_component_by_slug, list_components
+from app.components.service import already_built, get_component_by_slug, list_components
 from app.harness.agent import ENTRY
 from app.pagination import ListParams
-from tests.helpers import BLOCK, create_category
+from app.vectors import service as vectors
+from tests.helpers import BLOCK, create_category, create_component
 
 pytestmark = pytest.mark.anyio
 
@@ -90,3 +91,44 @@ async def test_a_component_can_be_read_by_slug(db_session):
 async def test_an_unknown_sort_field_is_rejected(db_session):
     with pytest.raises(HTTPException):
         await list_components(db_session, params=ListParams(sort="nope"))
+
+
+async def test_a_brief_that_repeats_a_block_is_recognised(db_session, monkeypatch):
+    """The duplicate guard: retrieval says how near, and the bar says how near is near."""
+    category = await create_category(db_session, slug="hero")
+    component = await create_component(db_session, category_id=category.id, slug="alpha")
+
+    await _closest(monkeypatch, component.id, distance=0.42)
+
+    found = await already_built(db_session, brief="A hero with a headline and one action")
+
+    assert found is not None
+    assert found[0].id == component.id
+    assert found[1] == 0.42
+
+
+async def test_a_brief_that_only_resembles_one_is_not(db_session, monkeypatch):
+    category = await create_category(db_session, slug="hero")
+    component = await create_component(db_session, category_id=category.id, slug="alpha")
+
+    await _closest(monkeypatch, component.id, distance=0.77)
+
+    assert await already_built(db_session, brief="A login form with two buttons") is None
+
+
+async def test_an_empty_registry_matches_nothing(db_session, monkeypatch):
+    async def nothing(text, *, limit=5):
+        return []
+
+    monkeypatch.setattr(vectors, "find_components", nothing)
+
+    assert await already_built(db_session, brief="A hero") is None
+
+
+async def _closest(monkeypatch, component_id, *, distance: float) -> None:
+    """Retrieval, answered with one match at a known distance."""
+
+    async def found(text, *, limit=5):
+        return [vectors.Match(id=component_id, distance=distance)]
+
+    monkeypatch.setattr(vectors, "find_components", found)

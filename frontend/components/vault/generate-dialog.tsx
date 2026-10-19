@@ -26,12 +26,18 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Message, MessageContent, MessageGroup } from "@/components/ui/message";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusWord } from "@/components/vault/status-word";
+import { SuggestionRail } from "@/components/vault/suggestion-rail";
 import { TaskChecklist } from "@/components/vault/task-checklist";
 import { readTurn } from "@/lib/agent/stream";
 import type { AgentEvent } from "@/lib/agent/events";
 import { cn } from "@/lib/utils";
 import { TASK_STATUS_LABELS } from "@/lib/vault/task-status";
-import type { Task, TaskDetail, TaskStatus } from "@/lib/vault/types";
+import type {
+  Suggestion,
+  Task,
+  TaskDetail,
+  TaskStatus,
+} from "@/lib/vault/types";
 import { MESSAGE_MAX_LENGTH } from "@/server/agent/agent.schemas";
 
 /**
@@ -146,6 +152,25 @@ function dropIfUnsaid(turns: Turn[], id: number): Turn[] {
   return turns.filter((turn) => turn.id !== id || turn.text !== "");
 }
 
+/**
+ * Add what the agent found to what is already shown, newest last.
+ *
+ * The backend sends only what it has not sent, but a conversation can be searched
+ * twice in one turn and a card that appears twice is a bug the person sees. The
+ * id is the identity: one block, one card.
+ */
+function mergeSuggestions(
+  current: Suggestion[],
+  arriving: Suggestion[],
+): Suggestion[] {
+  const seen = new Set(current.map((one) => `${one.kind}-${one.id}`));
+
+  return [
+    ...current,
+    ...arriving.filter((one) => !seen.has(`${one.kind}-${one.id}`)),
+  ];
+}
+
 /** What the route handler said when the agent could not be reached. */
 async function unreadable(response: Response): Promise<string> {
   const body: unknown = await response.json().catch(() => null);
@@ -187,6 +212,10 @@ export function GenerateDialog({
   const [task, setTask] = useState<Task | null>(null);
   const [trouble, setTrouble] = useState<string | null>(null);
   const [following, setFollowing] = useState(true);
+  // What the agent put in front of the person: blocks and pictures it found. They
+  // are shown as cards rather than read out, so they outlive the turn that found
+  // them and are cleared with the conversation.
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
 
   // The conversation the turns belong to. Named here and kept for as long as the
   // dialog is open, because the memory on the other end is one per thread.
@@ -276,6 +305,7 @@ export function GenerateDialog({
     setTask(null);
     setTrouble(null);
     setFollowing(true);
+    setSuggestions([]);
   }
 
   function nextId(): number {
@@ -332,6 +362,10 @@ export function GenerateDialog({
         if (event.type === "tool") {
           setActivity({ name: event.name, state: event.state });
           return;
+        }
+
+        if (event.type === "suggestions") {
+          setSuggestions((current) => mergeSuggestions(current, event.items));
         }
 
         if (event.type === "task") {
@@ -429,6 +463,8 @@ export function GenerateDialog({
                 ))
               : null}
           </MessageGroup>
+
+          <SuggestionRail items={suggestions} />
 
           {line ? (
             <p className="type-label text-ink-faint flex items-center gap-2">

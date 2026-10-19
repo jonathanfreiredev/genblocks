@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.components.models import Component
 from app.generations.models import Generation
 from app.pagination import ListParams
+from app.settings import settings
+from app.vectors import service as vectors
 
 
 async def list_components(
@@ -58,9 +60,7 @@ async def get_component_by_slug(session: AsyncSession, *, slug: str) -> Componen
     )
 
 
-async def by_ids(
-    session: AsyncSession, *, ids: Sequence[uuid.UUID]
-) -> list[Component]:
+async def by_ids(session: AsyncSession, *, ids: Sequence[uuid.UUID]) -> list[Component]:
     """The blocks with these ids, in the order they were asked for.
 
     Retrieval answers with ids and distances; this turns the ids into rows without
@@ -95,3 +95,23 @@ async def renders(
     )
 
     return {component_id: path for component_id, path in found.all()}
+
+
+async def already_built(session: AsyncSession, *, brief: str) -> tuple[Component, float] | None:
+    """The block this brief already is, when the registry is close enough to say so.
+
+    Duplicate checking is retrieval's second question: the first is "what does this
+    resemble", and this one is "is it the same thing". The bar lives in settings
+    because it is calibration, and it is measured — a brief that repeats a block
+    lands near the bottom of the distance scale, and everything else further up.
+
+    A bar is not a verdict: the caller decides what to do with the match, and the
+    conversation can override it once the person has seen what already exists.
+    """
+    matches = await vectors.find_components(brief, limit=1)
+    if not matches or matches[0].distance > settings.duplicate_distance:
+        return None
+
+    found = await by_ids(session, ids=[matches[0].id])
+
+    return (found[0], matches[0].distance) if found else None

@@ -74,6 +74,31 @@ async def remember_image(
     )
 
 
+async def remember_component_texts(*, entries: list[tuple[uuid.UUID, str, str, str]]) -> int:
+    """Remember several blocks by their words, in one call to the embedder.
+
+    ``entries`` is (id, text, slug, category). The seed has twelve rows to file at
+    once, and one request per row is what a rate limit exists to stop.
+    """
+    return await _remember_texts(
+        COMPONENTS,
+        entries=[
+            (one, text, {"slug": slug, "category": category, "kind": "component"})
+            for one, text, slug, category in entries
+        ],
+    )
+
+
+async def remember_image_texts(*, entries: list[tuple[uuid.UUID, str, str]]) -> int:
+    """Remember several pictures by their prompt, in one call to the embedder."""
+    return await _remember_texts(
+        IMAGES,
+        entries=[
+            (one, text, {"category": category, "kind": "image"}) for one, text, category in entries
+        ],
+    )
+
+
 async def find_components(text: str, *, limit: int = 5) -> list[Match]:
     """The published blocks nearest to a brief, nearest first."""
     return await _find(COMPONENTS, text=text, limit=limit)
@@ -96,11 +121,33 @@ async def forget(collection_name: str, *, ids: list[uuid.UUID]) -> None:
         return
 
     try:
-        await asyncio.to_thread(
-            collection(collection_name).delete, ids=[str(one) for one in ids]
-        )
+        await asyncio.to_thread(collection(collection_name).delete, ids=[str(one) for one in ids])
     except Exception as broke:  # noqa: BLE001 - an index that lags is not an outage
         logger.warning("vectors forgot nothing", collection=collection_name, error=str(broke))
+
+
+async def _remember_texts(
+    name: str, *, entries: list[tuple[uuid.UUID, str, dict[str, str]]]
+) -> int:
+    """Remember a batch, by text only, and say how many were stored."""
+    if not entries:
+        return 0
+
+    try:
+        vectors = await embed.embed(
+            [[{"type": embed.TEXT, "text": text}] for _, text, _ in entries]
+        )
+    except embed.EmbeddingUnavailable as unavailable:
+        logger.warning("vectors skipped", reason=str(unavailable))
+
+        return 0
+
+    stored = 0
+    for (one, text, metadata), vector in zip(entries, vectors, strict=True):
+        if await _store(name, component_id=one, vector=vector, text=text, metadata=metadata):
+            stored += 1
+
+    return stored
 
 
 async def _vector(*, text: str, image: bytes | None) -> list[float] | None:

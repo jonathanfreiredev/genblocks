@@ -48,6 +48,56 @@ describe("readAgentEvent", () => {
     ).toEqual({ type: "task", task: TASK });
   });
 
+  test("reads what the agent found, so the rail can draw it", () => {
+    const items = [
+      {
+        kind: "component",
+        id: "0b9c1e2a-aaaa-bbbb-cccc-ddddeeeeffff",
+        title: "Tiered pricing",
+        detail: "Three plans in a ruled table",
+        path: "genblocks/screenshots/abc-1",
+        width: null,
+        height: null,
+      },
+      {
+        kind: "image",
+        id: "0b9c1e2a-9999-8888-7777-666655554444",
+        title: "A coastal path at dawn",
+        detail: "960×640",
+        path: "genblocks/images/xyz",
+        width: 960,
+        height: 640,
+      },
+    ];
+
+    expect(
+      readAgentEvent({ event: "suggestions", data: JSON.stringify({ items }) }),
+    ).toEqual({ type: "suggestions", items });
+  });
+
+  test("keeps the cards it can draw and drops the ones it cannot", () => {
+    const data = JSON.stringify({
+      items: [
+        { kind: "component", id: "a", title: "A block", detail: "" },
+        // No id: a card that would link nowhere.
+        { kind: "component", title: "Nameless", detail: "" },
+        // No kind: neither a block nor a picture.
+        { id: "b", title: "A thing", detail: "" },
+      ],
+    });
+
+    expect(readAgentEvent({ event: "suggestions", data })).toEqual({
+      type: "suggestions",
+      items: [{ kind: "component", id: "a", title: "A block", detail: "" }],
+    });
+  });
+
+  test("says nothing when a suggestions frame holds nothing drawable", () => {
+    expect(
+      readAgentEvent({ event: "suggestions", data: '{"items":[]}' }),
+    ).toBeNull();
+  });
+
   test("reads an error and an end", () => {
     expect(
       readAgentEvent({

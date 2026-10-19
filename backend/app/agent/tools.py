@@ -29,7 +29,6 @@ from app.db.session import async_session_maker
 from app.images import service as images_service
 from app.images.models import Image
 from app.pagination import ListParams
-from app.settings import settings
 from app.tasks import service as tasks_service
 from app.tasks.models import Task
 from app.tasks.schemas import Brief, TaskCreate, TaskRead
@@ -45,9 +44,7 @@ SEARCH_LIMIT = 5
 PICTURE_LIMIT = 3
 
 
-def build_tools(
-    *, caller: User, queued: list[Task], suggested: Suggestions
-) -> list[BaseTool]:
+def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> list[BaseTool]:
     """The tools one conversation can reach, with the caller already bound.
 
     ``queued`` collects what this conversation creates. The endpoint reads it to
@@ -130,7 +127,7 @@ def build_tools(
         }
 
     @tool
-    async def create_component(brief: Brief) -> dict[str, Any]:
+    async def create_component(brief: Brief, force: bool = False) -> dict[str, Any]:
         """Queue the one task that builds the block, and return it.
 
         Call this once the brief says what the block is for, what it contains and
@@ -140,7 +137,9 @@ def build_tools(
         for the block, and there is no reason to call it twice.
 
         It refuses when the registry already holds this block: the answer names
-        what it found instead, and nothing is queued.
+        what it found instead, and nothing is queued. The person may still want
+        their own version — only after they have said so, call it again with
+        ``force``.
         """
         # Through the shared type rather than trusted from the argument: the
         # tool's schema tells the model what a brief looks like, and this is what
@@ -148,7 +147,11 @@ def build_tools(
         payload = TaskCreate(brief=brief)
 
         async with async_session_maker() as session:
-            already = await _already_here(session, brief=payload.brief)
+            already = (
+                None
+                if force
+                else await components_service.already_built(session, brief=payload.brief)
+            )
 
             if already is not None:
                 block, distance = already
@@ -173,9 +176,7 @@ def build_tools(
     return [search_components, find_images, create_component]
 
 
-async def _nearest_components(
-    session: Any, *, query: str
-) -> list[tuple[Component, float | None]]:
+async def _nearest_components(session: Any, *, query: str) -> list[tuple[Component, float | None]]:
     """The blocks nearest to a query, with how near each one is.
 
     Retrieval first; free-text over titles and descriptions when there is no index
@@ -194,17 +195,6 @@ async def _nearest_components(
     )
 
     return [(block, None) for block in found]
-
-
-async def _already_here(session: Any, *, brief: str) -> tuple[Component, float] | None:
-    """The block this brief is, when the registry is close enough to say so."""
-    matches = await vectors.find_components(brief, limit=1)
-    if not matches or matches[0].distance > settings.duplicate_distance:
-        return None
-
-    found = await components_service.by_ids(session, ids=[matches[0].id])
-
-    return (found[0], matches[0].distance) if found else None
 
 
 async def _pictures(session: Any, *, ids: list[Any]) -> list[Image]:

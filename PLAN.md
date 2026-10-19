@@ -16,10 +16,12 @@ inglés (ver `AGENTS.md`). Este documento va en español por comodidad.
   entrega como una rebanada revisable en `git`.
 - **Secciones 13–15**: variables de entorno, lo aplazado y los riesgos.
 
-**Estado (oct 2026)**: fases **0–8 hechas** y en `git`; la **9 en curso**, larga y
-en tres rebanadas. Las fases 0–8 se quedan escritas como se entregaron: son el
-registro de lo construido, no una promesa pendiente. Las decisiones antiguas
-tampoco se reescriben: cuando una cambia, la nueva dice a cuál sustituye.
+**Estado (oct 2026)**: fases **0–10 hechas** y en `git`. La 9 se entregó en tres
+rebanadas y la 10 cerró con la capa de vectores, el guard de duplicados, el reúso
+de imágenes, el routing de taxonomía y las propuestas en el chat. Las fases
+anteriores se quedan escritas como se entregaron: son el registro de lo
+construido, no una promesa pendiente. Las decisiones antiguas tampoco se
+reescriben: cuando una cambia, la nueva dice a cuál sustituye.
 
 Principio de construcción: **rebanadas verticales finas, con dobles ("fakes")
 primero**. Antes de depender de Modal, Chroma o del LLM real, el sistema se cierra
@@ -291,6 +293,26 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     - *Los 6 bloques sembrados siguen siendo claros y literales: no pasan por el
       sandbox y el interruptor aún no está. Cuando llegue, se les añade el par (o se
       re-siembran), o el toggle se limita a lo generado.*
+39. **La recuperación es una mejora, nunca una dependencia.** El embedder y el
+    store están detrás de un servicio que degrada: si fallan, recordar es un aviso
+    en el log y buscar no encuentra nada. Un bloque se publica aunque no se pueda
+    indexar, y el chat funciona aunque Voyage esté caído. Lo que sí es una puerta
+    es el **guard de duplicados**: un brief que está a menos de
+    `duplicate_distance` del registro no encola, y el agente enseña lo que ya
+    existe. La barra se midió (duplicados 0,40–0,47; lo ajeno 0,77+) y se puede
+    **argumentar**: `create_component` acepta `force` cuando la persona ha dicho
+    que quiere la suya.
+    - *Los bloques e imágenes que el agente encuentra viajan al diálogo como
+      evento `suggestions`, no como prosa: se dibujan en un riel horizontal y cada
+      tarjeta abre el item. Una sugerencia que no se puede pulsar es un párrafo.*
+40. **La taxonomía la elige el modelo, pero la lista es del registro.** `spec` deja
+    de ser canned: se le pasan los tipos (slug + nombre) y los cinco bloques más
+    cercanos con el tipo bajo el que están archivados, y responde **un slug de esa
+    lista**. Un slug que no existe no es un tipo nuevo: es un fallo de la corrida,
+    como una respuesta ilegible del juez. La copia —título y descripción— sigue
+    siendo determinista: nunca fue una decisión. Es la primera llamada al LLM que
+    no produce el artefacto, y va antes del sandbox, así que equivocarse ahí no
+    cuesta un render.
 
 ---
 
@@ -807,6 +829,20 @@ promete. El spec sigue canned (la taxonomía por RAG es la Fase 10).
 
 **Verificación**: el guard detecta un duplicado; una imagen se reutiliza; un brief
 recibe el tipo correcto.
+
+**Entregado.** Verificado en vivo contra el dataset sembrado: un brief que repite
+un bloque queda a **0,40–0,47** de distancia y se reconoce como duplicado; lo que
+no tiene que ver queda en **0,77+**. El routing eligió `pricing` para un brief de
+tabla de precios, con los cinco bloques más cercanos como evidencia. La biblioteca
+se siembra con 12 filas recordadas en dos peticiones (Voyage free tier son 3/min).
+
+Dos correcciones que la verificación obligó:
+
+- `embed_text` devolvía la lista del embedder (una lista de vectores) en lugar del
+  vector, así que **Chroma rechazaba toda consulta** y la búsqueda no encontraba
+  nada nunca. El guard y los ejemplares estaban muertos en silencio. Hay test.
+- El umbral inicial (0,18) era una suposición; con lo medido se quedó en **0,50**
+  para duplicados y **0,45** para reúso de imágenes.
 
 **Fuera**: sin guías (descartadas por ahora).
 

@@ -33,6 +33,7 @@ from app.harness.agent import ENTRY
 from app.images.models import Image
 from app.tasks.models import StepStatus, Task, TaskKind, TaskStatus, TaskStep
 from app.users.models import User
+from app.vectors import service as vectors
 
 # The model and rubric the seeded attempts claim to have come from. Not a real
 # run, so the trace id stays empty: there is nothing to replay.
@@ -132,6 +133,7 @@ class SeedSummary:
     tasks: int
     attempts: int
     owner_email: str | None
+    indexed: int = 0
 
 
 COMPONENTS: tuple[ComponentSpec, ...] = (
@@ -946,9 +948,15 @@ async def seed_vault(session: AsyncSession, *, owner_email: str | None = None) -
     attempts = await _seed_component_attempts(session, components=components)
     attempts += await _seed_tasks(session, components=components, owner_id=owner_id)
 
-    await _seed_images(session, categories=categories)
+    images = await _seed_images(session, categories=categories)
 
     await session.commit()
+
+    # Retrieval is built after the rows are, and from what the rows say: the
+    # seeded blocks have no render and the seeded pictures no bytes, so they are
+    # remembered by their words. A registry that cannot be searched in
+    # development is a feature nobody can try.
+    indexed = await _seed_vectors(components=components, images=images, categories=categories)
 
     return SeedSummary(
         components=len(COMPONENTS),
@@ -956,7 +964,40 @@ async def seed_vault(session: AsyncSession, *, owner_email: str | None = None) -
         tasks=len(TASKS),
         attempts=attempts,
         owner_email=owner_email,
+        indexed=indexed,
     )
+
+
+async def _seed_vectors(
+    *,
+    components: dict[str, Component],
+    images: list[Image],
+    categories: dict[str, Category],
+) -> int:
+    """Remember the seeded rows as vectors, by their words.
+
+    Best effort on purpose: a development database has to be seedable without the
+    embedder, and the seed says how many it managed to remember rather than
+    failing over a network it does not control.
+    """
+    slug_of = {category.id: slug for slug, category in categories.items()}
+
+    remembered = await vectors.remember_component_texts(
+        entries=[
+            (
+                component.id,
+                f"{component.title}. {component.description}\n\n{component.delivery_prompt}",
+                component.slug,
+                slug_of.get(component.category_id, ""),
+            )
+            for component in components.values()
+        ]
+    )
+    remembered += await vectors.remember_image_texts(
+        entries=[(image.id, image.prompt, slug_of.get(image.category_id, "")) for image in images]
+    )
+
+    return remembered
 
 
 async def _resolve_owner(session: AsyncSession, *, owner_email: str | None) -> uuid.UUID | None:
@@ -1148,8 +1189,10 @@ async def _seed_candidate_attempt(
     generation.langfuse_trace_id = None
 
 
-async def _seed_images(session: AsyncSession, *, categories: dict[str, Category]) -> None:
+async def _seed_images(session: AsyncSession, *, categories: dict[str, Category]) -> list[Image]:
     """Upsert the stock images and the generation panel that produced each one."""
+    planted: list[Image] = []
+
     for spec in IMAGES:
         image_id = _seed_id(f"image/{spec.key}")
         image = await session.get(Image, image_id)
@@ -1168,8 +1211,11 @@ async def _seed_images(session: AsyncSession, *, categories: dict[str, Category]
         image.scores = spec.scores
         image.rubric_version = IMAGE_RUBRIC_VERSION
         image.langfuse_trace_id = None
+        planted.append(image)
 
     await session.flush()
+
+    return planted
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -1201,6 +1247,7 @@ def _main(argv: list[str] | None = None) -> None:
         f"Seeded {summary.components} components, {summary.images} images, "
         f"{summary.tasks} tasks and {summary.attempts} attempts"
     )
+    print(f"Remembered {summary.indexed} rows as vectors")
     if summary.owner_email is None:
         print(
             "The tasks are unowned: no --owner was given, so no account can see them.\n"

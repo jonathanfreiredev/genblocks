@@ -111,7 +111,7 @@ def test_a_tool_that_answered_is_finished():
 
 def test_the_task_a_tool_queued_reaches_the_dialog_with_the_answer():
     queued = [task()]
-    reader = TurnReader(queued=queued)
+    reader = TurnReader(queued=queued, suggested=Suggestions())
 
     after = reader.read(ToolMessage(content="{}", name="create_component", tool_call_id="call_2"))
     end = reader.close()
@@ -133,4 +133,27 @@ def test_a_turn_ends_whether_or_not_it_queued_anything():
 
 
 def test_a_message_the_reader_does_not_know_is_left_alone():
-    assert TurnReader(queued=[], suggested=Suggestions()).read(HumanMessage(content="build a hero")) == []
+    reader = TurnReader(queued=[], suggested=Suggestions())
+
+    assert reader.read(HumanMessage(content="build a hero")) == []
+
+
+def test_what_a_tool_found_reaches_the_dialog_once():
+    suggested = Suggestions()
+    reader = TurnReader(queued=[], suggested=suggested)
+    block = Suggestion(
+        kind="component",
+        id=uuid.uuid4(),
+        title="Tiered pricing",
+        detail="Three plans in a ruled table",
+        path="genblocks/screenshots/abc-1",
+    )
+    suggested.add(block)
+
+    first = reader.read(ToolMessage(content="{}", name="search_components", tool_call_id="c1"))
+    second = reader.read(ToolMessage(content="{}", name="search_components", tool_call_id="c2"))
+
+    assert [event.name for event in first] == ["tool", "suggestions"]
+    assert first[1].data == {"items": [block.as_body()]}
+    # A second search that finds the same block does not draw it twice.
+    assert [event.name for event in second] == ["tool"]

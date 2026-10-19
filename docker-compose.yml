@@ -61,6 +61,10 @@ services:
       - ./backend/alembic:/app/alembic
       - ./backend/alembic.ini:/app/alembic.ini
       - ./backend/pyproject.toml:/app/pyproject.toml
+      # The vector store is a directory as well as a database: without this the
+      # index lives inside the container and a rebuild forgets every block it
+      # could have found. Shared by the service and by `docker compose run`.
+      - ./.chroma:/app/.chroma
     depends_on:
       postgres:
         condition: service_healthy

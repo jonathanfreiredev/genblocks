@@ -10,3 +10,6 @@
 # its own — and neither is a source file.
 backend/app/harness/scaffold/node_modules/
 backend/app/harness/scaffold/dist/
+
+# The local vector store (Chroma's persistent client).
+.chroma

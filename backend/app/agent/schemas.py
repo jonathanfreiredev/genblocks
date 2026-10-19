@@ -91,6 +91,7 @@ class Suggestions:
 
         return True
 
+
 class ChatRequest(BaseModel):
     """One turn: what the person said, and which conversation it belongs to."""
 

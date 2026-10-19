@@ -21,6 +21,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.categories import service as categories_service
 from app.components.models import Component, ComponentAsset
 from app.db.models import utcnow
 from app.generations.models import Generation, Verdict
@@ -33,7 +34,7 @@ from app.judge import scoring as judging
 from app.judge.rubrics import COMPONENTS, IMAGES
 from app.judge.schemas import DimensionScore, JudgeAnswer, Judged
 from app.settings import settings
-from app.tasks import canned, runner
+from app.tasks import runner, spec
 from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
 from app.tasks.service import (
     INTERRUPTED_ERROR,
@@ -221,6 +222,31 @@ class Judge:
         return judging.read(self._answer(PICTURE_SCORES), IMAGES)
 
 
+@pytest.fixture(autouse=True)
+def filed_under(monkeypatch):
+    """The type a run files under, decided without a model.
+
+    The routing itself is tested where the model is scripted
+    (``tests/integration/test_task_spec.py``); here the answer is fixed so a run
+    is about what the runner does with it.
+    """
+
+    async def build_spec(session, *, brief, model=None):
+        category = await categories_service.get_category_by_slug(session, slug="hero")
+        if category is None:
+            raise spec.CategoryNotSeeded("The taxonomy has no types of block.")
+
+        return spec.BlockSpec(
+            category_id=category.id,
+            category_slug=category.slug,
+            title=spec.title_for(brief),
+            description=spec.description_for(brief),
+            spec={"version": spec.VERSION, "source": "rag", "category": category.slug},
+        )
+
+    monkeypatch.setattr(spec, "build_spec", build_spec)
+
+
 @pytest.fixture
 def harness(monkeypatch) -> Harness:
     """The harness, the sandbox and the cloud, answered without leaving the process."""
@@ -333,7 +359,7 @@ async def _wait_for(session: AsyncSession, task_id: uuid.UUID, status: str) -> N
 
 
 async def test_a_queued_task_runs_towards_a_published_block(runner_session, harness, judge):
-    category = await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    category = await create_category(runner_session, slug="hero")
     category_id = category.id
     owner = await _owner(runner_session)
 
@@ -349,7 +375,7 @@ async def test_a_queued_task_runs_towards_a_published_block(runner_session, harn
     # task as it was before the worker touched it.
     runner_session.expire_all()
 
-    slug = runner.slug_for(title=canned.title_for(BRIEF), task_id=task_id)
+    slug = runner.slug_for(title=spec.title_for(BRIEF), task_id=task_id)
     ran = await get_task(runner_session, task_id=task_id)
     assert ran is not None
     assert ran.status == TaskStatus.SUCCEEDED
@@ -360,7 +386,7 @@ async def test_a_queued_task_runs_towards_a_published_block(runner_session, harn
     # step that did the work.
     assert [step.name for step in ran.steps] == list(runner.STEP_NAMES)
     assert [step.status for step in ran.steps] == [StepStatus.SUCCEEDED] * len(runner.STEP_NAMES)
-    assert ran.steps[0].detail == {"category": canned.CATEGORY_SLUG}
+    assert ran.steps[0].detail == {"category": "hero"}
     assert ran.steps[1].detail == {
         "checks": "9/9",
         "files": 2,
@@ -374,9 +400,7 @@ async def test_a_queued_task_runs_towards_a_published_block(runner_session, harn
 
     # The harness was asked for this brief and this type, the project went to the
     # sandbox file by file, and the judge was shown the whole of it.
-    assert harness.asked == [
-        {"brief": BRIEF, "category": canned.CATEGORY_SLUG, "image_categories": []}
-    ]
+    assert harness.asked == [{"brief": BRIEF, "category": "hero", "image_categories": []}]
     assert sorted(one.path for one in harness.checked[0]) == ["src/Block.tsx", "src/parts/Rule.tsx"]
     assert judge.shown == [(BRIEF, PROJECT)]
 
@@ -423,7 +447,7 @@ async def test_a_block_under_the_bar_is_kept_as_an_attempt_and_not_published(
     runner_session, harness, judge
 ):
     """The judge is a gate: the block is readable, and the library does not have it."""
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug="hero")
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
     task_id = task.id
@@ -466,7 +490,7 @@ async def test_a_block_under_the_bar_is_kept_as_an_attempt_and_not_published(
 async def test_a_block_the_sandbox_refuses_is_kept_and_nobody_judges_it(
     runner_session, harness, judge
 ):
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug="hero")
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
     task_id = task.id
@@ -500,7 +524,7 @@ async def test_a_block_the_sandbox_refuses_is_kept_and_nobody_judges_it(
 
 async def test_the_pictures_a_block_asks_for_are_filed_and_linked(runner_session, harness, judge):
     """A picture is a library artifact of its own, judged as it enters."""
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug="hero")
     await create_category(runner_session, slug=CATEGORY, kind="image")
     owner = await _owner(runner_session)
     owner_id = owner.id
@@ -549,7 +573,7 @@ async def test_the_pictures_a_block_asks_for_are_filed_and_linked(runner_session
 async def test_a_picture_asked_for_by_a_block_that_is_not_published_stays_in_the_library(
     runner_session, harness, judge
 ):
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug="hero")
     await create_category(runner_session, slug=CATEGORY, kind="image")
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
@@ -573,7 +597,7 @@ async def test_a_picture_asked_for_by_a_block_that_is_not_published_stays_in_the
 
 async def test_findings_that_are_not_fatal_are_evidence_not_a_gate(runner_session, harness, judge):
     """A layout that breaks at 390px is worth knowing, and not worth refusing."""
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug="hero")
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
     task_id = task.id
@@ -601,7 +625,7 @@ async def test_a_run_with_no_render_is_still_judged_and_publishes_without_a_phot
     runner_session, harness, judge
 ):
     """Nothing to photograph is not a failure: the attempt says the asset is not there."""
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug="hero")
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
     task_id = task.id
@@ -632,7 +656,7 @@ async def test_a_harness_that_writes_nothing_fails_the_task(runner_session, harn
 
     monkeypatch.setattr(agent, "build", wrote_nothing)
 
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug="hero")
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
     task_id = task.id
@@ -663,7 +687,7 @@ async def test_a_sandbox_that_never_answers_fails_the_task_with_its_words(
 
     monkeypatch.setattr(sandbox, "check", refused)
 
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug="hero")
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
     task_id = task.id
@@ -701,7 +725,7 @@ async def test_a_run_that_cannot_plan_fails_the_task_and_says_why(runner_session
     assert failed.status == TaskStatus.FAILED
     assert failed.component_id is None
     assert failed.finished_at is not None
-    assert canned.CATEGORY_SLUG in (failed.error or "")
+    assert "types of block" in (failed.error or "")
 
     # The step that failed says so; the ones it never reached stay queued.
     assert [step.status for step in failed.steps] == [
@@ -789,7 +813,7 @@ async def test_a_restart_with_nothing_running_changes_nothing(runner_session):
 
 async def test_the_worker_drains_the_queue_and_stops(runner_session, harness, judge):
     """The worker, end to end: a queued brief becomes a published block."""
-    await create_category(runner_session, slug=canned.CATEGORY_SLUG)
+    await create_category(runner_session, slug="hero")
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
     task_id = task.id

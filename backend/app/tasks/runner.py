@@ -49,7 +49,8 @@ from app.images.models import Image
 from app.judge import scoring as judge
 from app.judge.schemas import Judged
 from app.settings import settings
-from app.tasks import canned, service
+from app.tasks import service
+from app.tasks import spec as block_spec
 from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
 from app.vectors import service as vectors
 
@@ -201,16 +202,21 @@ async def _open_checklist(session: AsyncSession, *, task_id: uuid.UUID) -> list[
     return steps
 
 
-async def _retrieve(session: AsyncSession, *, task: Task, step: TaskStep) -> canned.CannedSpec:
-    """Decide what to build. Retrieval of references arrives with RAG (Fase 10)."""
+async def _retrieve(session: AsyncSession, *, task: Task, step: TaskStep) -> block_spec.BlockSpec:
+    """Decide what to build: the type it is filed under, and the copy.
+
+    The type comes from the taxonomy, read by the model against the blocks the
+    registry already holds (Fase 10). It is the first thing a run decides and the
+    first place a model is asked anything other than the artifact itself.
+    """
     await _begin(session, step)
-    spec = await canned.build_spec(session, brief=task.brief)
-    await _finish(session, step, detail={"category": spec.category_slug})
-    return spec
+    decided = await block_spec.build_spec(session, brief=task.brief)
+    await _finish(session, step, detail={"category": decided.category_slug})
+    return decided
 
 
 async def _build(
-    session: AsyncSession, *, task: Task, step: TaskStep, spec: canned.CannedSpec
+    session: AsyncSession, *, task: Task, step: TaskStep, spec: block_spec.BlockSpec
 ) -> Made:
     """Build the block with the harness, and turn the result into an attempt.
 
@@ -293,9 +299,7 @@ async def _keep(
             # bytes.
             existing = await session.get(Image, placed.library_id)
             if existing is None:
-                raise PictureUnfiled(
-                    "The picture this block reused is no longer in the library."
-                )
+                raise PictureUnfiled("The picture this block reused is no longer in the library.")
             pictures.append(existing)
             continue
 
@@ -443,7 +447,7 @@ async def _publish(
     *,
     task: Task,
     step: TaskStep,
-    spec: canned.CannedSpec,
+    spec: block_spec.BlockSpec,
     made: Made,
 ) -> None:
     """Commit: the block is created, and the task's attempts point at it.

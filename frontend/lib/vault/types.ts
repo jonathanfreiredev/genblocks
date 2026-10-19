@@ -178,3 +178,20 @@ export interface Task {
 export interface TaskDetail extends Task {
   generations: Generation[];
 }
+
+/**
+ * Something the agent found while working, shown as a card in the conversation.
+ *
+ * A block or a picture the registry already has: `path` is the Cloudinary public
+ * id of what to show, and it is null when there is nothing (a seeded block has no
+ * render), in which case the card falls back to its words.
+ */
+export interface Suggestion {
+  kind: "component" | "image";
+  id: string;
+  title: string;
+  detail: string;
+  path: string | null;
+  width: number | null;
+  height: number | null;
+}

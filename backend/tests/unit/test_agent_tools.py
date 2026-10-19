@@ -59,3 +59,40 @@ async def test_a_brief_too_short_to_be_one_never_reaches_the_queue():
         await _tool("create_component", queued).ainvoke({"brief": "hero"})
 
     assert queued == []
+
+
+async def test_a_brief_the_registry_already_has_is_not_queued(monkeypatch):
+    """The guard refuses, and the answer says what it found instead."""
+    from types import SimpleNamespace
+
+    from app.agent.schemas import Suggestions
+    from app.components import service as components_service
+    from app.tasks import service as tasks_service
+
+    found = SimpleNamespace(
+        id=uuid.uuid4(),
+        slug="tiered-pricing",
+        title="Tiered pricing",
+        description="Three plans in a ruled table",
+    )
+    suggested = Suggestions()
+
+    async def already_built(session, *, brief):
+        return (found, 0.42)
+
+    async def queued_nothing(*args, **kwargs):
+        raise AssertionError("a duplicate must not reach the queue")
+
+    monkeypatch.setattr(components_service, "already_built", already_built)
+    monkeypatch.setattr(tasks_service, "create_task", queued_nothing)
+
+    tool = next(
+        one
+        for one in build_tools(caller=caller(), queued=[], suggested=suggested)
+        if one.name == "create_component"
+    )
+    answer = await tool.ainvoke({"brief": "A pricing table with three tiers"})
+
+    assert answer["queued"] is False
+    assert answer["already"]["slug"] == "tiered-pricing"
+    assert [one.id for one in suggested.items] == [found.id]

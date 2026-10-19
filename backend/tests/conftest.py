@@ -4,3 +4,25 @@ import pytest
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
+
+
+@pytest.fixture(autouse=True)
+def no_vectors(monkeypatch, tmp_path):
+    """Keep the suite off the network and out of the real vector store.
+
+    Retrieval is two external services — an embedder and a store — and a test that
+    reached either would be testing somebody else's uptime. The settings are
+    emptied rather than the service stubbed, because that is the state the product
+    has to survive anyway: no embedder configured means indexing is a warning and
+    search finds nothing, which is what every test that does not ask for vectors
+    should see.
+
+    A test that wants retrieval patches these back, and points ``chroma_path`` at
+    its own directory.
+    """
+    from app.settings import settings
+
+    monkeypatch.setattr(settings, "voyage_api_key", None)
+    monkeypatch.setattr(settings, "chroma_api_key", None)
+    monkeypatch.setattr(settings, "chroma_host", None)
+    monkeypatch.setattr(settings, "chroma_path", str(tmp_path / "chroma"))
