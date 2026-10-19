@@ -143,6 +143,7 @@ services:
       - ./frontend/app:/app/app
       - ./frontend/components:/app/components
       - ./frontend/lib:/app/lib
+      - ./frontend/hooks:/app/hooks
       - ./frontend/server:/app/server
       - ./frontend/public:/app/public
       - ./frontend/proxy.ts:/app/proxy.ts

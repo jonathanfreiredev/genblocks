@@ -33,6 +33,8 @@ class ImageRead(BaseModel):
     height: int
     category_id: uuid.UUID
     created_by: uuid.UUID | None
+    # The maker's public name, resolved by the router; null for the house.
+    author: str | None = None
     license: str
     model: str | None
     scores: dict | None

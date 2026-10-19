@@ -1,6 +1,6 @@
-import { Header } from "@/components/header";
-import { VerificationBanner } from "@/components/auth/verification-banner";
-import { Breadcrumbs } from "@/components/breadcrumbs";
+import { AppShell } from "@/components/shell/app-shell";
+import { listCategories } from "@/lib/vault/api";
+import type { Category } from "@/lib/vault/types";
 import { getSession } from "@/server/auth/auth.lib";
 
 export default async function Layout({
@@ -10,14 +10,18 @@ export default async function Layout({
 }>) {
   const session = await getSession();
 
+  // The sidebar is chrome: a vault that cannot be read must not take the page
+  // down with it. The gallery itself catches the same failure and says so.
+  let categories: Category[] = [];
+  try {
+    categories = await listCategories();
+  } catch {
+    categories = [];
+  }
+
   return (
-    <>
-      <Header session={session} />
-      {session && !session.user.isVerified ? <VerificationBanner /> : null}
-      <main className="relative flex flex-col">
-        <Breadcrumbs />
-        {children}
-      </main>
-    </>
+    <AppShell session={session} categories={categories}>
+      {children}
+    </AppShell>
   );
 }

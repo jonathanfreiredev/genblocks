@@ -10,6 +10,7 @@ from app.db.session import get_async_db_session
 from app.images.schemas import ImageListQuery, ImageRead
 from app.images.service import get_image, list_images
 from app.pagination import OffsetPage
+from app.users.service import display_names
 
 images_router = APIRouter(prefix="/images", tags=["images"])
 
@@ -28,8 +29,15 @@ async def read_images(
         session, params=params, category_id=params.category_id, search=params.search
     )
 
+    names = await display_names(session, ids=[image.created_by for image in images])
+
     return OffsetPage(
-        items=[ImageRead.model_validate(image) for image in images],
+        items=[
+            ImageRead.model_validate(image).model_copy(
+                update={"author": names.get(image.created_by) if image.created_by else None}
+            )
+            for image in images
+        ],
         total=total,
         limit=params.limit,
         offset=params.offset,
@@ -46,4 +54,8 @@ async def read_image(
     if image is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
 
-    return ImageRead.model_validate(image)
+    names = await display_names(session, ids=[image.created_by])
+
+    return ImageRead.model_validate(image).model_copy(
+        update={"author": names.get(image.created_by) if image.created_by else None}
+    )

@@ -1,11 +1,14 @@
+import { Loader2 } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 /**
- * A state, in words.
+ * A state, in a badge.
  *
- * A running operation carries the system's one working cue — a mono caret
- * against the line — instead of a spinner, and a failed one borrows the verdict
- * triad, because a failure is a verdict on that step.
+ * A running operation carries one small spinner; failed borrows the destructive
+ * pair; queued is quiet. The state is still a word, because a word is what a
+ * checklist can be read for at a glance.
  */
 export function StatusWord({
   label,
@@ -19,25 +22,12 @@ export function StatusWord({
   muted?: boolean;
 }) {
   return (
-    <span
-      className={cn(
-        "type-label inline-flex items-center gap-2",
-        failed
-          ? "text-verdict-fail"
-          : running
-            ? "text-ink"
-            : muted
-              ? "text-ink-faint"
-              : "text-ink-soft",
-      )}
+    <Badge
+      variant={failed ? "destructive" : running ? "secondary" : "outline"}
+      className={cn("gap-1.5", muted && "text-muted-foreground")}
     >
-      {running ? (
-        <span
-          aria-hidden
-          className="animate-caret bg-ink h-3.5 w-0.5 motion-reduce:animate-none"
-        />
-      ) : null}
+      {running ? <Loader2 className="animate-spin" aria-hidden /> : null}
       {label}
-    </span>
+    </Badge>
   );
 }

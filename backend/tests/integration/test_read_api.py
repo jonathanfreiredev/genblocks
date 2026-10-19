@@ -10,6 +10,7 @@ import pytest
 
 from app.generations.models import Generation
 from app.harness.agent import ENTRY
+from app.users.models import User
 from tests.helpers import create_category, create_component, create_image
 
 pytestmark = pytest.mark.anyio
@@ -71,6 +72,50 @@ async def test_components_come_back_as_a_page_of_cards(client, db_session):
     assert len(body["items"]) == 2
     # A card needs no code: the full block is a separate read.
     assert "code" not in body["items"][0]
+
+
+async def test_a_card_carries_the_maker_and_the_render(client, db_session):
+    category = await create_category(db_session, slug="hero")
+    user = User(supabase_user_id=uuid.uuid4(), full_name="Marisol Vega")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    component = await create_component(db_session, category_id=category.id, slug="alpha")
+    component.created_by = user.id
+    generation = Generation(
+        component_id=component.id,
+        attempt_no=1,
+        files={ENTRY: "x"},
+        entry=ENTRY,
+        verdict="published",
+        screenshot_path="genblocks/screenshots/alpha",
+    )
+    db_session.add(generation)
+    await db_session.commit()
+    await db_session.refresh(generation)
+
+    component.winning_generation_id = generation.id
+    await db_session.commit()
+
+    card = (await client.get("/v1/components")).json()["items"][0]
+    full = (await client.get(f"/v1/components/{component.id}")).json()
+
+    # The wall needs a picture and a name, and neither lives on the block's row.
+    assert card["author"] == "Marisol Vega"
+    assert card["screenshot_path"] == "genblocks/screenshots/alpha"
+    assert full["author"] == "Marisol Vega"
+    assert full["screenshot_path"] == "genblocks/screenshots/alpha"
+
+
+async def test_an_unclaimed_card_has_no_author(client, db_session):
+    category = await create_category(db_session, slug="hero")
+    await create_component(db_session, category_id=category.id, slug="alpha")
+
+    card = (await client.get("/v1/components")).json()["items"][0]
+
+    assert card["author"] is None
+    assert card["screenshot_path"] is None
 
 
 async def test_components_can_be_filtered_by_category_and_searched(client, db_session):
@@ -175,6 +220,24 @@ async def test_images_come_back_with_their_generation_panel(client, db_session):
     # ``path`` is the Cloudinary public id, not a URL: the client picks the host.
     assert body["items"][0]["path"] == image.path
     assert body["items"][0]["scores"] == {"visual": 88, "prompt_fit": 91, "compliance": 100}
+
+
+async def test_an_image_carries_its_maker(client, db_session):
+    scenes = await create_category(db_session, slug="scene", kind="image")
+    user = User(supabase_user_id=uuid.uuid4(), full_name="Marisol Vega")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    image = await create_image(db_session, category_id=scenes.id, path="images/landscape")
+    image.created_by = user.id
+    await db_session.commit()
+
+    card = (await client.get("/v1/images")).json()["items"][0]
+    full = (await client.get(f"/v1/images/{image.id}")).json()
+
+    assert card["author"] == "Marisol Vega"
+    assert full["author"] == "Marisol Vega"
 
 
 async def test_an_image_is_read_by_id(client, db_session):

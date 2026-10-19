@@ -22,8 +22,10 @@ export const metadata: Metadata = {
 function Meta({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-baseline gap-2">
-      <dt className="type-label text-ink-faint">{label}</dt>
-      <dd className="type-meta text-ink-soft max-w-[24ch] truncate">
+      <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        {label}
+      </dt>
+      <dd className="text-muted-foreground max-w-[24ch] truncate text-xs">
         {children}
       </dd>
     </div>
@@ -85,16 +87,18 @@ export default async function TaskPage({
               Nothing is lost: the task is kept in the database, not in the
               worker&apos;s memory. Reload to try again.
             </p>
-            <p className="type-meta mt-2">{failure}</p>
+            <p className="mt-2 text-xs">{failure}</p>
           </AlertDescription>
         </Alert>
       ) : null}
 
       {task ? (
         <>
-          <h1 className="type-title max-w-[68ch] text-balance">{task.brief}</h1>
+          <h1 className="max-w-[68ch] text-lg font-semibold tracking-tight text-balance">
+            {task.brief}
+          </h1>
 
-          <dl className="border-rule mt-5 flex flex-wrap items-baseline gap-x-8 gap-y-3 border-y py-4">
+          <dl className="border-border mt-5 flex flex-wrap items-baseline gap-x-8 gap-y-3 border-y py-4">
             <Meta label="Status">
               <StatusWord
                 label={TASK_STATUS_LABELS[task.status]}
@@ -117,12 +121,16 @@ export default async function TaskPage({
             </Alert>
           ) : null}
 
-          <h2 className="type-label text-ink-faint mt-10">Checklist</h2>
+          <h2 className="text-muted-foreground mt-10 text-xs font-medium tracking-wide uppercase">
+            Checklist
+          </h2>
           <TaskChecklist steps={task.steps} className="mt-3" />
 
           {generation ? (
             <>
-              <h2 className="type-label text-ink-faint mt-10">The result</h2>
+              <h2 className="text-muted-foreground mt-10 text-xs font-medium tracking-wide uppercase">
+                The result
+              </h2>
               <div className="mt-3">
                 <TaskResult generation={generation} brief={task.brief} />
               </div>
@@ -135,7 +143,7 @@ export default async function TaskPage({
                 variant="link"
                 render={
                   <Link
-                    href={`/?kind=component&item=${task.component_id}`}
+                    href={`/blocks/${task.component_id}`}
                     prefetch={false}
                   />
                 }

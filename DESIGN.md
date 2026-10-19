@@ -1,398 +1,458 @@
 ---
-version: "alpha"
+version: "1.0"
 name: "GenBlocks"
-description: "Editorial command center — a white editorial canvas, monumental display type, deep green and navy evidence bands, coral taxonomy and rule-driven lists, for a public registry of prompt-generated UI components and the verdicts of the judge that scored them."
+description: "A shadcn/ui shell around a wall of generated work: a quiet neutral system, one thin header, a full-height sidebar, square preview tiles, and an item page that puts the picture first and the evidence beside it."
 colors:
-  canvas: "#ffffff"
-  stone: "#eeece7"
-  stone-soft: "#f7f6f2"
-  wash-green: "#edfce9"
-  wash-blue: "#f1f5ff"
-  ink: "#212121"
-  ink-strong: "#17171c"
-  ink-muted: "#6b6b7a"
-  hairline: "#d9d9dd"
-  hairline-soft: "#e5e7eb"
-  primary: "#17171c"
-  primary-foreground: "#ffffff"
-  coral: "#ff7759"
-  coral-soft: "#ffad9b"
-  on-coral: "#17171c"
-  link: "#1863dc"
-  band: "#003c33"
-  band-alt: "#071829"
-  band-foreground: "#ffffff"
-  focus: "#4c6ee6"
-  verdict-pass: "#12684f"
-  verdict-pass-soft: "#e2f1ea"
-  verdict-retry: "#8a5c14"
-  verdict-retry-soft: "#f6ecd6"
-  verdict-fail: "#b30000"
-  verdict-fail-soft: "#f8e3e3"
+  background: "#ffffff"
+  foreground: "#0a0a0a"
+  card: "#ffffff"
+  card-foreground: "#0a0a0a"
+  popover: "#ffffff"
+  popover-foreground: "#0a0a0a"
+  primary: "#171717"
+  primary-foreground: "#fafafa"
+  secondary: "#f5f5f5"
+  secondary-foreground: "#171717"
+  muted: "#f5f5f5"
+  muted-foreground: "#737373"
+  accent: "#f5f5f5"
+  accent-foreground: "#171717"
+  destructive: "#e7000b"
+  border: "#e5e5e5"
+  input: "#e5e5e5"
+  ring: "#a3a3a3"
+  sidebar: "#fafafa"
+  sidebar-foreground: "#0a0a0a"
+  sidebar-primary: "#171717"
+  sidebar-primary-foreground: "#fafafa"
+  sidebar-accent: "#f5f5f5"
+  sidebar-accent-foreground: "#171717"
+  sidebar-border: "#e5e5e5"
+  sidebar-ring: "#a3a3a3"
+  pass: "#047857"
+  pass-soft: "rgb(16 185 129 / 0.10)"
+  fail: "#e7000b"
+  fail-soft: "rgb(231 0 11 / 0.10)"
+  dark-background: "#0a0a0a"
+  dark-foreground: "#fafafa"
+  dark-card: "#171717"
+  dark-muted: "#262626"
+  dark-muted-foreground: "#a3a3a3"
+  dark-border: "rgb(255 255 255 / 0.10)"
+  dark-sidebar: "#171717"
 
 typography:
-  display:
-    fontFamily: Space Grotesk
-    fontSize: 4.5rem
-    fontWeight: 400
-    lineHeight: 1
-    letterSpacing: "-0.03em"
-  display-sm:
-    fontFamily: Space Grotesk
-    fontSize: 2.5rem
-    fontWeight: 400
-    lineHeight: 1.05
-    letterSpacing: "-0.02em"
-  title:
-    fontFamily: Hanken Grotesk
+  sans: Geist
+  mono: Geist Mono
+  page-title:
+    fontFamily: Geist
     fontSize: 1.5rem
-    fontWeight: 500
+    fontWeight: 600
     lineHeight: 1.25
-    letterSpacing: "-0.01em"
-  subtitle:
-    fontFamily: Hanken Grotesk
-    fontSize: 1.125rem
-    fontWeight: 400
+    letterSpacing: "-0.025em"
+  section-label:
+    fontFamily: Geist
+    fontSize: 0.75rem
+    fontWeight: 500
     lineHeight: 1.4
+    letterSpacing: "0.05em"
+    textTransform: uppercase
   body:
-    fontFamily: Hanken Grotesk
-    fontSize: 1rem
-    fontWeight: 400
-    lineHeight: 1.5
-  body-sm:
-    fontFamily: Hanken Grotesk
+    fontFamily: Geist
     fontSize: 0.875rem
     fontWeight: 400
-    lineHeight: 1.4
-  micro:
-    fontFamily: Hanken Grotesk
+    lineHeight: 1.5
+  row-label:
+    fontFamily: Geist
+    fontSize: 0.875rem
+    fontWeight: 400
+    lineHeight: 1.5
+  row-value:
+    fontFamily: Geist
+    fontSize: 0.875rem
+    fontWeight: 500
+    lineHeight: 1.5
+  small:
+    fontFamily: Geist
     fontSize: 0.75rem
     fontWeight: 400
     lineHeight: 1.4
-  label:
-    fontFamily: Space Mono
-    fontSize: 0.875rem
-    fontWeight: 400
-    lineHeight: 1.4
-    letterSpacing: "0.02em"
   code:
-    fontFamily: Space Mono
-    fontSize: 0.8125rem
+    fontFamily: Geist Mono
+    fontSize: 0.75rem
     fontWeight: 400
     lineHeight: 1.6
   score:
-    fontFamily: Space Mono
-    fontSize: 1.75rem
-    fontWeight: 500
+    fontFamily: Geist
+    fontSize: 1.125rem
+    fontWeight: 600
     lineHeight: 1
     fontFeature: "tnum"
 
 rounded:
-  none: "0px"
-  xs: "4px"
-  sm: "8px"
-  md: "16px"
-  lg: "22px"
-  xl: "30px"
-  pill: "9999px"
+  sm: "6px"
+  md: "8px"
+  lg: "10px"
+  xl: "14px"
+  2xl: "18px"
+  3xl: "22px"
+  4xl: "26px"
 
 spacing:
   xs: "4px"
   sm: "8px"
-  md: "16px"
-  lg: "24px"
-  xl: "32px"
-  2xl: "48px"
-  3xl: "64px"
-  4xl: "96px"
+  md: "12px"
+  lg: "16px"
+  xl: "24px"
+  2xl: "32px"
+  3xl: "40px"
 
 components:
-  nav-bar:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.none}"
-    height: 68px
-  hairline:
-    backgroundColor: "{colors.hairline}"
-    height: 1px
-  divider-soft:
-    backgroundColor: "{colors.hairline-soft}"
-    height: 1px
-  focus-outline:
-    backgroundColor: "{colors.focus}"
-    height: 2px
-    width: 2px
+  header:
+    backgroundColor: "{colors.background}"
+    textColor: "{colors.foreground}"
+    height: 56px
+    border: "1px {colors.border}"
+  sidebar:
+    backgroundColor: "{colors.sidebar}"
+    textColor: "{colors.sidebar-foreground}"
+    width: 256px
+    width-collapsed: 48px
+    width-mobile: 288px
+  sidebar-button:
+    textColor: "{colors.sidebar-accent-foreground}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    height: 32px
+    padding: 8px
+  breadcrumb-band:
+    backgroundColor: "color-mix(in oklab, {colors.muted} 40%, transparent)"
+    textColor: "{colors.muted-foreground}"
+    height: 36px
+    padding: 8px 12px
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.primary-foreground}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.pill}"
-    padding: 24px
-    height: 44px
-  button-primary-hover:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.primary-foreground}"
+    typography: "{typography.body}"
+    rounded: "{rounded.lg}"
+    height: 32px
+    padding: 10px
   button-outline:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink-strong}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.pill}"
-    padding: 24px
-    height: 44px
-  field:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.sm}"
-    padding: 12px
-    height: 44px
-  card:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    padding: 24px
-  card-stone:
-    backgroundColor: "{colors.stone}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    padding: 24px
-  dark-band:
-    backgroundColor: "{colors.band}"
-    textColor: "{colors.band-foreground}"
-    rounded: "{rounded.none}"
-    padding: 64px
-  dark-band-navy:
-    backgroundColor: "{colors.band-alt}"
-    textColor: "{colors.band-foreground}"
-    rounded: "{rounded.none}"
-    padding: 64px
-  wash-band:
-    backgroundColor: "{colors.wash-green}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.none}"
-    padding: 64px
-  wash-band-alt:
-    backgroundColor: "{colors.wash-blue}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.none}"
-    padding: 64px
-  console-panel:
-    backgroundColor: "{colors.ink-strong}"
-    textColor: "{colors.band-foreground}"
-    typography: "{typography.code}"
-    rounded: "{rounded.md}"
-    padding: 16px
+    backgroundColor: "{colors.background}"
+    textColor: "{colors.foreground}"
+    border: "1px {colors.border}"
+    rounded: "{rounded.lg}"
+    height: 32px
+  input:
+    backgroundColor: "transparent"
+    textColor: "{colors.foreground}"
+    border: "1px {colors.input}"
+    rounded: "{rounded.lg}"
+    height: 32px
+    padding: 10px
+  search-button:
+    backgroundColor: "{colors.background}"
+    textColor: "{colors.muted-foreground}"
+    border: "1px {colors.border}"
+    rounded: "{rounded.lg}"
+    height: 32px
+    width: 224px
+  grid-tile:
+    backgroundColor: "{colors.background}"
+    border: "1px {colors.border}"
+    rounded: "{rounded.xl}"
+    padding: 8px
+  grid-tile-hover:
+    backgroundColor: "color-mix(in oklab, {colors.muted} 30%, transparent)"
+    translateY: -2px
+  item-frame:
+    backgroundColor: "color-mix(in oklab, {colors.muted} 20%, transparent)"
+    border: "1px {colors.border}"
+    rounded: "{rounded.xl}"
+    padding: 8px
+    maxHeight: 58svh
   code-block:
-    backgroundColor: "{colors.stone-soft}"
-    textColor: "{colors.ink}"
+    backgroundColor: "color-mix(in oklab, {colors.muted} 20%, transparent)"
+    textColor: "{colors.foreground}"
     typography: "{typography.code}"
-    rounded: "{rounded.sm}"
-    padding: 16px
-  category-chip:
-    backgroundColor: "{colors.coral}"
-    textColor: "{colors.on-coral}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.pill}"
-    padding: 8px
-  category-chip-quiet:
-    backgroundColor: "{colors.stone-soft}"
-    textColor: "{colors.ink-strong}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.pill}"
-    padding: 8px
-  highlight:
-    backgroundColor: "{colors.coral-soft}"
-    textColor: "{colors.on-coral}"
-    typography: "{typography.body-sm}"
-    padding: 2px
-  link:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.link}"
-    typography: "{typography.body-sm}"
-    padding: 2px
-  verdict-stamp:
-    backgroundColor: "{colors.verdict-pass-soft}"
-    textColor: "{colors.verdict-pass}"
-    typography: "{typography.label}"
-    rounded: "{rounded.xs}"
-    padding: 4px
-  stamp-retry:
-    backgroundColor: "{colors.verdict-retry-soft}"
-    textColor: "{colors.verdict-retry}"
-    typography: "{typography.label}"
-    rounded: "{rounded.xs}"
-    padding: 4px
-  stamp-fail:
-    backgroundColor: "{colors.verdict-fail-soft}"
-    textColor: "{colors.verdict-fail}"
-    typography: "{typography.label}"
-    rounded: "{rounded.xs}"
-    padding: 4px
-  ledger-row:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    typography: "{typography.label}"
-    rounded: "{rounded.none}"
-    padding: 16px
-  ledger-row-alt:
-    backgroundColor: "{colors.stone-soft}"
-    textColor: "{colors.ink}"
-    typography: "{typography.label}"
-    rounded: "{rounded.none}"
-    padding: 16px
-  caption-text:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink-muted}"
-    typography: "{typography.micro}"
-    padding: 4px
-  dialog:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+    lineNumbers: true
+  file-rail:
+    backgroundColor: "color-mix(in oklab, {colors.muted} 30%, transparent)"
+    textColor: "{colors.muted-foreground}"
     rounded: "{rounded.md}"
-    padding: 24px
+    width: 176px
+    width-collapsed: 40px
+  evidence-panel:
+    backgroundColor: "{colors.card}"
+    textColor: "{colors.card-foreground}"
+    border: "1px {colors.border}"
+    rounded: "{rounded.xl}"
+    padding: 16px
+    width: 320px
+  score-readout:
+    textColor: "{colors.foreground}"
+    typography: "{typography.score}"
+    trackColor: "{colors.muted}"
+    trackWidth: 56px
+  verdict-pass:
+    backgroundColor: "{colors.pass-soft}"
+    textColor: "{colors.pass}"
+    rounded: "{rounded.md}"
+    padding: "2px 8px"
+  verdict-fail:
+    backgroundColor: "{colors.fail-soft}"
+    textColor: "{colors.fail}"
+    rounded: "{rounded.md}"
+    padding: "2px 8px"
+  avatar-button:
+    backgroundColor: "{colors.background}"
+    border: "1px {colors.border}"
+    rounded: "9999px"
+    size: 36px
 ---
 
 ## Overview
 
-An editorial command center for a registry. The page opens on white, states its case in monumental display type, then steps back into restrained UI: thin rules, coral taxonomy, and lists that read like a research index rather than a wall of cards. Where the system needs weight, it does not add a shadow — it changes the surface to deep green or navy and lets the content go white.
+GenBlocks is a public wall of UI blocks and stock images, each one generated from a prompt and scored by a judge that did not write it. The interface exists to get out of the way of the work: the pictures are the argument, and the evidence is one click behind them.
 
-GenBlocks is a public record of prompt-generated UI components and the verdicts a judge gave each attempt. The design borrows the register of a research publication: **taxonomy you can filter**, **evidence you can read**, and **numbers that line up**. It is a system with a point of view — monumental type, flat surfaces, one warm accent — not a neutral UI kit.
+The system is **shadcn/ui on the neutral base theme**. It is deliberately quiet: white and near-black, one thin header, a full-height sidebar, square previews, and a single accent that belongs to the artifacts rather than to the chrome. There is no editorial display face, no coral taxonomy, no green or navy bands, no monospaced uppercase labels everywhere, and no pill buttons. Those belonged to the previous system and are retired.
 
-- Density: 4/10 — Airy in the marketing shell, dense only where the data is
-- Variance: 5/10 — Centered statements alternating with full-width bands and rule-driven lists
-- Motion: 3/10 — Quiet and functional; nothing bounces
+**This document describes the implementation.** `app/globals.css` and `components/ui/` are the source of truth. When a token or a component changes, change the code first, then bring this file back in line.
 
-## Colors
+## Foundations
 
-A white canvas, one near-black, and color that arrives with intent.
+### Color
 
-**Surfaces**
+All color is semantic. Components use `bg-background`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-muted`, `bg-card`, `bg-sidebar` and their siblings; they never use a raw hex, a named Tailwind palette color, or a manual `dark:` override.
 
-- **Canvas (#ffffff):** the default page. Most of the product lives here.
-- **Stone (#eeece7):** warm secondary surface for product cards, quiet blocks and forms sitting on dark bands.
-- **Stone Soft (#f7f6f2):** inset wells, alternate table rows, code backgrounds.
-- **Wash Green (#edfce9) / Wash Blue (#f1f5ff):** pale section backdrops behind dark panels and media. They are the only place a large field of tint is allowed.
+- **Background / foreground** — white and near-black in light, near-black and near-white in dark.
+- **Primary** — near-black in light (the one filled action), near-white in dark.
+- **Muted** — the quiet surface for insets, file rails, code backgrounds and alternate rows.
+- **Muted foreground** — metadata, labels, captions and the author under a tile.
+- **Border / input** — one hairline for every boundary.
+- **Sidebar** — a slightly off-white surface in light (`#fafafa`), a step above the page in dark (`#171717`).
+- **Destructive** — failures, rejected verdicts and destructive actions. Nothing else.
+- **Pass** — a small emerald pair used only for a passing verdict. It is functional, not brand.
+- **Charts** — available from the theme, not used by the shell today.
 
-**Text and rules**
+Dark mode is a full tonal inversion driven by the `.dark` class. Every surface is defined twice; a component that needs a different dark value is a component that should use a token.
 
-- **Ink (#212121):** default body text.
-- **Ink Strong (#17171c):** headlines, the primary pill, the footer. The near-black is the brand anchor.
-- **Ink Muted (#6b6b7a):** secondary text, metadata, captions. Measured AA on canvas. _(The upstream reference used a lighter grey that fails AA — this value is deliberately darker.)_
-- **Hairline (#d9d9dd) / Hairline Soft (#e5e7eb):** rules and borders. Rules are structure in this system, not decoration.
+### Typography
 
-**Accents**
+Two faces, both Geist:
 
-- **Accent — Coral (#ff7759):** taxonomy only. Category chips, active filters and small warm markers. **Never text on canvas** (2.6:1). As a fill it takes `accent-foreground`, which is near-black, at 7:1.
-- **Accent Soft (#ffad9b):** chip borders and pale warm fills.
-- **Link (#1863dc):** editorial links and secondary emphasis. 5.4:1 on canvas.
-- **Focus (#4c6ee6):** the keyboard ring, and nothing else.
+- **Geist** — everything that is read: titles, body, labels, buttons.
+- **Geist Mono** — code, file paths, install lines and any figure that should line up.
 
-**Bands**
+The scale is short and intentional:
 
-- **Band Green (#003c33) / Band Alt Navy (#071829):** full-width evidence sections. The only dark surfaces besides the footer. Text inverts to `band-foreground`. Cards inside a band use translucent white surfaces, never stone.
+- **Page title** — 24px, semibold, tight tracking. One per page: visible on an item, `sr-only` on the wall and the task list.
+- **Section label** — 12px, medium, uppercase, wide tracking, muted. Used for `JUDGE`, `HARNESS`, `Browse`, `Categories`, `Files`.
+- **Body / row text** — 14px. Labels are muted and regular; values are foreground and medium.
+- **Small** — 12px, for status words, counts and secondary hints.
+- **Code** — 12px mono with 1.6 line height.
+- **Score** — 18px semibold, tabular numerals.
 
-**Verdict — functional, never brand**
+Do not introduce a display face, a third family, or a second type scale. Headings are not all caps; all caps belongs to the 12px section labels only.
 
-- **Pass (#12684f) / Retry (#96651a) / Fail (#b30000)**, each with a soft tint for stamped backgrounds. These stay separate from the coral and the blue on purpose: a rejected component must never look like a filter chip or a link.
+### Radius
 
-Rules of use: coral is taxonomy, blue is navigation, and neither is ever a surface. The verdict triad appears only where a verdict exists. If a screen has no verdict, that screen has no triad color.
+`--radius: 0.625rem` (10px). The scale derives from it:
 
-**Dark mode** is a derived tonal inversion kept in `frontend/app/globals.css`: canvas becomes near-black, stone becomes `#17171c`, ink inverts, hairlines become translucent, and the primary pill inverts to white-on-dark. The bands stay green and navy; the accents lift one step to hold AA. It is derived from these tokens, not authored here.
+- `sm` 6px — tiny controls, inline tags.
+- `md` 8px — menu items, file buttons, badges.
+- `lg` 10px — buttons, inputs, the search field.
+- `xl` 14px — cards, dialogs, the item frame, the evidence panel.
+- `2xl` 18px — larger surfaces.
+- `3xl` 22px, `4xl` 26px — reserved; not used by the shell.
 
-## Typography
+Buttons and inputs are `rounded-lg`, not pills. The avatar is the only circle.
 
-Three roles, and the split is the point — collapsing them into one sans is the fastest way to make this system look generic.
+### Spacing and layout
 
-- **Space Grotesk** — display only, and sparingly. It carries the one monumental declaration a page is allowed. Tight, slightly mechanical, almost monospaced in spirit.
-- **Hanken Grotesk** — body, UI and every heading that is not the display. Neutral, quiet, not the default system face.
-- **Space Mono** — technical labels, metadata, scores, code. Uppercase for category and system markers.
+A 4px base. The practical steps are 4, 8, 12, 16, 24, 32 and 40.
 
-Discipline:
+- **Content padding** — 12px on a phone, 16px on a laptop.
+- **Grid gap** — 12px.
+- **Card padding** — 16px.
+- **Section gap** — 24px in the evidence panel, 16–24px between the parts of an item page.
+- **Line length** — body copy stays under ~72ch; the item description is short by construction.
 
-- **Avoid heavy weights.** Display and body sit at 400, buttons and titles at 500. Hierarchy comes from size, tracking and surface contrast. If something needs to shout, make it bigger, not bolder.
-- **Keep display type tight.** Negative tracking (−0.02 to −0.03em) and a line height of 1.0; hero copy should feel carved, not airy.
-- **One oversized headline per page.** After the display, settle into 14–24px UI copy.
-- **Uppercase mono labels** (14px, 0.02em) mark category and system states.
-- **Tabular numerals everywhere a figure appears.** Scores, counts, dates.
-- Headlines are never all caps. All caps belongs to mono labels.
-- Line length caps at ~72ch.
-- Fallbacks if the webfonts are unavailable: Space Grotesk → system grotesque; Hanken Grotesk → Inter, Arial; Space Mono → ui-monospace, Menlo.
+### Elevation and motion
 
-## Layout
+Flat by default. Borders and muted surfaces do the separating; shadows belong to overlays only, as shadcn ships them.
 
-- **8px base.** Practical steps run 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 / 96.
-- **Max width 1200px**, centered, 24px side padding.
-- **Two shells.** The marketing shell is centered and airy: statement, proof, product, CTA, separated by large intervals of empty space. The registry shell is a ruled index: a filter row, then rows or a 3-column grid.
-- **Three-zone navigation:** mark left, links centered, action right.
-- **Rows over cards.** For lists of components, attempts and research, use rule-separated rows with columns for category, score and date. Reach for a card only when an item is genuinely a self-contained object.
-- **Whitespace is a trust signal.** Big empty intervals separate the claim, the proof and the action. Dense content appears only where the information architecture demands it.
-- **Sections alternate surfaces**, not shadows: canvas → wash → band → canvas.
+Motion is functional and brief:
 
-Responsive: nav collapses to the sheet below 768px; hero media stacks; grids go 3 → 2 → 1; form rows stack; research rows keep the rule but push metadata below the title; nothing overflows horizontally.
+- Hovering a tile lifts it 2px and fades in the author; 150–200ms, ease-out.
+- Tabs, menus and dialogs use shadcn's own transitions.
+- Nothing bounces, nothing animates on entry, nothing reveals on scroll.
+- New motion should respect `prefers-reduced-motion`.
 
-## Elevation & Depth
+## The shell
 
-Flat, on purpose. Depth is surface alternation, contrast and thin borders — not shadow.
+### Sidebar — laptop
 
-- **Flat:** canvas and band sections. No shadow, ever.
-- **Bordered:** 1px hairline (or translucent white inside a band) for cards, forms, rows and wells.
-- **Media lift:** a rounded media card over a contrasting section is the only "raised" object in the marketing shell. Its radius is 16–22px.
-- Exactly **one shadow token** exists, for transient overlays (dialogs, menus, sheets, toasts): `0 8px 24px rgb(23 23 28 / 0.10)`. Nothing else casts.
-- **No glow, no blur, no glass.** Nothing is translucent except white-on-band surfaces.
-- Motion is functional and brief: 120–200ms, ease-out, opacity and transform only. No entrance animations, no hover lift, no scroll reveals.
+A real shadcn `Sidebar` (`collapsible="icon"`), full viewport height, its content scrollable.
 
-## Shapes
+- **Width** 16rem expanded, 3rem collapsed.
+- **Header** 56px tall, matching the app header: the mark and `GenBlocks` on the left, the collapse button on the right.
+- Collapsed, the header stacks the mark over the button and the width falls to 48px.
+- **Generate with AI** is the first item under the header: a full-width primary button. Collapsed, it is a single sparkle icon with an accessible name.
+- **Browse** holds Blocks and Images, each with an icon and an active state.
+- **Categories** lists `All` and the level-2 types of the section on screen. The list is long by nature; it scrolls.
+- **Footer** holds the theme toggle and a quiet Source link. Collapsed, only the toggle remains.
 
-Rounded, but not cute.
+The sidebar is the only navigation. There is no home page and no kind switch in the page body.
 
-- **Radius scale:** 4px (utility, thumbnails) · 8px (inputs, small cards, chips-outline) · 16px (cards, dialogs) · 22px (signature media cards, toasts) · 30px (filters) · **pill** (primary and outline buttons, category chips).
-- **Buttons are pills.** The primary CTA is a near-black pill; the secondary is either an outlined pill or an underlined text link. A squared button is wrong here.
-- Media and major cards never go below 8px, and the signature media radius is 22px.
-- Rules are 1px and visible. A boundary drawn with a rule beats a corner or a shadow.
+### Header — laptop
+
+A 56px strip that starts where the sidebar ends and spans the rest of the width.
+
+- **Right side**: the search affordance, then the account.
+- Logged out: `Log in` (ghost) and `Sign up` (secondary).
+- Logged in: the avatar menu, unchanged.
+- **Search** looks like an input but is a button: a magnifier and the lowercase word `search`, 224px wide, `rounded-lg`. It opens a dialog with the real field.
+
+The header is sticky and slightly translucent (`bg-background/80` plus backdrop blur) so the wall keeps moving underneath it.
+
+### Header — phone
+
+The header spans the full width and is a three-part strip:
+
+- **Left**: a burger that opens the navigation.
+- **Center**: the mark and `GenBlocks`, absolutely centered so neither side control can push it off the middle.
+- **Right**: a magnifier button, then `Log in` when logged out or the avatar when logged in. No sign-up on the phone header.
+
+There is no search field in the mobile header: the magnifier opens the same dialog.
+
+### Sidebar — phone
+
+The same sidebar becomes a sheet that starts **below** the header (`top: var(--header-height)`), so the header keeps its full width and stays visible. It has its own header row: `MENU` on the left and a close button on the right. Links close the sheet when tapped. The footer keeps the theme toggle.
+
+### Breadcrumb band
+
+A muted strip directly under the header (`bg-muted/40`, 1px bottom border, 8px by 12px padding).
+
+- `/blocks` → `Blocks`; `/blocks/hero` → `Blocks / Hero`.
+- `/blocks/<id>` → `Blocks` only; the page's h1 names the item, and repeating it in the band would be the same word twice.
+- `/images` → `Images`; `/tasks` → `Your tasks`; a task detail appends the short id; `/profile` → `Profile`.
+
+There is no `Home` crumb. The section is the root.
+
+## The wall
+
+The gallery is a wall of pictures, not a list of records.
+
+- **Full width** minus 12–16px of padding. No max-width, no centred column.
+- **Grid**: 2 columns on a phone, 3 on a small tablet, 4 on a laptop, 5 on a wide screen; 12px gap.
+- **Cell**: a square (`aspect-square`) `rounded-xl` frame with a 1px border and 8px of padding. The thumbnail sits inside it, contained rather than cropped, so the proportions the judge saw are the proportions a visitor sees.
+- **Nothing on the tile** except the picture. On hover the picture lifts 2px, the frame takes a faint muted wash, and the maker's name (`author`, or `GenBlocks` when nobody claimed it) fades in centred at the bottom.
+- **No title, slug, date or category** on the wall. The accessible name is the item's title; the visual text is only the author on hover.
+- **Above the grid**: one small line with the count (`7 blocks`) and, when searching, `for “query”` plus a `Clear search` link. No section title and no description.
+- **Pagination**: two outline buttons and a small `Page x of y`, below the grid.
+
+Loading and missing assets are honest: the `AssetPlate` shows a muted frame with `Awaiting asset` and what is known (model or dimensions) rather than a broken image.
+
+## The item page
+
+Opening a tile is a navigation, not a dialog: `/blocks/<uuid>` or `/images/<uuid>`.
+
+Top to bottom:
+
+1. **The title** — the block's title, or the image's category. One h1, 24px semibold.
+2. **The render** — inside a muted, bordered frame with 8–12px padding. No tab, no `Render` label. The frame is capped at `58svh` (images at `60svh`) and centred; the whole artifact is contained, never cropped.
+3. **Two columns** below, aligned at the top:
+   - **Left, flexible**: the `code` and `prompt` tabs for a block; the prompt card for an image.
+   - **Right, 20rem (22rem on a wide screen)**: the evidence.
+
+### Code tab
+
+- A real tarball of the project: the file rail on the left (a strip above the code on a phone), always visible, always collapsible. It starts open.
+- The rail lists every path, highlights the current one and truncates long paths. On a phone it scrolls horizontally.
+- Collapsing it leaves a 40px rail with the reopen button; the code takes the width.
+- The code itself is shadcn's `CodeBlock`: a bordered, `rounded-lg`, monospaced surface with line numbers, horizontal scroll and a copy action that appears on hover, focus or touch. Inside the tab card it is flush (`rounded-none border-0`) with a faint muted background.
+- A line with a package to install sits under the code as a mono command with its own copy button. React and React DOM are implied and never listed.
+- The `code` and `prompt` labels are lowercase.
+
+### Prompt tab
+
+The delivery prompt as body copy, with a copy button in the tab header. The image item uses the same shape as a single prompt card.
+
+### Evidence column
+
+A bordered `rounded-xl` card, 16px padding, 24px between groups. The order is fixed:
+
+1. **Description**, when the artifact has one. Images put the prompt on the left instead.
+2. **Category, date, model and trace** as a definition list. Labels 14px muted; values 14px medium and truncated. The trace is a link when a Langfuse host is configured and `Not recorded` otherwise.
+3. **Judge** — the score rows. Label 14px muted on the left, score on the right: 18px semibold tabular numerals over a 56px, 4px-high muted track. One row per rubric dimension.
+4. **Harness** — one row per check, label 14px, state 12px (`ok` muted, `failed` destructive). A failed check may carry the sandbox's own sentence underneath. Accessibility violations follow as 14px lines with id, impact and node count.
+
+The panel narrows rather than widening the page: never give the evidence more than 22rem. On a phone it stacks under the tabs.
+
+### Block and image differences
+
+- A block has a title, a project, a delivery prompt, an attempt and harness checks.
+- An image has no code and no separate prompt section; its category is the h1, the prompt is the left card, and the evidence keeps the same order without a harness.
+
+## Tasks and account
+
+- **Tasks list**: the visible heading is gone; an `sr-only` h1 keeps the page named. The brief, status badge and timestamp form a rule-separated list. The empty state offers the generator.
+- **Task detail**: unchanged in structure. The brief is the heading; status, queue time, finish time and trace sit in a bordered definition row; the checklist is a bordered table; the result is the render plus the evidence panel with its verdict and model.
+- **Profile and auth**: shadcn cards and fields on the same neutral tokens. Auth pages have no shell chrome; they are centred on the canvas.
 
 ## Components
 
-- **Primary button.** Near-black pill (or white on a dark band), 14px label at weight 500, 24px horizontal padding, 44px tall. Hover darkens or lightens by one step; no shadow, no lift.
-- **Secondary button.** Outlined pill: canvas fill, 1px hairline, near-black text. Ghost is text with a rule underline. One primary action per view.
-- **Link.** `link` blue, underlined on hover. Never coral.
-- **Input.** Canvas fill, 1px hairline, 8px radius, 44px tall. Label above is an uppercase mono label; helper and error text are mono. Focus is the `focus` ring — one treatment on every focusable element.
-- **Category chip.** Pill. Active: coral fill with near-black text. Quiet: stone fill or a coral hairline with near-black text. Coral is for taxonomy, so a chip is the only place a large coral area is allowed.
-- **Index card.** Canvas surface, 1px hairline, 16px radius, generous padding. Carries a mono accession mark, a title and a metadata row. In a grid these are 3-up on desktop.
-- **Stone card.** Same geometry on the warm stone surface, for product and model summaries. Never used on a band.
-- **Dark band.** Full-width green or navy section with white text. Cards inside it use translucent white surfaces and hairline borders. Used for evidence: the trace, the scores, the attempt history.
-- **Console panel.** Near-black panel with mono text and small status chips — the running task, the trace, the code. This is the "agent console" of the product.
-- **Verdict stamp.** Small 4px-radius chip, uppercase mono, hairline border in the verdict color over its soft tint. `PASS` / `RETRY` / `REJECTED`. Not a pill, not an icon.
-- **Attempt ledger.** Rule-separated table: `№`, timestamp, score (tabular), verdict stamp. Rows are tall and open; alternate rows use stone-soft. This table is a first-class surface — it is the product's argument.
-- **Score readout.** The judge's number in mono, tabular, right-aligned, over a thin hairline bar showing the value on the track. Data, not a donut.
-- **Highlight.** Coral-soft marker behind near-black text, inline only. Flags the winning attempt or a key figure.
-- **Research row.** The list form: title left, category chips centered, date right, separated by hairlines. No boxing.
-- **Navigation / footer.** Canvas nav with a hairline beneath; near-black footer with white labels and muted links.
-
-**States:** hover darkens or lightens one step; focus is the shared ring; pressed nudges 1px; disabled drops to 45% opacity with a not-allowed cursor. Every component defines all four.
+- **Button** — shadcn's default. Primary is near-black, outline is a hairline on the canvas, secondary is muted, ghost is text with a hover wash. Heights 24/28/32/36px by size; `rounded-lg`; icons via `data-icon` and no manual sizing.
+- **Input / Textarea** — 32px high, transparent, 1px input border, `rounded-lg`, a 3px ring on focus.
+- **InputGroup** — the search field: a magnifier addon, the input, and an inline `Search` button.
+- **Search dialog** — a title, one sentence of scope, the input group. Submit on Enter. It searches the section on screen and keeps the current category.
+- **Tabs** — shadcn's line variant. Triggers live inside a `TabsList`; the active line is the foreground.
+- **CodeBlock** — shadcn's component: header/actions/content/footer, line numbers, copy button, horizontal scroll.
+- **Dialog / Sheet / Dropdown** — shadcn defaults. Overlays are the only place a shadow appears. Every dialog and sheet has a title (visually hidden when needed).
+- **Badge** — status words and verdicts. `secondary` for running, `destructive` for failed, `outline` for queued or done; verdicts use the functional emerald/destructive pairs.
+- **Sidebar** — the real shadcn sidebar with menu buttons, group labels, tooltips in icon mode and a sheet on mobile.
+- **Empty / Alert** — the shadcn primitives, not bespoke markup.
+- **ScoreReadout** — the product's one custom data component: 18px semibold tabular number over a 56px track. No donuts, rings or gauges.
+- **AssetPlate** — the product's one media component: a Cloudinary id, a transform width, `object-contain` in the gallery and item view, and an honest muted fallback.
 
 ## Do's and Don'ts
 
 Do:
 
-- Do start from the white canvas; introduce green or navy only as full-width bands.
-- Do keep primary CTAs pill-shaped and near-black.
-- Do use 16–22px radius on cards and media; keep inputs at 8px.
-- Do use coral for taxonomy and small warm accents, never as the CTA system.
-- Do let one monumental display line carry a page, then settle down.
-- Do use rules and open rows instead of wrapping every item in a card.
-- Do set every figure in tabular mono.
-- Do check WCAG AA on every text/background pair, including coral and the verdict tints.
+- Do start from `background`, `foreground`, `muted`, `border`, `card` and `sidebar`; use the semantic token that names the role.
+- Do reach for a shadcn component before writing markup. Add it with `pnpm dlx shadcn@latest add <component>`.
+- Do keep the shell thin: 56px header, 16rem sidebar, 12px content padding.
+- Do keep the wall textless until hover, and keep the author the only label.
+- Do keep the evidence column narrow and its type scale consistent: 12px section labels, 14px labels and values, 18px scores.
+- Do keep the file rail visible and collapsible, with the file list on the left on a laptop and above the code on a phone.
+- Do cap renders at 58–60svh and contain them.
+- Do use `gap-*`, `size-*`, `truncate`, `cn()` and `data-icon`.
+- Do give every icon-only button an `aria-label`.
+- Do keep one h1 per page; use `sr-only` where the visible title was removed on purpose.
+- Do respect dark mode through tokens and check both themes.
 
 Don't:
 
-- Don't put coral or blue text on the canvas — use near-black or `link` blue only.
-- Don't turn coral or blue into broad decorative surfaces.
-- Don't add drop shadows to cards. Depth is surface and rule.
-- Don't use saturated gradients or glow as a UI background.
-- Don't make every section card-based; unframed rows and open space are the default.
-- Don't use squared buttons or radii below 4px.
-- Don't replace the display / body / mono split with one generic sans.
-- Don't reuse a brand accent for a verdict — pass, retry and fail stay functional.
-- Don't use emoji as icons, or an icon set that carries its own color.
-- Don't write "Elevate", "Seamless", "Unleash", "Next-Gen", or lorem ipsum — including in empty states.
-- Don't fake depth, motion or polish to make an empty collection feel full.
+- Don't use the old `type-*` utilities, `text-ink*`, `bg-panel*`, `border-rule`, coral, bands or pill buttons. They are gone.
+- Don't use raw hex, named palette colors or manual `dark:` overrides in components.
+- Don't put a section title, a description, a count hero or a breadcrumb inside the page body; the band and the sidebar already said it.
+- Don't put text on a gallery tile other than the author on hover.
+- Don't make the render taller than the viewport or crop the artifact to fill a square.
+- Don't make the evidence panel wider than 22rem or let its labels and values drift to different sizes.
+- Don't hide the file rail; collapse it.
+- Don't add shadows to cards, gradients, glass or glow. Only overlays lift.
+- Don't animate entrances, bounces or scroll reveals. Hover lifts and fades are enough.
+- Don't uppercase body copy; reserve uppercase for the 12px section labels.
+- Don't build a custom dialog, menu, tab or field when shadcn already ships one.
+
+## Implementation notes
+
+- Tokens live in `frontend/app/globals.css`: the neutral oklch values, the derived radius scale and `--header-height: 3.5rem`.
+- Components live in `frontend/components/ui/` and are added with the shadcn CLI. `components.json` pins `base-nova`, neutral, Geist and Lucide.
+- The shell lives in `components/shell/`; the wall in `components/vault/`.
+- Routes are `/blocks`, `/blocks/<type-or-id>`, `/images`, `/images/<type-or-id>`, `/tasks`, `/tasks/<id>` and `/profile`. `/` redirects to `/blocks`.
+- The file rail is always rendered, even for a one-file project, because the list is part of understanding the project.
+- `lib/vault/links.ts` owns the URL shape; `lib/breadcrumbs.ts` owns the trail.
+- When the code and this document disagree, the code wins. Update the document in the same change.

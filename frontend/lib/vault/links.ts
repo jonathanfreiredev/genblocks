@@ -1,11 +1,24 @@
 import type { Kind } from "@/lib/vault/types";
 
-/** How many items a page of the gallery shows: two full rows on a wide screen. */
+/** How many items a page of a section shows. */
 export const PAGE_SIZE = 12;
 
+/** The two addresses the product has. Blocks are the default. */
+export type Section = "blocks" | "images";
+
+export const SECTION_KIND: Record<Section, Kind> = {
+  blocks: "component",
+  images: "image",
+};
+
+export const KIND_SECTION: Record<Kind, Section> = {
+  component: "blocks",
+  image: "images",
+};
+
 export interface CatalogueView {
-  kind: Kind;
-  /** A level-2 taxonomy slug to narrow the gallery to one type. */
+  section: Section;
+  /** A level-2 taxonomy slug, carried in the path. */
   type?: string;
   /** Free text: a block's title and description, or an image's prompt. */
   q?: string;
@@ -13,12 +26,31 @@ export interface CatalogueView {
   page: number;
 }
 
-export interface CatalogueRequest extends CatalogueView {
-  /** The item whose dialog is open, when one is. */
-  item?: string;
+type SearchParams = Record<string, string | string[] | undefined>;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: string): boolean {
+  return UUID.test(value);
 }
 
-type SearchParams = Record<string, string | string[] | undefined>;
+export function sectionFromPath(pathname: string): Section {
+  return pathname.startsWith("/images") ? "images" : "blocks";
+}
+
+/** The type slug a path names, or `undefined` when it names a list or an item. */
+export function typeFromPath(
+  pathname: string,
+  section: Section,
+): string | undefined {
+  const segments = pathname.split("/").filter(Boolean);
+
+  if (segments[0] !== section || !segments[1] || isUuid(segments[1])) {
+    return undefined;
+  }
+
+  return segments[1];
+}
 
 function single(value: string | string[] | undefined): string | undefined {
   const first = Array.isArray(value) ? value[0] : value;
@@ -28,34 +60,31 @@ function single(value: string | string[] | undefined): string | undefined {
 }
 
 /**
- * Read the gallery's own URL.
+ * Read the catalogue's own URL.
  *
- * The address is the state: the kind, the filters, the page and the open item
- * all live in it, so any view can be linked to, reloaded, and returned to with
- * the browser's Back. Anything unrecognised falls back to the default view
- * rather than erroring — a link with a stale filter should still open a gallery.
+ * The section and the type are path segments, so a view can be linked to and the
+ * breadcrumb never has to ask the browser what is selected. Search and page are
+ * the two things that do not deserve a path of their own yet.
  */
-export function parseCatalogue(searchParams: SearchParams): CatalogueRequest {
+export function parseCatalogue(
+  section: Section,
+  searchParams: SearchParams,
+  typeSlug?: string,
+): CatalogueView {
   const page = Number(single(searchParams.page) ?? "1");
 
   return {
-    kind: single(searchParams.kind) === "image" ? "image" : "component",
-    type: single(searchParams.type),
+    section,
+    type: typeSlug,
     q: single(searchParams.q),
     page: Number.isInteger(page) && page >= 1 ? page : 1,
-    item: single(searchParams.item),
   };
 }
 
-function queryFor(view: CatalogueView): URLSearchParams {
+export function catalogueHref(view: CatalogueView): string {
+  const path = view.type ? `/${view.section}/${view.type}` : `/${view.section}`;
   const params = new URLSearchParams();
 
-  if (view.kind !== "component") {
-    params.set("kind", view.kind);
-  }
-  if (view.type) {
-    params.set("type", view.type);
-  }
   if (view.q) {
     params.set("q", view.q);
   }
@@ -63,22 +92,13 @@ function queryFor(view: CatalogueView): URLSearchParams {
     params.set("page", String(view.page));
   }
 
-  return params;
+  const query = params.toString();
+
+  return query ? `${path}?${query}` : path;
 }
 
-/** The same view, with no dialog open. */
-export function catalogueHref(view: CatalogueView): string {
-  const query = queryFor(view).toString();
-
-  return query ? `/?${query}` : "/";
-}
-
-/** The same view with one item's dialog open. */
-export function itemHref(view: CatalogueView, itemId: string): string {
-  const params = queryFor(view);
-  params.set("item", itemId);
-
-  return `/?${params.toString()}`;
+export function itemHref(section: Section, itemId: string): string {
+  return `/${section}/${itemId}`;
 }
 
 export function offsetFor(view: CatalogueView): number {

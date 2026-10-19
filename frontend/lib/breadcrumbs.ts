@@ -1,19 +1,21 @@
-export type Breadcrumb = {
+import type { Category } from "@/lib/vault/types";
+import { isUuid, SECTION_KIND, type Section } from "@/lib/vault/links";
+
+export type Crumb = {
   label: string;
-  href: string;
+  /** Absent on the page the visitor is already reading. */
+  href?: string;
 };
 
-/**
- * Labels for segments that do not read well when humanised. Everything else is
- * derived from the URL, so a new route gets a breadcrumb without any wiring.
- */
+const SECTION_LABELS: Record<Section, string> = {
+  blocks: "Blocks",
+  images: "Images",
+};
+
 const SEGMENT_LABELS: Record<string, string> = {
   profile: "Profile",
+  tasks: "Your tasks",
 };
-
-/** A uuid as it appears in a URL. */
-const UUID_SEGMENT =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function humanize(segment: string): string {
   return segment
@@ -24,45 +26,79 @@ function humanize(segment: string): string {
 }
 
 /**
- * The readable label for one segment.
+ * Turn a pathname into the trail under the header.
  *
- * A resource addressed by its id (a task, an item) has no name of its own in
- * the URL, and humanising thirty-six hex characters gives a crumb that pushes
- * everything else off a phone. The first eight characters are enough to tell two
- * of them apart and short enough to sit in a trail.
+ * There is no home page anymore, so the first crumb is the section itself:
+ * Blocks, Images, Your tasks. A type is the second crumb and the item pages stop
+ * at their section — their own title is the page's h1, and repeating it in the
+ * band above would be the same word twice.
  */
-function segmentLabel(segment: string): string {
-  if (SEGMENT_LABELS[segment]) {
-    return SEGMENT_LABELS[segment];
-  }
-
-  return UUID_SEGMENT.test(segment) ? segment.slice(0, 8) : humanize(segment);
-}
-
-/**
- * Turn a pathname into the trail of breadcrumbs shown under the header.
- *
- * The first crumb is always the home page, so there is a way back from any
- * nested page. The home page itself returns an empty trail: there is nothing to
- * trail back to, and callers use that to hide the breadcrumb.
- *
- * Note: dynamic segments (`[id]`) come out as their literal name; add them to
- * `SEGMENT_LABELS` when they are a word, or leave them to the short-id rule when
- * they are an id.
- */
-export function buildBreadcrumbs(pathname: string): Breadcrumb[] {
+export function buildBreadcrumbs(
+  pathname: string,
+  categories: Category[] = [],
+): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
 
   if (segments.length === 0) {
     return [];
   }
 
-  const trail: Breadcrumb[] = [{ label: "Home", href: "/" }];
+  const [first, second] = segments;
+
+  if (first === "blocks" || first === "images") {
+    const section = first as Section;
+    const label = SECTION_LABELS[section];
+
+    if (!second) {
+      return [{ label }];
+    }
+
+    if (isUuid(second)) {
+      // An item: the band keeps the way back, and the page's own h1 is the item.
+      return [{ label, href: `/${section}` }];
+    }
+
+    const kind = SECTION_KIND[section];
+    const type = categories.find(
+      (category) =>
+        category.kind === kind &&
+        category.level === 2 &&
+        category.slug === second,
+    );
+
+    return [
+      { label, href: `/${section}` },
+      { label: type?.name ?? humanize(second) },
+    ];
+  }
+
+  if (first === "tasks") {
+    if (!second) {
+      return [{ label: "Your tasks" }];
+    }
+
+    return [
+      { label: "Your tasks", href: "/tasks" },
+      { label: isUuid(second) ? second.slice(0, 8) : humanize(second) },
+    ];
+  }
+
+  if (SEGMENT_LABELS[first]) {
+    return [{ label: SEGMENT_LABELS[first] }];
+  }
+
+  // Anything else is a route this file has not met yet; the URL is still the
+  // source of truth, so it gets a readable trail rather than nothing.
+  const trail: Crumb[] = [];
   let href = "";
 
   for (const segment of segments) {
     href += `/${segment}`;
-    trail.push({ label: segmentLabel(segment), href });
+    trail.push({ label: humanize(segment), href });
+  }
+
+  if (trail.length > 0) {
+    trail[trail.length - 1] = { label: trail[trail.length - 1].label };
   }
 
   return trail;

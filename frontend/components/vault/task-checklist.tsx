@@ -37,66 +37,68 @@ export function TaskChecklist({
   className?: string;
 }) {
   return (
-    <table
-      className={cn("type-meta w-full border-collapse text-left", className)}
-    >
-      <caption className="sr-only">
-        The steps this task has run, in order
-      </caption>
+    <div className={cn("overflow-x-auto rounded-xl border", className)}>
+      <table className="w-full border-collapse text-left text-sm">
+        <caption className="sr-only">
+          The steps this task has run, in order
+        </caption>
 
-      <thead>
-        <tr className="border-rule-strong border-b">
-          <th scope="col" className="type-label text-ink-faint py-2 pr-4">
-            №
-          </th>
-          <th scope="col" className="type-label text-ink-faint py-2 pr-4">
-            Step
-          </th>
-          <th scope="col" className="type-label text-ink-faint py-2 pr-4">
-            Status
-          </th>
-          <th scope="col" className="type-label text-ink-faint py-2 text-right">
-            Took
-          </th>
-        </tr>
-      </thead>
+        <thead>
+          <tr className="bg-muted/40 border-b">
+            {["№", "Step", "Status", "Took"].map((label) => (
+              <th
+                key={label}
+                scope="col"
+                className={cn(
+                  "text-muted-foreground px-3 py-2 text-xs font-medium tracking-wide uppercase",
+                  label === "Took" && "text-right",
+                )}
+              >
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
 
-      <tbody>
-        {steps.map((step, index) => {
-          const detail = detailLine(step.detail);
+        <tbody>
+          {steps.map((step, index) => {
+            const detail = detailLine(step.detail);
 
-          return (
-            <tr
-              key={step.id}
-              className={cn(
-                "border-rule border-b align-top",
-                index % 2 === 1 ? "bg-panel-sunken" : "bg-panel",
-              )}
-            >
-              <td className="text-ink-faint py-2.5 pr-4 tabular-nums">
-                {step.index + 1}
-              </td>
-              <td className="text-ink py-2.5 pr-4">
-                {step.name}
-                {detail ? (
-                  <span className="text-ink-faint mt-1 block">{detail}</span>
-                ) : null}
-              </td>
-              <td className="py-2.5 pr-4">
-                <StatusWord
-                  label={STEP_STATUS_LABELS[step.status]}
-                  running={step.status === "running"}
-                  failed={step.status === "failed"}
-                  muted={step.status === "pending"}
-                />
-              </td>
-              <td className="text-ink-soft py-2.5 text-right tabular-nums">
-                {elapsed(step.started_at, step.finished_at)}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+            return (
+              <tr
+                key={step.id}
+                className={cn(
+                  "border-b align-top last:border-b-0",
+                  index % 2 === 1 ? "bg-muted/20" : "bg-background",
+                )}
+              >
+                <td className="text-muted-foreground px-3 py-2.5 tabular-nums">
+                  {step.index + 1}
+                </td>
+                <td className="px-3 py-2.5">
+                  {step.name}
+                  {detail ? (
+                    <span className="text-muted-foreground mt-1 block text-xs">
+                      {detail}
+                    </span>
+                  ) : null}
+                </td>
+                <td className="px-3 py-2.5">
+                  <StatusWord
+                    label={STEP_STATUS_LABELS[step.status]}
+                    running={step.status === "running"}
+                    failed={step.status === "failed"}
+                    muted={step.status === "pending"}
+                  />
+                </td>
+                <td className="text-muted-foreground px-3 py-2.5 text-right tabular-nums">
+                  {elapsed(step.started_at, step.finished_at)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

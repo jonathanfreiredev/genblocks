@@ -17,9 +17,26 @@ function Group({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <h2 className="type-label text-ink-faint">{label}</h2>
+    <section className="flex flex-col gap-2">
+      <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        {label}
+      </h2>
       {children}
+    </section>
+  );
+}
+
+function Row({
+  label,
+  children,
+}: {
+  label: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-t py-2.5 first:border-t-0">
+      <dt className="text-muted-foreground min-w-0 text-sm">{label}</dt>
+      <dd className="shrink-0">{children}</dd>
     </div>
   );
 }
@@ -27,138 +44,149 @@ function Group({
 /**
  * The evidence half of an item: what the judge decided and how it decided it.
  *
- * The same panel serves a block, an image and a task — the rubric differs, the
- * shape does not — because the whole claim of the product is that every artifact
- * carries the numbers it earned, in one form a reader learns once.
- *
- * ``showVerdict`` is for the library, where everything on show has already
- * passed: a stamp that always says PASS is decoration, and the item being there
- * is the verdict. A task page keeps it, because a run there can be a refusal.
- *
- * ``action`` is the panel's own control, at the head of the panel rather than
- * floating over the content: the item view puts its collapse there, and the task
- * page passes nothing.
+ * The same panel serves a block, an image and a task. `details` is what the item
+ * view puts above the numbers — description, category, date, model and trace —
+ * so the panel itself does not repeat facts the page already knows. A task page
+ * passes nothing and gets the original header, because a run can be a refusal
+ * and its verdict belongs on screen.
  */
 export function EvidencePanel({
   kind,
   judged,
   showVerdict = true,
+  showModel = true,
+  showTrace = true,
+  details,
   action,
+  className,
 }: {
   kind: Kind;
   judged: Judged;
   showVerdict?: boolean;
+  showModel?: boolean;
+  showTrace?: boolean;
+  details?: React.ReactNode;
   action?: React.ReactNode;
+  className?: string;
 }) {
   const stamp = stampFor(judged.verdict);
   const rows = scoresFor(kind, judged.scores);
   const harness = checkRows(judged.checks);
-  // Read at render time, not at module load: the panel is built once and the
-  // host is a build-time value, and a test that stubs it should see the link.
   const traceHost = process.env.NEXT_PUBLIC_LANGFUSE_HOST?.replace(/\/+$/, "");
   const traceUrl =
     traceHost && judged.traceId ? `${traceHost}/trace/${judged.traceId}` : null;
+  const header = Boolean(action || showVerdict || showModel);
 
   return (
-    <div className="bg-panel flex flex-col gap-8 p-6">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          {action}
-          {showVerdict ? (
-            stamp ? (
-              <VerdictStamp verdict={stamp} />
-            ) : (
-              <span className="type-label text-ink-faint">Not judged</span>
-            )
+    <div
+      className={cn(
+        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border p-4",
+        className,
+      )}
+    >
+      {header ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            {action}
+            {showVerdict ? (
+              stamp ? (
+                <VerdictStamp verdict={stamp} />
+              ) : (
+                <span className="text-muted-foreground text-xs">
+                  Not judged
+                </span>
+              )
+            ) : null}
+          </div>
+          {showModel ? (
+            <p className="text-muted-foreground text-xs">
+              {judged.model ?? "No model ran"}
+              {judged.rubricVersion ? ` · ${judged.rubricVersion}` : null}
+            </p>
           ) : null}
         </div>
+      ) : null}
 
-        <p className="type-meta text-ink-faint">
-          {/* "Unknown" would read as a gap in the record. A null model is not
-              unknown — it is a fact: nothing generated this one. */}
-          {judged.model ?? "No model ran"}
-          {judged.rubricVersion ? ` · ${judged.rubricVersion}` : null}
-        </p>
-      </div>
+      {details}
 
       <Group label="Judge">
         {rows.length > 0 ? (
-          <dl className="mt-3 flex flex-col">
+          <dl className="flex flex-col">
             {rows.map(({ dimension, value }) => (
-              <div
-                key={dimension.key}
-                className="border-rule flex items-baseline justify-between gap-6 border-t py-2.5"
-              >
-                <dt className="type-meta text-ink-soft">{dimension.label}</dt>
-                <dd>
-                  <ScoreReadout value={value} />
-                </dd>
-              </div>
+              <Row key={dimension.key} label={dimension.label}>
+                <ScoreReadout value={value} />
+              </Row>
             ))}
           </dl>
         ) : (
-          <p className="type-meta text-ink-soft mt-3">
+          <p className="text-muted-foreground text-sm">
             No scores yet. The judge writes them once an attempt is finished.
           </p>
         )}
       </Group>
 
-      <Group label="Trace">
-        <div className="mt-2 flex items-center justify-between gap-4">
-          {traceUrl ? (
-            <a
-              href={traceUrl}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Open the trace in Langfuse"
-              className="type-meta text-ink-soft hover:text-ink truncate underline-offset-4 hover:underline"
-            >
-              {judged.traceId}
-            </a>
-          ) : (
-            <p className="type-meta text-ink-soft truncate">
-              {judged.traceId ?? "Not recorded"}
-            </p>
-          )}
-          {judged.traceId ? (
-            <CopyButton text={judged.traceId} idleLabel="Copy the trace id" />
-          ) : null}
-        </div>
-      </Group>
+      {showTrace ? (
+        <Group label="Trace">
+          <div className="flex items-center justify-between gap-3">
+            {traceUrl ? (
+              <a
+                href={traceUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open the trace in Langfuse"
+                className="text-muted-foreground hover:text-foreground truncate text-xs underline-offset-4 hover:underline"
+              >
+                {judged.traceId}
+              </a>
+            ) : (
+              <p className="text-muted-foreground truncate text-xs">
+                {judged.traceId ?? "Not recorded"}
+              </p>
+            )}
+            {judged.traceId ? (
+              <CopyButton text={judged.traceId} idleLabel="Copy the trace id" />
+            ) : null}
+          </div>
+        </Group>
+      ) : null}
 
       {harness.length > 0 ? (
         <Group label="Harness">
-          <dl className="mt-3 flex flex-col">
+          <dl className="flex flex-col">
             {harness.map((row) => (
-              <div
+              <Row
                 key={row.label}
-                className="border-rule flex items-baseline justify-between gap-6 border-t py-2.5"
+                label={
+                  <>
+                    {row.label}
+                    {row.detail && !row.ok ? (
+                      <span className="text-muted-foreground/80 mt-1 block max-w-[40ch] text-xs">
+                        {row.detail}
+                      </span>
+                    ) : null}
+                  </>
+                }
               >
-                <dt className="type-meta text-ink-soft">
-                  {row.label}
-                  {row.detail && !row.ok ? (
-                    <span className="text-ink-faint mt-1 block max-w-[42ch]">
-                      {row.detail}
-                    </span>
-                  ) : null}
-                </dt>
-                <dd
+                <span
                   className={cn(
-                    "type-label shrink-0",
-                    row.ok ? "text-ink-faint" : "text-ink",
+                    "text-sm font-medium",
+                    row.ok ? "text-muted-foreground" : "text-destructive",
                   )}
                 >
                   {row.ok ? "ok" : "failed"}
-                </dd>
-              </div>
+                </span>
+              </Row>
             ))}
           </dl>
 
           {judged.checks && judged.checks.violations.length > 0 ? (
-            <ul className="border-rule mt-3 flex flex-col gap-1.5 border-t pt-3">
+            <ul className="flex flex-col gap-1.5 border-t pt-3">
               {judged.checks.violations.map((violation) => (
-                <li key={violation.id} className="type-meta text-ink-soft">
-                  <span className="text-ink">{violation.id}</span>
+                <li
+                  key={violation.id}
+                  className="text-muted-foreground text-xs"
+                >
+                  <span className="text-foreground">{violation.id}</span>
                   {violation.impact ? ` · ${violation.impact}` : null}
                   {violation.nodes > 0 ? ` · ${violation.nodes} nodes` : null}
                 </li>

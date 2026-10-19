@@ -71,9 +71,9 @@ describe("TaskChecklist", () => {
     expect(screen.getAllByText("—")).toHaveLength(2);
   });
 
-  test("reserves the animated caret for the step that is running", () => {
+  test("reserves the spinner for the step that is running", () => {
     const { container } = render(<TaskChecklist steps={STEPS} />);
 
-    expect(container.querySelectorAll(".animate-caret")).toHaveLength(1);
+    expect(container.querySelectorAll(".animate-spin")).toHaveLength(1);
   });
 });

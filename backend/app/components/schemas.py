@@ -27,6 +27,12 @@ class ComponentSummary(BaseModel):
     description: str
     category_id: uuid.UUID
     created_at: datetime
+    # The gallery shows the maker under the thumbnail, and the maker is a user,
+    # not a field on the block. Both are filled by the router, not by the ORM row.
+    author: str | None = None
+    # The picture the block was published from. The card is a thumbnail, so the
+    # list needs the render without loading the attempt it lives on.
+    screenshot_path: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -6,86 +6,99 @@ import {
   itemHref,
   offsetFor,
   parseCatalogue,
+  sectionFromPath,
+  typeFromPath,
 } from "@/lib/vault/links";
 
 describe("parseCatalogue", () => {
-  test("defaults to the blocks, first page, no filters", () => {
-    expect(parseCatalogue({})).toEqual({
-      kind: "component",
+  test("reads the section from the route, not the query", () => {
+    expect(parseCatalogue("blocks", {})).toEqual({
+      section: "blocks",
       type: undefined,
       q: undefined,
       page: 1,
-      item: undefined,
     });
   });
 
-  test("reads the whole view out of the address", () => {
+  test("carries the type slug, the search and the page", () => {
     expect(
-      parseCatalogue({
-        kind: "image",
-        type: "photography",
-        q: "harbour",
-        page: "3",
-        item: "8f3a",
-      }),
+      parseCatalogue("images", { q: "harbour", page: "3" }, "photography"),
     ).toEqual({
-      kind: "image",
+      section: "images",
       type: "photography",
       q: "harbour",
       page: 3,
-      item: "8f3a",
     });
   });
 
   test("takes the first value when a parameter repeats", () => {
-    expect(parseCatalogue({ q: ["first", "second"] }).q).toBe("first");
+    expect(parseCatalogue("blocks", { q: ["first", "second"] }).q).toBe(
+      "first",
+    );
   });
 
-  test("falls back to the default view rather than failing on nonsense", () => {
-    expect(parseCatalogue({ kind: "banana" }).kind).toBe("component");
-    expect(parseCatalogue({ page: "0" }).page).toBe(1);
-    expect(parseCatalogue({ page: "-4" }).page).toBe(1);
-    expect(parseCatalogue({ page: "two" }).page).toBe(1);
-    expect(parseCatalogue({ q: "   " }).q).toBeUndefined();
+  test("falls back rather than failing on nonsense", () => {
+    expect(parseCatalogue("blocks", { page: "0" }).page).toBe(1);
+    expect(parseCatalogue("blocks", { page: "-4" }).page).toBe(1);
+    expect(parseCatalogue("blocks", { page: "two" }).page).toBe(1);
+    expect(parseCatalogue("blocks", { q: "   " }).q).toBeUndefined();
   });
 });
 
 describe("hrefs", () => {
-  test("leaves the default view bare", () => {
-    expect(catalogueHref({ kind: "component", page: 1 })).toBe("/");
+  test("leaves a bare section bare", () => {
+    expect(catalogueHref({ section: "blocks", page: 1 })).toBe("/blocks");
+    expect(catalogueHref({ section: "images", page: 1 })).toBe("/images");
   });
 
-  test("carries the filters and drops the first page", () => {
+  test("puts a category in the path and the search in the query", () => {
     expect(
-      catalogueHref({ kind: "image", type: "scene", q: "dawn", page: 1 }),
-    ).toBe("/?kind=image&type=scene&q=dawn");
+      catalogueHref({ section: "images", type: "scene", q: "dawn", page: 1 }),
+    ).toBe("/images/scene?q=dawn");
   });
 
   test("adds the page only when it is not the first", () => {
-    expect(catalogueHref({ kind: "component", page: 2 })).toBe("/?page=2");
+    expect(catalogueHref({ section: "blocks", page: 2 })).toBe(
+      "/blocks?page=2",
+    );
   });
 
-  test("opens an item inside the view it was found in", () => {
-    expect(itemHref({ kind: "image", page: 1 }, "abc")).toBe(
-      "/?kind=image&item=abc",
-    );
+  test("an item is an address, not a query", () => {
+    expect(itemHref("images", "abc")).toBe("/images/abc");
+    expect(itemHref("blocks", "abc")).toBe("/blocks/abc");
   });
 
   test("round-trips through the parser", () => {
-    const view = { kind: "image" as const, type: "scene", q: "dawn", page: 3 };
-    const parsed = parseCatalogue(
-      Object.fromEntries(
-        new URL(catalogueHref(view), "https://x").searchParams,
-      ),
-    );
+    const parsed = parseCatalogue("images", { q: "dawn", page: "3" }, "scene");
 
-    expect(parsed).toEqual({ ...view, item: undefined });
+    expect(parsed).toEqual({
+      section: "images",
+      type: "scene",
+      q: "dawn",
+      page: 3,
+    });
+  });
+});
+
+describe("where the URL is", () => {
+  test("reads the section from the first segment", () => {
+    expect(sectionFromPath("/blocks")).toBe("blocks");
+    expect(sectionFromPath("/images/scene")).toBe("images");
+    expect(sectionFromPath("/tasks")).toBe("blocks");
+  });
+
+  test("reads a type, but not an item id", () => {
+    expect(typeFromPath("/blocks/hero", "blocks")).toBe("hero");
+    expect(
+      typeFromPath("/blocks/0199f1ab-2c3d-4e5f-8a9b-0c1d2e3f4a5b", "blocks"),
+    ).toBeUndefined();
+    expect(typeFromPath("/images", "images")).toBeUndefined();
   });
 });
 
 describe("offsetFor", () => {
   test("pages from zero", () => {
-    expect(offsetFor({ kind: "component", page: 1 })).toBe(0);
-    expect(offsetFor({ kind: "component", page: 4 })).toBe(3 * PAGE_SIZE);
+    expect(offsetFor({ section: "blocks", page: 1 })).toBe(0);
+    expect(offsetFor({ section: "blocks", page: 4 })).toBe(3 * PAGE_SIZE);
   });
 });

@@ -4,19 +4,56 @@ Every block here has been through the judge; that is what makes the vault public
 """
 
 import uuid
+from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.components.models import Component
 from app.components.schemas import ComponentListQuery, ComponentRead, ComponentSummary
-from app.components.service import get_component, get_component_by_slug, list_components
+from app.components.service import (
+    get_component,
+    get_component_by_slug,
+    list_components,
+    renders,
+)
 from app.db.session import get_async_db_session
 from app.generations.schemas import GenerationRead
 from app.generations.service import list_generations
 from app.pagination import OffsetPage
+from app.users.service import display_names
 
 components_router = APIRouter(prefix="/components", tags=["components"])
+
+
+async def _summaries(
+    session: AsyncSession, components: Sequence[Component]
+) -> list[ComponentSummary]:
+    """The list shape, with the two facts that live outside the block's row."""
+    names = await display_names(session, ids=[one.created_by for one in components])
+    shots = await renders(session, ids=[one.id for one in components])
+
+    return [
+        ComponentSummary.model_validate(component).model_copy(
+            update={
+                "author": names.get(component.created_by) if component.created_by else None,
+                "screenshot_path": shots.get(component.id),
+            }
+        )
+        for component in components
+    ]
+
+
+async def _read(session: AsyncSession, component: Component) -> ComponentRead:
+    (summary,) = await _summaries(session, [component])
+
+    return ComponentRead.model_validate(component).model_copy(
+        update={
+            "author": summary.author,
+            "screenshot_path": summary.screenshot_path,
+        }
+    )
 
 
 @components_router.get("", response_model=OffsetPage[ComponentSummary])
@@ -35,7 +72,7 @@ async def read_components(
     )
 
     return OffsetPage(
-        items=[ComponentSummary.model_validate(component) for component in components],
+        items=await _summaries(session, components),
         total=total,
         limit=params.limit,
         offset=params.offset,
@@ -52,7 +89,7 @@ async def read_component_by_slug(
     if component is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found.")
 
-    return ComponentRead.model_validate(component)
+    return await _read(session, component)
 
 
 @components_router.get("/{component_id}", response_model=ComponentRead)
@@ -65,7 +102,7 @@ async def read_component(
     if component is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found.")
 
-    return ComponentRead.model_validate(component)
+    return await _read(session, component)
 
 
 @components_router.get("/{component_id}/generations", response_model=list[GenerationRead])

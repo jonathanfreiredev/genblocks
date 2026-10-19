@@ -1,35 +1,49 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * The vault's shell: headings, navigation and the one action.
+ * The shell: where the app lands, how the two sections swap, and the one action.
  *
- * Only what is below "an item opens" needs data behind it; everything above
- * holds whether or not an API is answering, which is the point of the page
- * rendering its own frame before it reads anything.
+ * The gallery itself is covered in vault.spec.ts, which needs the seeded rows.
+ * These hold with an empty vault too, which is the point of a shell that does not
+ * wait for data to draw itself.
  */
-test("home page opens on the blocks", async ({ page }) => {
+
+test("the default route lands on the blocks", async ({ page }) => {
   await page.goto("/");
 
+  await expect(page).toHaveURL(/\/blocks$/);
   await expect(
-    page.getByRole("main").getByRole("heading", { level: 1 }),
-  ).toHaveText("Blocks");
+    page.getByRole("link", { name: "Blocks", exact: true }).first(),
+  ).toBeVisible();
 });
 
-test("the kinds swap the sheet", async ({ page }) => {
-  await page.goto("/");
+test("the sections swap from the sidebar", async ({ page }) => {
+  await page.goto("/blocks");
 
-  await page.getByRole("link", { name: "Images", exact: true }).click();
+  await page.getByRole("link", { name: "Images", exact: true }).first().click();
 
-  await expect(page).toHaveURL(/kind=image/);
+  await expect(page).toHaveURL(/\/images$/);
   await expect(
-    page.getByRole("main").getByRole("heading", { level: 1 }),
-  ).toHaveText("Images");
+    page.getByRole("navigation", { name: "Breadcrumb" }).getByText("Images"),
+  ).toBeVisible();
+});
+
+test("the search is a field in a dialog, opened from the header", async ({
+  page,
+}) => {
+  await page.goto("/blocks");
+
+  await page.getByRole("button", { name: "search" }).first().click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("textbox")).toBeVisible();
 });
 
 test("the generator dialog opens and asks a visitor to sign in", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/blocks");
 
   await page.getByRole("button", { name: "Generate with AI" }).click();
 

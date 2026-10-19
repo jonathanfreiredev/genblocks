@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -6,6 +7,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.claims import TokenClaims
 from app.users.models import User
+
+
+async def display_names(
+    session: AsyncSession, *, ids: Sequence[uuid.UUID | None]
+) -> dict[uuid.UUID, str]:
+    """The public name of each author, by user id.
+
+    Only the display name: an email is the account's, not the gallery's, and a
+    profile without a name stays anonymous rather than leaking the address a
+    visitor would otherwise never see.
+    """
+    wanted = [one for one in ids if one is not None]
+    if not wanted:
+        return {}
+
+    found = await session.execute(
+        select(User.id, User.full_name).where(User.id.in_(wanted), User.full_name.is_not(None))
+    )
+
+    return {user_id: name for user_id, name in found.all() if name}
 
 
 async def get_or_create_user(session: AsyncSession, claims: TokenClaims) -> User:

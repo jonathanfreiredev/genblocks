@@ -47,6 +47,10 @@ export interface ComponentSummary {
   description: string;
   category_id: string;
   created_at: string;
+  /** The maker's public name; null when nobody claimed it. */
+  author: string | null;
+  /** The render the block was published from, when the run left one. */
+  screenshot_path: string | null;
 }
 
 export interface Component extends ComponentSummary {
@@ -143,6 +147,8 @@ export interface Image {
   height: number;
   category_id: string;
   created_by: string | null;
+  /** The maker's public name; null for the house. */
+  author: string | null;
   license: string;
   model: string | null;
   scores: Record<string, number> | null;

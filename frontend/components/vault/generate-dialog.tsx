@@ -1,5 +1,6 @@
 "use client";
 
+import { SparklesIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -133,7 +134,9 @@ function Turn({
   return (
     <Message align={align}>
       <MessageContent>
-        <span className="type-label text-ink-faint">{from}</span>
+        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+          {from}
+        </span>
         <Bubble variant={align === "end" ? "muted" : "ghost"} align={align}>
           <BubbleContent className="whitespace-pre-wrap">
             {children}
@@ -428,20 +431,30 @@ export function GenerateDialog({
       }}
     >
       <DialogTrigger
-        render={<Button className={cn(className, "cursor-pointer")} />}
+        render={
+          <Button
+            className={cn(className, "cursor-pointer")}
+            aria-label="Generate with AI"
+          />
+        }
       >
-        Generate with AI
+        <SparklesIcon data-icon="inline-start" />
+        <span className="group-data-[collapsible=icon]:hidden">
+          Generate with AI
+        </span>
       </DialogTrigger>
 
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-4 sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="type-title">Generate a block</DialogTitle>
+          <DialogTitle className="text-lg font-semibold tracking-tight">
+            Generate a block
+          </DialogTitle>
         </DialogHeader>
 
         <div
           ref={viewport}
           onScroll={onScroll}
-          className="border-hairline flex min-h-24 flex-1 flex-col gap-4 overflow-y-auto border-y py-4"
+          className="border-border flex min-h-24 flex-1 flex-col gap-4 overflow-y-auto border-y py-4"
         >
           <MessageGroup>
             <Turn from="Generator">{signedIn ? GREETING : VISITOR}</Turn>
@@ -455,7 +468,7 @@ export function GenerateDialog({
                   >
                     {turn.from === "agent" && turn.text === "" ? (
                       <span
-                        className="text-ink-faint animate-pulse"
+                        className="text-muted-foreground animate-pulse"
                         aria-label="The agent is answering"
                       >
                         …
@@ -471,7 +484,7 @@ export function GenerateDialog({
           <SuggestionRail items={suggestions} />
 
           {line ? (
-            <p className="type-label text-ink-faint flex items-center gap-2">
+            <p className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wide uppercase">
               <span
                 className={cn(
                   "bg-coral size-1.5 shrink-0 rounded-full",
@@ -492,12 +505,14 @@ export function GenerateDialog({
         ) : null}
 
         {task ? (
-          <div className="border-hairline flex flex-col gap-3 border-t pt-4">
+          <div className="border-border flex flex-col gap-3 border-t pt-4">
             <div
               className="flex items-baseline justify-between gap-4"
               role="status"
             >
-              <span className="type-label text-ink-faint">Checklist</span>
+              <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                Checklist
+              </span>
               <StatusWord
                 label={TASK_STATUS_LABELS[task.status]}
                 running={task.status === "running"}
@@ -506,14 +521,14 @@ export function GenerateDialog({
               />
             </div>
 
-            <p className="type-body-sm text-ink-muted">
+            <p className="text-muted-foreground text-sm">
               {task.cached ? CACHED_LINE : QUEUED_LINES[task.status]}
             </p>
 
             {task.steps.length > 0 ? (
               <TaskChecklist steps={task.steps} />
             ) : (
-              <p className="type-meta text-ink-muted">
+              <p className="text-muted-foreground text-xs">
                 No worker has opened this task yet. Its steps are written when
                 one claims it.
               </p>
@@ -557,7 +572,7 @@ export function GenerateDialog({
         ) : null}
 
         {signedIn && task !== null ? (
-          <p className="type-meta text-ink-muted">
+          <p className="text-muted-foreground text-xs">
             The conversation ends where the task starts: from here the checklist
             is the record, and it keeps writing itself once this dialog closes.
           </p>
@@ -589,7 +604,7 @@ export function GenerateDialog({
 
             {task.component_id ? (
               <Link
-                href={`/?kind=component&item=${task.component_id}`}
+                href={`/blocks/${task.component_id}`}
                 prefetch={false}
                 className={buttonVariants({ variant: "link" })}
               >

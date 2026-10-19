@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment } from "react";
-import { House } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import {
@@ -13,50 +12,42 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { buildBreadcrumbs } from "@/lib/breadcrumbs";
+import type { Category } from "@/lib/vault/types";
 
 /**
- * Wayfinding bar sitting directly under the header.
+ * The muted band under the header.
  *
- * It gets its own bordered band so it reads as chrome and never competes with
- * the page's own typography. The trail is derived from the current path, so a
- * new route gets a breadcrumb without any wiring, and it is hidden on the home
- * page, where there is nothing to trail back to.
+ * It is the only place the taxonomy is named outside the sidebar, so it answers
+ * "where am I" without competing with the page. On an item page it stops at the
+ * section: the h1 right below already says the item's name.
  */
-export function Breadcrumbs() {
+export function Breadcrumbs({ categories }: { categories: Category[] }) {
   const pathname = usePathname();
-  const trail = buildBreadcrumbs(pathname);
+  const trail = buildBreadcrumbs(pathname, categories);
 
-  if (trail.length <= 1) {
+  if (trail.length === 0) {
     return null;
   }
 
   return (
-    <div className="pt-[var(--header-height)]">
-      <Breadcrumb className="bg-muted/40 w-full">
-        <BreadcrumbList className="w-full px-6 py-2.5">
+    <div className="bg-muted/40 border-b">
+      <Breadcrumb className="px-3 py-2 md:px-4">
+        <BreadcrumbList>
           {trail.map((crumb, index) => {
-            const isCurrentPage = index === trail.length - 1;
-            const isHome = crumb.href === "/";
+            const isCurrent = index === trail.length - 1;
 
             return (
-              <Fragment key={crumb.href}>
+              <Fragment key={`${crumb.label}-${index}`}>
                 <BreadcrumbItem>
-                  {isCurrentPage ? (
+                  {isCurrent || !crumb.href ? (
                     <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
                   ) : (
                     <BreadcrumbLink href={crumb.href}>
-                      {isHome ? (
-                        <>
-                          <House className="size-3.5" aria-hidden="true" />
-                          <span className="sr-only">Home</span>
-                        </>
-                      ) : (
-                        crumb.label
-                      )}
+                      {crumb.label}
                     </BreadcrumbLink>
                   )}
                 </BreadcrumbItem>
-                {!isCurrentPage ? <BreadcrumbSeparator /> : null}
+                {!isCurrent ? <BreadcrumbSeparator /> : null}
               </Fragment>
             );
           })}

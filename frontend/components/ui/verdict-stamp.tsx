@@ -9,12 +9,12 @@ const VERDICT_LABELS = {
 } as const;
 
 const verdictStampVariants = cva(
-  "inline-flex w-fit shrink-0 items-center rounded-sm border px-1.5 py-0.5 type-label",
+  "inline-flex w-fit shrink-0 items-center rounded-md border px-2 py-0.5 text-xs font-medium",
   {
     variants: {
       verdict: {
-        pass: "border-verdict-pass/40 bg-verdict-pass-soft text-verdict-pass",
-        fail: "border-verdict-fail/40 bg-verdict-fail-soft text-verdict-fail",
+        pass: "border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+        fail: "border-destructive/25 bg-destructive/10 text-destructive",
       },
     },
     defaultVariants: {
@@ -23,10 +23,6 @@ const verdictStampVariants = cva(
   },
 );
 
-// The judge's verdict as a rubber stamp: uppercase mono, hairline border, soft
-// tint. Never a pill, never an icon, and never one of the brand spot inks — the
-// pair is functional, so a rejection can't be mistaken for an action. There is no
-// third stamp: a block is published or it is not, and there is no retry to draw.
 function VerdictStamp({
   className,
   verdict,

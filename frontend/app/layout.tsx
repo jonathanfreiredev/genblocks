@@ -1,28 +1,19 @@
 import type { Metadata } from "next";
-import { Hanken_Grotesk, Space_Grotesk, Space_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toast";
-import { Footer } from "@/components/footer";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-// Display: the one monumental declaration a page gets. Tight, slightly
-// mechanical, almost monospaced in spirit.
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-display",
-  subsets: ["latin"],
-});
-
-// Body and UI, including every heading that is not the display.
-const hankenGrotesk = Hanken_Grotesk({
+// The shadcn preset's typeface: one neutral sans for everything, one mono for
+// code and figures. Identity, if it comes, is a later decision.
+const geist = Geist({
   variable: "--font-sans",
   subsets: ["latin"],
 });
 
-// Technical labels, metadata, scores, code. Not a variable font, so the two
-// weights the type scale uses are declared explicitly.
-const spaceMono = Space_Mono({
+const geistMono = Geist_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
-  weight: ["400", "700"],
 });
 
 export const metadata: Metadata = {
@@ -69,7 +60,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${spaceGrotesk.variable} ${hankenGrotesk.variable} ${spaceMono.variable} h-full antialiased`}
+      className={`${geist.variable} ${geistMono.variable} h-full antialiased`}
       // The theme script adds `dark` before hydration, so the class differs from
       // the server output on purpose. This suppresses only that one warning.
       suppressHydrationWarning
@@ -82,10 +73,7 @@ export default function RootLayout({
             __html: `(function(){try{var s=localStorage.getItem("genblocks-theme");var d=s?s==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d)}catch(e){}})();`,
           }}
         />
-        {/* Around everything on purpose: the theme has to be applied before the
-            first paint, and this is the only script the app ships. */}
-        {children}
-        <Footer />
+        <TooltipProvider>{children}</TooltipProvider>
         <Toaster />
       </body>
     </html>

@@ -2,8 +2,8 @@ import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/utils";
 
-// The judge's score: tabular mono numerals, right-aligned, over a hairline bar
-// that reads the value on the track. Data — not a donut, not a ring, not a gauge.
+// The judge's score: tabular numerals, right-aligned, with a short track under
+// it. A figure to compare down a column, not a gauge.
 function ScoreReadout({
   className,
   value,
@@ -19,16 +19,21 @@ function ScoreReadout({
       className={cn("flex flex-col items-end gap-1.5", className)}
       {...props}
     >
-      <span className="type-score">{clamped}</span>
+      <span className="text-lg leading-none font-semibold tabular-nums">
+        {clamped}
+      </span>
       <span
         role="meter"
         aria-label="Score"
         aria-valuenow={clamped}
         aria-valuemin={0}
         aria-valuemax={max}
-        className="bg-hairline block h-px w-16"
+        className="bg-muted block h-1 w-14 overflow-hidden rounded-full"
       >
-        <span className="bg-ink block h-px" style={{ width: `${percent}%` }} />
+        <span
+          className="bg-foreground block h-full rounded-full"
+          style={{ width: `${percent}%` }}
+        />
       </span>
     </div>
   );

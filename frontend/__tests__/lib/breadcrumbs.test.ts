@@ -1,48 +1,57 @@
 import { describe, expect, test } from "vitest";
 
 import { buildBreadcrumbs } from "@/lib/breadcrumbs";
+import type { Category } from "@/lib/vault/types";
+
+const CATEGORIES: Category[] = [
+  {
+    id: "hero",
+    parent_id: "components",
+    kind: "component",
+    slug: "hero",
+    name: "Hero",
+    level: 2,
+  },
+];
 
 describe("buildBreadcrumbs", () => {
-  test("returns nothing for the home page", () => {
+  test("has no trail at the root, which redirects", () => {
     expect(buildBreadcrumbs("/")).toEqual([]);
   });
 
-  test("starts at home and ends at the current page", () => {
-    expect(buildBreadcrumbs("/profile")).toEqual([
-      { label: "Home", href: "/" },
-      { label: "Profile", href: "/profile" },
+  test("the section is the first and current crumb", () => {
+    expect(buildBreadcrumbs("/blocks")).toEqual([{ label: "Blocks" }]);
+    expect(buildBreadcrumbs("/images")).toEqual([{ label: "Images" }]);
+  });
+
+  test("a type hangs off the section", () => {
+    expect(buildBreadcrumbs("/blocks/hero", CATEGORIES)).toEqual([
+      { label: "Blocks", href: "/blocks" },
+      { label: "Hero" },
     ]);
   });
 
-  test("builds cumulative links for nested routes", () => {
-    expect(buildBreadcrumbs("/settings/security")).toEqual([
-      { label: "Home", href: "/" },
-      { label: "Settings", href: "/settings" },
-      { label: "Security", href: "/settings/security" },
-    ]);
+  test("an item stops at its section: the h1 below names it", () => {
+    expect(
+      buildBreadcrumbs(
+        "/blocks/0199f1ab-2c3d-4e5f-8a9b-0c1d2e3f4a5b",
+        CATEGORIES,
+      ),
+    ).toEqual([{ label: "Blocks", href: "/blocks" }]);
   });
 
-  test("humanises multi-word segments", () => {
-    expect(buildBreadcrumbs("/my-account")).toEqual([
-      { label: "Home", href: "/" },
-      { label: "My Account", href: "/my-account" },
-    ]);
+  test("tasks keep the old trail, with a short id", () => {
+    expect(buildBreadcrumbs("/tasks")).toEqual([{ label: "Your tasks" }]);
+    expect(
+      buildBreadcrumbs("/tasks/0199f1ab-2c3d-4e5f-8a9b-0c1d2e3f4a5b"),
+    ).toEqual([{ label: "Your tasks", href: "/tasks" }, { label: "0199f1ab" }]);
+  });
+
+  test("a single page is its own crumb", () => {
+    expect(buildBreadcrumbs("/profile")).toEqual([{ label: "Profile" }]);
   });
 
   test("ignores a trailing slash", () => {
-    expect(buildBreadcrumbs("/profile/")).toEqual(buildBreadcrumbs("/profile"));
-  });
-
-  test("shortens an id, which has no name of its own", () => {
-    expect(
-      buildBreadcrumbs("/tasks/0199f1ab-2c3d-4e5f-8a9b-0c1d2e3f4a5b"),
-    ).toEqual([
-      { label: "Home", href: "/" },
-      { label: "Tasks", href: "/tasks" },
-      {
-        label: "0199f1ab",
-        href: "/tasks/0199f1ab-2c3d-4e5f-8a9b-0c1d2e3f4a5b",
-      },
-    ]);
+    expect(buildBreadcrumbs("/blocks/")).toEqual(buildBreadcrumbs("/blocks"));
   });
 });

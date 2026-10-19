@@ -40,10 +40,10 @@ describe("SuggestionRail", () => {
     // card is a link and the browser can keep it.
     expect(
       screen.getByRole("link", { name: /Tiered pricing/ }),
-    ).toHaveAttribute("href", `/?kind=component&item=${BLOCK.id}`);
+    ).toHaveAttribute("href", `/blocks/${BLOCK.id}`);
     expect(
       screen.getByRole("link", { name: /A coastal path at dawn/ }),
-    ).toHaveAttribute("href", `/?kind=image&item=${PICTURE.id}`);
+    ).toHaveAttribute("href", `/images/${PICTURE.id}`);
   });
 
   test("names the kind of each card in words", () => {

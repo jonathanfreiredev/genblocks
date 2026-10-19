@@ -57,9 +57,10 @@ export default async function TasksPage() {
 
   return (
     <div className="mx-auto w-full max-w-[900px] px-6 py-12">
+      <h1 className="sr-only">Your tasks</h1>
+
       <header className="flex flex-col gap-3">
-        <h1 className="type-display">Your tasks</h1>
-        <p className="type-body text-ink-soft max-w-[68ch]">
+        <p className="text-muted-foreground max-w-[68ch] text-sm">
           Every brief handed to the generator becomes one of these. The
           checklist is the task&apos;s own record: a worker writes it as it
           goes, and this page only reads it.
@@ -74,13 +75,15 @@ export default async function TasksPage() {
               Nothing is lost: your tasks are kept in the database, not in the
               worker&apos;s memory. Reload to try again.
             </p>
-            <p className="type-meta mt-2">{failure}</p>
+            <p className="mt-2 text-xs">{failure}</p>
           </AlertDescription>
         </Alert>
       ) : tasks.length === 0 ? (
         <Empty className="mt-10 py-20">
           <EmptyHeader>
-            <EmptyTitle className="type-title">No tasks yet</EmptyTitle>
+            <EmptyTitle className="text-lg font-semibold tracking-tight">
+              No tasks yet
+            </EmptyTitle>
             <EmptyDescription>
               Hand the generator a brief and it will appear here, step by step.
             </EmptyDescription>
@@ -90,12 +93,12 @@ export default async function TasksPage() {
           </EmptyContent>
         </Empty>
       ) : (
-        <ul className="border-rule mt-10 border-t">
+        <ul className="border-border mt-10 border-t">
           {tasks.map((task) => (
-            <li key={task.id} className="border-rule border-b">
+            <li key={task.id} className="border-border border-b">
               <Link
                 href={`/tasks/${task.id}`}
-                className="hover:bg-panel grid gap-2 px-1 py-4 transition-colors duration-150 sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:items-baseline sm:gap-6"
+                className="hover:bg-muted/60 grid gap-2 px-1 py-4 transition-colors duration-150 sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:items-baseline sm:gap-6"
               >
                 <StatusWord
                   label={TASK_STATUS_LABELS[task.status]}
@@ -104,9 +107,11 @@ export default async function TasksPage() {
                   muted={task.status === "pending"}
                 />
 
-                <span className="type-body text-ink min-w-0">{task.brief}</span>
+                <span className="text-foreground min-w-0 text-sm">
+                  {task.brief}
+                </span>
 
-                <span className="type-meta text-ink-faint shrink-0 tabular-nums">
+                <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
                   {formatDate(task.created_at)} {formatTime(task.created_at)}
                 </span>
               </Link>

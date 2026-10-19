@@ -155,7 +155,7 @@ describe("GenerateDialog", () => {
     expect(screen.getByText("Publishing the block")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open the block" }),
-    ).toHaveAttribute("href", `/?kind=component&item=${COMPONENT_ID}`);
+    ).toHaveAttribute("href", `/blocks/${COMPONENT_ID}`);
 
     // The page behind the dialog was told, so it does not sit on "Running".
     expect(refresh).toHaveBeenCalled();
@@ -206,7 +206,7 @@ describe("GenerateDialog", () => {
     expect(screen.getByText("Found in the registry")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open the block" }),
-    ).toHaveAttribute("href", `/?kind=component&item=${COMPONENT_ID}`);
+    ).toHaveAttribute("href", `/blocks/${COMPONENT_ID}`);
   });
 
   test("says so when the agent cannot be reached", async () => {

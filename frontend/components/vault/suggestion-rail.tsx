@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AssetPlate } from "@/components/vault/asset-plate";
+import { itemHref, KIND_SECTION } from "@/lib/vault/links";
 import type { Suggestion } from "@/lib/vault/types";
 
 /**
@@ -8,16 +9,13 @@ import type { Suggestion } from "@/lib/vault/types";
  *
  * A conversation is a column of words, and five blocks are not five paragraphs:
  * they are five pictures to look at, side by side, each one a way into the item
- * view. So they scroll across rather than down, and each card opens the thing it
+ * page. So they scroll across rather than down, and each card opens the thing it
  * shows — a suggestion nobody can click is a paragraph again.
- *
- * The rail keeps its own scroll: the dialog's viewport scrolls for the words, and
- * a sideways gesture inside the rail belongs to the rail.
  */
 
-/** Where a card goes: the gallery, with the item dialog already open. */
+/** Where a card goes: the item page of the section it belongs to. */
 function hrefFor(item: Suggestion): string {
-  return `/?kind=${item.kind}&item=${item.id}`;
+  return itemHref(KIND_SECTION[item.kind], item.id);
 }
 
 /** What a card is, in the words of the registry rather than of the model. */
@@ -32,8 +30,10 @@ export function SuggestionRail({ items }: { items: Suggestion[] }) {
   }
 
   return (
-    <div data-slot="suggestion-rail" className="border-rule border-t pt-4">
-      <p className="type-label text-ink-faint">Already in the registry</p>
+    <div data-slot="suggestion-rail" className="border-t pt-4">
+      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        Already in the registry
+      </p>
 
       <ul className="-mx-1 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2">
         {items.map((item) => (
@@ -43,9 +43,9 @@ export function SuggestionRail({ items }: { items: Suggestion[] }) {
           >
             <Link
               href={hrefFor(item)}
-              className="group focus-visible:outline-ring flex h-full flex-col gap-2 rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="group focus-visible:ring-ring flex h-full flex-col gap-2 rounded-lg outline-none focus-visible:ring-2"
             >
-              <div className="border-rule bg-panel-sunken relative aspect-[4/3] overflow-hidden border">
+              <div className="bg-muted relative aspect-[4/3] overflow-hidden rounded-lg border">
                 {item.path ? (
                   <AssetPlate
                     path={item.path}
@@ -55,20 +55,16 @@ export function SuggestionRail({ items }: { items: Suggestion[] }) {
                     className="h-full w-full"
                   />
                 ) : (
-                  // A block from before there were renders. Saying why the frame
-                  // is empty is worth more than a blank surface.
-                  <span className="type-label text-ink-faint absolute inset-0 flex items-center justify-center">
+                  <span className="text-muted-foreground absolute inset-0 flex items-center justify-center px-2 text-center text-xs">
                     {item.kind === "component" ? "No render yet" : "No picture"}
                   </span>
                 )}
               </div>
 
-              {/* Two lines of title whatever the title is, so the labels below
-                  line up across the rail instead of stepping down with each wrap. */}
-              <p className="type-meta text-ink line-clamp-2 min-h-[2.8em] group-hover:underline">
+              <p className="line-clamp-2 min-h-[2.8em] text-xs font-medium group-hover:underline">
                 {item.title}
               </p>
-              <span className="type-label text-ink-faint mt-auto">
+              <span className="text-muted-foreground mt-auto text-xs">
                 {KIND_LABEL[item.kind]}
               </span>
             </Link>

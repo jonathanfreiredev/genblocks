@@ -2,138 +2,101 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AssetPlate } from "@/components/vault/asset-plate";
-import { accessionMark, dimensions, formatDate } from "@/lib/vault/format";
+import { dimensions } from "@/lib/vault/format";
 import type { ComponentSummary, Image } from "@/lib/vault/types";
 
 /**
- * The gallery is a proof sheet: cells that share their rules, never floating
- * tiles. Every cell answers the same three questions in the same order — which
- * item, what it is, and when it joined the registry — so the sheet can be read
- * at speed instead of admired one card at a time.
+ * The gallery is a wall of pictures, not a list of records.
+ *
+ * Each cell is a square frame with the specimen inside it: a block's render or
+ * an image, contained rather than cropped, so the proportions the judge saw are
+ * the proportions a visitor sees. There is no text on the wall. On hover the
+ * specimen lifts a hair and the maker's name arrives under it — the only label
+ * a thumbnail needs.
  */
 export function ItemGrid({ children }: { children: ReactNode }) {
   return (
     <ul
       data-slot="item-grid"
-      className="border-rule border-t border-l sm:grid sm:grid-cols-2 xl:grid-cols-3"
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
     >
       {children}
     </ul>
   );
 }
 
-function Cell({ children }: { children: ReactNode }) {
-  return (
-    <li data-slot="item-cell" className="border-rule flex border-r border-b">
-      {children}
-    </li>
-  );
-}
-
-function CellHead({
-  position,
-  typeName,
+function Cell({
+  href,
+  author,
+  label,
+  children,
 }: {
-  position: number;
-  typeName: string;
+  href: string;
+  author: string;
+  label: string;
+  children: ReactNode;
 }) {
   return (
-    <div className="type-label text-ink-faint flex items-baseline justify-between gap-4">
-      <span className="tabular-nums">{accessionMark(position)}</span>
-      <span className="truncate">{typeName}</span>
-    </div>
-  );
-}
+    <li data-slot="item-cell" className="min-w-0">
+      <Link
+        href={href}
+        aria-label={label}
+        className="group bg-background hover:border-foreground/20 hover:bg-muted/30 focus-visible:ring-ring focus-visible:ring-offset-background relative block aspect-square overflow-hidden rounded-xl border p-2 transition-[transform,background-color,border-color] duration-200 ease-out hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-offset-2"
+      >
+        <div className="h-full w-full pb-6 transition-transform duration-200 ease-out group-hover:-translate-y-0.5">
+          {children}
+        </div>
 
-function CellFoot({ left, right }: { left: string; right: string }) {
-  return (
-    <div className="type-meta border-rule text-ink-faint mt-auto flex items-baseline justify-between gap-4 border-t pt-3">
-      <span className="truncate">{left}</span>
-      <span className="shrink-0 tabular-nums">{right}</span>
-    </div>
-  );
-}
-
-/**
- * The cell's whole surface is the link that opens the item, so the specimen
- * cannot be read without being able to act on it.
- */
-function Specimen({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="hover:bg-panel focus-visible:bg-panel flex w-full flex-col gap-5 p-5 transition-colors duration-150"
-    >
-      {children}
-    </Link>
+        <span className="text-muted-foreground pointer-events-none absolute inset-x-2 bottom-2 truncate text-center text-xs font-medium opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          {author}
+        </span>
+      </Link>
+    </li>
   );
 }
 
 export function ComponentCell({
   component,
-  typeName,
-  position,
   href,
 }: {
   component: ComponentSummary;
-  typeName: string;
-  position: number;
   href: string;
 }) {
   return (
-    <Cell>
-      <Specimen href={href}>
-        <CellHead position={position} typeName={typeName} />
-
-        <div className="flex flex-col gap-2">
-          <h2 className="type-title">{component.title}</h2>
-          <p className="type-body-sm text-ink-soft line-clamp-3">
-            {component.description}
-          </p>
-        </div>
-
-        <CellFoot
-          left={component.slug}
-          right={formatDate(component.created_at)}
+    <Cell
+      href={href}
+      author={component.author ?? "GenBlocks"}
+      label={component.title}
+    >
+      {component.screenshot_path ? (
+        <AssetPlate
+          path={component.screenshot_path}
+          alt={`The rendered block: ${component.title}`}
+          sizes="(min-width: 1280px) 320px, (min-width: 1024px) 30vw, (min-width: 640px) 40vw, 45vw"
+          caption={component.title}
+          fit="contain"
+          className="size-full bg-transparent"
         />
-      </Specimen>
+      ) : (
+        <span className="text-muted-foreground flex size-full items-center justify-center p-3 text-center text-xs">
+          {component.title}
+        </span>
+      )}
     </Cell>
   );
 }
 
-export function ImageCell({
-  image,
-  typeName,
-  position,
-  href,
-}: {
-  image: Image;
-  typeName: string;
-  position: number;
-  href: string;
-}) {
+export function ImageCell({ image, href }: { image: Image; href: string }) {
   return (
-    <Cell>
-      <Specimen href={href}>
-        <CellHead position={position} typeName={typeName} />
-
-        <AssetPlate
-          path={image.path}
-          alt={image.prompt}
-          sizes="(min-width: 1280px) 400px, (min-width: 640px) 45vw, 100vw"
-          caption={dimensions(image.width, image.height)}
-          className="border-rule aspect-[3/2] border"
-        />
-
-        <p className="type-body-sm text-ink-soft line-clamp-2">
-          {image.prompt}
-        </p>
-
-        <CellFoot
-          left={image.model ?? "Unknown model"}
-          right={formatDate(image.created_at)}
-        />
-      </Specimen>
+    <Cell href={href} author={image.author ?? "GenBlocks"} label={image.prompt}>
+      <AssetPlate
+        path={image.path}
+        alt={image.prompt}
+        sizes="(min-width: 1280px) 320px, (min-width: 1024px) 30vw, (min-width: 640px) 40vw, 45vw"
+        caption={dimensions(image.width, image.height)}
+        fit="contain"
+        className="size-full bg-transparent"
+      />
     </Cell>
   );
 }

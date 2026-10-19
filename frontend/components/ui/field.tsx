@@ -106,7 +106,7 @@ function FieldLabel({
     <Label
       data-slot="field-label"
       className={cn(
-        "group/field-label peer/field-label type-label text-ink-muted has-data-checked:border-primary/30 has-data-checked:bg-primary/5 flex w-fit gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border *:data-[slot=field]:p-3",
+        "group/field-label peer/field-label text-foreground has-data-checked:border-primary/30 has-data-checked:bg-primary/5 flex w-fit gap-2 text-sm font-medium group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border *:data-[slot=field]:p-3",
         "has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col",
         className,
       )}
@@ -133,7 +133,7 @@ function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
     <p
       data-slot="field-description"
       className={cn(
-        "text-muted-foreground text-left font-mono text-sm leading-normal font-normal group-has-data-horizontal/field:text-balance [[data-variant=legend]+&]:-mt-1.5",
+        "text-muted-foreground text-left text-sm leading-normal font-normal group-has-data-horizontal/field:text-balance [[data-variant=legend]+&]:-mt-1.5",
         "last:mt-0 nth-last-2:-mt-1",
         "[&>a:hover]:text-primary [&>a]:underline [&>a]:underline-offset-4",
         className,
@@ -216,10 +216,7 @@ function FieldError({
     <div
       role="alert"
       data-slot="field-error"
-      className={cn(
-        "text-destructive font-mono text-sm font-normal",
-        className,
-      )}
+      className={cn("text-destructive text-sm font-normal", className)}
       {...props}
     >
       {content}
