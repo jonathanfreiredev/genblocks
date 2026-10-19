@@ -38,7 +38,7 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.errors import GraphRecursionError
 
-from app.harness import images, sandbox, skills
+from app.harness import checks, images, skills
 from app.harness.prompts import ASK, HARNESS_PROMPT
 from app.harness.schemas import SandboxFile, SandboxResult
 from app.settings import settings
@@ -298,7 +298,7 @@ def _tools(draft: _Draft) -> list[Any]:
         if digest == draft.digest and draft.shown is not None:
             return _seen(draft.shown, note=UNCHANGED)
 
-        draft.shown = await sandbox.check(draft.project)
+        draft.shown = await checks.check(draft.project)
         draft.digest = digest
 
         return _seen(draft.shown)
@@ -331,6 +331,12 @@ def _tools(draft: _Draft) -> list[Any]:
             return (
                 "Look at the block first: the composition decides the prompt, and a "
                 "picture asked for before it is a picture asked for twice."
+            )
+        if draft.shown.blocked:
+            return (
+                "The block is not building yet: fix what the checks report, look again, "
+                "and ask for the picture once the project gets through. A picture in a "
+                "project that cannot publish is paid for nothing."
             )
         if len(draft.pictures) >= settings.images_per_block:
             return (

@@ -110,6 +110,12 @@ class Settings(BaseSettings):
     # How many pictures one block may ask the library for, in one pass near the end
     # of its run. Images are the priciest part of a task by a distance.
     images_per_block: int = 4
+    # The hosts a block may load a picture or a stylesheet from, comma-separated.
+    # Everything else it shows has to travel with it — a relative path or a
+    # ``data:`` URL — because a block is copied into somebody else's page, and a
+    # picture we do not host is a picture that stops arriving when that host moves.
+    # Checked before the sandbox, so a project that points elsewhere costs no render.
+    allowed_asset_hosts: str = "res.cloudinary.com"
     # Every dimension of the judge's rubric has its own bar, and an attempt
     # clears only when it clears all of them: a high mean does not carry a block
     # past a dimension it failed (PLAN.md, section 7). These numbers are the

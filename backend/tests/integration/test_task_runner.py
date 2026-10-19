@@ -388,7 +388,7 @@ async def test_a_queued_task_runs_towards_a_published_block(runner_session, harn
     assert [step.status for step in ran.steps] == [StepStatus.SUCCEEDED] * len(runner.STEP_NAMES)
     assert ran.steps[0].detail == {"category": "hero"}
     assert ran.steps[1].detail == {
-        "checks": "9/9",
+        "checks": "11/11",
         "files": 2,
         "iterations": 3,
         "skills": "1a2b3c4d",
@@ -423,7 +423,7 @@ async def test_a_queued_task_runs_towards_a_published_block(runner_session, harn
     assert harness.uploaded == [cloudinary.screenshot_id(task_id, 1)]
     assert attempt.checks is not None
     assert attempt.checks["blocked"] is False
-    assert (attempt.checks["passed"], attempt.checks["total"]) == (9, 9)
+    assert (attempt.checks["passed"], attempt.checks["total"]) == (11, 11)
 
     component = await runner_session.get(Component, ran.component_id)
     assert component is not None
@@ -508,7 +508,7 @@ async def test_a_block_the_sandbox_refuses_is_kept_and_nobody_judges_it(
     # The judge is not asked about something the sandbox would not build, and the
     # step that ran is closed with the checks it found.
     assert judge.shown == []
-    assert failed.steps[1].detail["checks"] == "8/9"
+    assert failed.steps[1].detail["checks"] == "10/11"
     assert failed.steps[2].status == StepStatus.PENDING
 
     attempt = (await _attempts(runner_session, task_id))[0]
@@ -518,6 +518,42 @@ async def test_a_block_the_sandbox_refuses_is_kept_and_nobody_judges_it(
     assert attempt.checks is not None
     assert attempt.checks["blocked"] is True
     assert harness.uploaded == []
+
+    assert await runner_session.scalar(select(Component)) is None
+
+
+async def test_a_block_that_loads_from_elsewhere_is_refused_before_the_sandbox(
+    runner_session, harness, judge
+):
+    await create_category(runner_session, slug="hero")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+    harness.built.files[ENTRY] = (
+        "export default function Block() {\n"
+        '  return <img src="https://images.unsplash.com/photo-1" alt="" />;\n'
+        "}\n"
+    )
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    failed = await get_task(runner_session, task_id=task_id)
+    assert failed is not None
+    assert failed.status == TaskStatus.FAILED
+    assert "assets" in (failed.error or "")
+    assert "images.unsplash.com" in (failed.error or "")
+
+    # No container was asked to build a project whose pictures will not arrive.
+    assert harness.checked == []
+    assert judge.shown == []
+
+    attempt = (await _attempts(runner_session, task_id))[0]
+    assert attempt.verdict == Verdict.REJECTED
+    assert attempt.checks is not None
+    assert attempt.checks["blocked"] is True
+    assert attempt.screenshot_path is None
 
     assert await runner_session.scalar(select(Component)) is None
 
@@ -610,7 +646,7 @@ async def test_findings_that_are_not_fatal_are_evidence_not_a_gate(runner_sessio
     done = await get_task(runner_session, task_id=task_id)
     assert done is not None
     assert done.status == TaskStatus.SUCCEEDED
-    assert done.steps[1].detail["checks"] == "7/9"
+    assert done.steps[1].detail["checks"] == "9/11"
 
     attempt = (await _attempts(runner_session, task_id))[0]
     assert attempt.checks is not None

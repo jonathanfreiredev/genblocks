@@ -17,7 +17,14 @@ style suggestion.
 - **It carries its chrome and borrows its pictures.** Icons and primitives are
   packages; photographs are assets of our library, handed to you as URLs. A URL to
   anything else is a picture that will not arrive. Cloudinary answers a transform
-  in the path (`/upload/w_1200/...`) if you need a size.
+  in the path (`/upload/w_1200/...`) if you need a size. This is checked before the
+  block is built: every `src`, `srcset`, `poster`, stylesheet link, CSS `url()` and
+  `@import` must be relative, a `data:` URL, or one of our hosts. A font imported
+  from Google is a stylesheet that does not travel.
+- **No network, no strings run as code.** A block is markup: it does not `fetch`,
+  open sockets, `eval`, build functions from strings, `document.write` or inject
+  HTML. The page you are inside owns its data, and those are the ways a block stops
+  being a block and becomes a script.
 - **Every picture is its own subject.** One prompt per picture, and a different
   scene in each: the same prompt asked twice comes back nearly the same
   photograph, and a row of nearly identical photographs is a defect a judge will

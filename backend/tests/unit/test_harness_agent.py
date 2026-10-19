@@ -12,6 +12,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from app.harness import agent, images, skills
+from app.harness import sandbox as harness_sandbox
 from app.harness.schemas import SandboxCheck, SandboxFile, SandboxResult
 from app.settings import settings
 from tests.agent_stub import ScriptedChatModel
@@ -62,7 +63,7 @@ class Sandbox:
 @pytest.fixture
 def sandbox(monkeypatch) -> Sandbox:
     fake = Sandbox()
-    monkeypatch.setattr(agent.sandbox, "check", fake.check)
+    monkeypatch.setattr(harness_sandbox, "check", fake.check)
 
     return fake
 
@@ -163,6 +164,29 @@ async def test_the_builder_is_given_the_brief_and_the_shelf(sandbox):
     assert "pricing" in ask.content
 
 
+FOREIGN = (
+    "export default function Block() {\n"
+    '  return <img src="https://images.unsplash.com/photo-1" alt="" />;\n'
+    "}\n"
+)
+
+
+async def test_a_look_tells_the_builder_what_the_block_loads_from_elsewhere(sandbox):
+    model = scripted(
+        calls("write_file", path=agent.ENTRY, content=FOREIGN),
+        calls("look"),
+        says("Done with what I had."),
+    )
+
+    await agent.build(brief=BRIEF, category="hero", model=model)
+
+    # The render is not paid for: the text already refused it.
+    assert sandbox.seen == []
+    said = said_by_tools(model)
+    assert "assets: failed" in said
+    assert "images.unsplash.com" in said
+
+
 async def test_a_look_at_an_unchanged_project_does_not_build_it_again(sandbox):
     model = scripted(
         calls("write_file", path=agent.ENTRY, content=FIRST),
@@ -176,6 +200,29 @@ async def test_a_look_at_an_unchanged_project_does_not_build_it_again(sandbox):
     assert built.iterations == 2
     assert len(sandbox.seen) == 1
     assert "Nothing has changed" in said_by_tools(model)
+
+
+async def test_a_block_that_does_not_build_yet_is_not_given_pictures(sandbox, pictures):
+    model = scripted(
+        calls("write_file", path=agent.ENTRY, content=FOREIGN),
+        calls("look"),
+        calls(
+            "generate_image",
+            slot="hero",
+            prompt="a road at dawn",
+            category="photography",
+            width=1024,
+            height=768,
+        ),
+        says("Done with what I had."),
+    )
+
+    await agent.build(brief=BRIEF, category="hero", image_categories=["photography"], model=model)
+
+    # The block never rendered, so nothing was asked of the provider: a picture in
+    # a project that cannot publish is a picture paid for nothing.
+    assert pictures == []
+    assert "not building yet" in said_by_tools(model)
 
 
 async def test_the_budget_is_looks_and_it_is_said_out_loud(sandbox, monkeypatch):

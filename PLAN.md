@@ -16,7 +16,8 @@ inglés (ver `AGENTS.md`). Este documento va en español por comodidad.
   entrega como una rebanada revisable en `git`.
 - **Secciones 13–15**: variables de entorno, lo aplazado y los riesgos.
 
-**Estado (oct 2026)**: fases **0–10 hechas** y en `git`. La 9 se entregó en tres
+**Estado (oct 2026)**: fases **0–10 hechas** y en `git`; la **11 en curso**, y su
+primera rebanada (11a, los checks estáticos) entregada. La 9 se entregó en tres
 rebanadas y la 10 cerró con la capa de vectores, el guard de duplicados, el reúso
 de imágenes, el routing de taxonomía y las propuestas en el chat. Las fases
 anteriores se quedan escritas como se entregaron: son el registro de lo
@@ -313,6 +314,17 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     siendo determinista: nunca fue una decisión. Es la primera llamada al LLM que
     no produce el artefacto, y va antes del sandbox, así que equivocarse ahí no
     cuesta un render.
+41. **Lo que un bloque no puede hacer se decide sin mirarlo.** Los dos checks
+    estáticos (`assets`, `safety`) son **fatales** y corren dentro del `look`, no
+    solo al final: un fallo que el agente no puede leer es un fallo que se convierte
+    en tarea muerta, y el bucle de arreglo es justo lo que hace que el harness valga.
+    El alcance de `safety` queda cerrado en lo que significa "esto va dentro de la
+    página de otro": nada de red (`fetch`, `XMLHttpRequest`, `WebSocket`,
+    `EventSource`, `sendBeacon`) y nada de ejecutar o inyectar cadenas (`eval`,
+    `new Function`, `document.write`, `dangerouslySetInnerHTML`, `javascript:`).
+    Es un chequeo de texto y lo dice: una URL construida en ejecución se le escapa,
+    y para eso está el juez. Un comentario que menciona `fetch(` no es una llamada.
+    Un proyecto bloqueado tampoco pide imágenes: primero se arregla, luego se paga.
 
 ---
 
@@ -861,6 +873,17 @@ Dos correcciones que la verificación obligó:
 
 **Verificación**: límite y tope se activan; un brief abusivo se rechaza; un bloque
 que apunta a un asset de fuera no se publica.
+
+**Entregado (11a).** `app/harness/checks.py`: dos checks sobre el texto del
+proyecto, `assets` y `safety`, ambos fatales y en la misma lista que el sandbox.
+Lo importante del diseño no es el regex sino **dónde corre**: en `look`, así que el
+agente se entera del fallo mientras puede arreglarlo, y antes de Modal, así que un
+proyecto que apunta fuera no cuesta un render. Un bloque que no pasa los checks
+tampoco pide imágenes: no se paga una foto para un proyecto que no puede
+publicarse. El host permitido es configuración (`allowed_asset_hosts`), no un
+literal enterrado. Tests: las cuatro formas de cargar (atributo, `<link>`, `url()`,
+`@import`), `srcset` candidato a candidato, `//host`, puerto y credenciales,
+comentarios que mencionan `fetch(` sin llamarlo, y el sandbox que no se llama.
 
 **Fuera**: nada de features nuevas.
 

@@ -43,7 +43,7 @@ from app.db.session import async_session_maker
 from app.generations.models import Generation, Verdict
 from app.generations.service import list_generations
 from app.harness import agent as harness
-from app.harness import cloudinary, sandbox
+from app.harness import checks, cloudinary
 from app.harness.schemas import SandboxFile, SandboxResult
 from app.images.models import Image
 from app.judge import scoring as judge
@@ -79,16 +79,16 @@ POLL_SECONDS = 0.5
 
 
 class HarnessRefused(Exception):
-    """The sandbox found something a run cannot publish past.
+    """A check found something a run cannot publish past.
 
-    Carries the sandbox's own words, because the task's error is where a reader
-    ends up and "typecheck: src/Block.tsx(12,7): Property 'x' does not exist" is
-    the answer they came for.
+    Carries the check's own words, because the task's error is where a reader ends
+    up and "typecheck: src/Block.tsx(12,7): Property 'x' does not exist" is the
+    answer they came for.
     """
 
     def __init__(self, result: SandboxResult) -> None:
         said = "; ".join(f"{check.name}: {check.detail or 'failed'}" for check in result.failures)
-        super().__init__(f"The sandbox refused the attempt — {said}")
+        super().__init__(f"The block was refused — {said}")
 
 
 class JudgeRejected(Exception):
@@ -237,7 +237,7 @@ async def _build(
     )
     pictures = await _keep(session, task=task, built=built, types=picture_types)
 
-    found = await sandbox.check(
+    found = await checks.check(
         [SandboxFile(path=path, content=content) for path, content in sorted(built.files.items())]
     )
     stored = await _store(found, task=task)

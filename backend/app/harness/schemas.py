@@ -19,16 +19,21 @@ RENDER = "render"
 ACCESSIBILITY = "accessibility"
 IMPORTS = "imports"
 
+# The two that never reach the sandbox: they read the project's text.
+ASSETS = "assets"
+SAFETY = "safety"
+
 # A layout check per viewport, named ``layout:desktop`` and so on.
 LAYOUT_PREFIX = "layout:"
 
 # What a run cannot carry on from. Code that does not typecheck, does not bundle,
-# renders nothing, or imports a package that is not on the shelf is not an attempt:
-# publishing it would put a broken block in the registry and call it a result — and
-# in the last case, a block nobody could install. Lint, layout and accessibility
-# findings are evidence for the judge, not gates: a wide hero at 390px is a
-# judgement call, and that is what the judge is for.
-FATAL_CHECKS = (TYPECHECK, BUILD, RENDER, IMPORTS)
+# renders nothing, imports a package that is not on the shelf, loads from a host
+# that is not ours, or reaches the network is not an attempt: publishing it would
+# put a broken block in the registry and call it a result — and in the last two
+# cases, a block that stops working the moment somebody copies it. Lint, layout and
+# accessibility findings are evidence for the judge, not gates: a wide hero at
+# 390px is a judgement call, and that is what the judge is for.
+FATAL_CHECKS = (TYPECHECK, BUILD, RENDER, IMPORTS, ASSETS, SAFETY)
 
 
 class SandboxFile(BaseModel):
