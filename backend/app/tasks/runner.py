@@ -394,10 +394,9 @@ async def _judge(
 def _weakest(judged: Judged) -> str:
     """The dimension that decided the attempt, as the checklist's one number.
 
-    The lowest score rather than the mean, and for the same reason the attempt
-    ledger is written that way (``frontend/lib/vault/rubric.ts``): a mean can
-    look respectable on an attempt that failed a dimension, which is the one
-    thing a line about a judgement must never do.
+    The lowest score rather than the mean: a mean can look respectable on a run
+    that failed a dimension, which is the one thing a line about a judgement must
+    never do.
     """
     dimension = min(judged.scores, key=lambda name: judged.scores[name])
 

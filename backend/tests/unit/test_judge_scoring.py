@@ -3,8 +3,7 @@
 The model call is not tested here: that would be a test of somebody else's
 uptime. What is tested is everything up to it and after it — how the model is
 configured for the answer, what the artifact handed to it looks like, which
-dimensions an answer is refused for, what a threshold does, and which of two
-attempts came closer.
+dimensions an answer is refused for, and what a threshold does.
 """
 
 import pytest
@@ -20,7 +19,6 @@ from app.judge.scoring import (
     UnreadableVerdict,
     as_judge,
     judge_model,
-    margin,
     missed,
     read,
     score_component,
@@ -109,22 +107,6 @@ def test_the_image_rubric_is_read_against_its_own_dimensions(monkeypatch):
 
     assert list(judged.scores) == list(IMAGES.dimensions)
     assert judged.passed is True
-
-
-def test_the_margin_is_the_room_left_on_the_dimension_that_came_closest(monkeypatch):
-    monkeypatch.setattr(settings, "rubric_thresholds", {"visual": 70, "copy": 70})
-
-    # One attempt failed a dimension badly, the other only just: the second came
-    # closer, whatever the two means say.
-    assert margin({"visual": 60, "copy": 95}) == -10
-    assert margin({"visual": 68, "copy": 71}) == -2
-
-
-def test_with_nothing_gated_the_margin_falls_back_to_the_scores(monkeypatch):
-    monkeypatch.setattr(settings, "rubric_thresholds", {})
-
-    assert margin({"visual": 80, "copy": 90}) == 85
-    assert margin({}) == 0
 
 
 def test_every_shipped_threshold_names_a_dimension_a_rubric_scores():

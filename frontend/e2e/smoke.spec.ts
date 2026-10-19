@@ -26,15 +26,22 @@ test("the kinds swap the sheet", async ({ page }) => {
   ).toHaveText("Images");
 });
 
-test("the generator dialog opens with a brief field", async ({ page }) => {
+test("the generator dialog opens and asks a visitor to sign in", async ({
+  page,
+}) => {
   await page.goto("/");
 
   await page.getByRole("button", { name: "Generate with AI" }).click();
 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Brief")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Generate" })).toBeDisabled();
+
+  // Queueing needs an account, because the task belongs to whoever asks for it.
+  // A visitor gets the reason and the way in, not a field the guard would refuse
+  // on the way out.
+  await expect(dialog.getByText(/needs an account/)).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "Sign in" })).toBeVisible();
+  await expect(dialog.getByLabel("Message")).toHaveCount(0);
 });
 
 test("login page renders the form", async ({ page }) => {

@@ -165,7 +165,7 @@ async function unreadable(response: Response): Promise<string> {
  * generation starts — this is not a chat about the collection. The agent is
  * real: it reads the brief, searches the registry for anything close, and queues
  * one task. The pipeline behind the task is still canned, which the checklist
- * and the attempt ledger say for themselves rather than hiding.
+ * says for itself rather than hiding.
  *
  * `signedIn` is false on the public gallery, where the vault can be read but
  * nothing can be asked for: the account is what a task hangs off, so a visitor

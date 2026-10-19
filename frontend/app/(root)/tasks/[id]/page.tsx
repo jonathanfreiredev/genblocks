@@ -5,14 +5,12 @@ import type { ReactNode } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { AssetPlate } from "@/components/vault/asset-plate";
-import { EvidencePanel } from "@/components/vault/evidence-panel";
 import { StatusWord } from "@/components/vault/status-word";
 import { TaskChecklist } from "@/components/vault/task-checklist";
+import { TaskResult } from "@/components/vault/task-result";
 import { getSession } from "@/server/auth/auth.lib";
 import { VaultUnreadable, getTask } from "@/lib/vault/api";
 import { formatDate, formatTime } from "@/lib/vault/format";
-import { judgedFrom } from "@/lib/vault/judged";
 import { TASK_STATUS_LABELS } from "@/lib/vault/task-status";
 import type { TaskDetail } from "@/lib/vault/types";
 
@@ -125,26 +123,8 @@ export default async function TaskPage({
           {generation ? (
             <>
               <h2 className="type-label text-ink-faint mt-10">The result</h2>
-              <div className="border-rule mt-3 flex flex-col border">
-                {generation.screenshot_path ? (
-                  <div className="p-6 pb-0">
-                    <AssetPlate
-                      path={generation.screenshot_path}
-                      alt={`The block this task produced: ${task?.brief ?? ""}`}
-                      sizes="(min-width: 1024px) 900px, 100vw"
-                      caption={generation.model ?? "Model not recorded"}
-                      className="aspect-[16/10]"
-                    />
-                  </div>
-                ) : (
-                  <p className="type-meta text-ink-soft p-6 pb-0">
-                    No render was taken for this run.
-                  </p>
-                )}
-                <EvidencePanel
-                  kind="component"
-                  judged={judgedFrom(generation)}
-                />
+              <div className="mt-3">
+                <TaskResult generation={generation} brief={task.brief} />
               </div>
             </>
           ) : null}

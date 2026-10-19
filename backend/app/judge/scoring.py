@@ -160,27 +160,6 @@ def missed(dimension: str, score: int) -> bool:
     return threshold is not None and score < threshold
 
 
-def margin(scores: dict[str, int]) -> int:
-    """How close an attempt came to clearing every bar, for choosing between two.
-
-    The room left on the dimension that came closest to failing, not the mean: a
-    mean lets a block that failed one dimension hide behind the others, which is
-    the same reason the attempt ledger shows a block's weakest dimension rather
-    than its average. The larger the margin, the closer the attempt was to being
-    published on its own merits.
-    """
-    distances = [
-        score - threshold
-        for dimension, score in scores.items()
-        if (threshold := threshold_for(dimension)) is not None
-    ]
-    if not distances:
-        # Nothing is gated: the score itself is all there is to go on.
-        return round(sum(scores.values()) / len(scores)) if scores else 0
-
-    return min(distances)
-
-
 def _mismatch(answered: set[str], expected: set[str], rubric: Rubric) -> str:
     """What was wrong with an answer, in the words of the rubric that refused it."""
     missing = ", ".join(sorted(expected - answered)) or "nothing"

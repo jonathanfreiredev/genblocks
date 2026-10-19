@@ -158,7 +158,7 @@ export function listTasks(
   );
 }
 
-/** One task with its checklist and its attempts, or `null` if it is not theirs. */
+/** One task with its checklist and the artifact it produced, or `null` if it is not theirs. */
 export function getTask(token: string, id: string): Promise<TaskDetail | null> {
   return readOrNull<TaskDetail>(`/tasks/${id}`, {}, token);
 }

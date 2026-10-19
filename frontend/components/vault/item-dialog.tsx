@@ -86,7 +86,15 @@ function Shell({
  */
 const IMPLIED_INSTALLS = new Set(["react", "react-dom"]);
 
-/** The files of a project, as a rail a reader can walk file by file. */
+/**
+ * The files of a project, as a rail a reader can walk file by file.
+ *
+ * The rail is as tall as the code beside it — the pane is a two-column split, not
+ * a list floating over it — but only the list itself is tinted: a file or two
+ * against a full-height block of grey reads as an empty column, which is what it
+ * is. The names stay put while the code scrolls, because a long file is exactly
+ * when somebody wants to jump to another one.
+ */
 function FileRail({
   paths,
   chosen,
@@ -97,23 +105,25 @@ function FileRail({
   onChoose: (path: string) => void;
 }) {
   return (
-    <div className="border-rule bg-panel-sunken flex shrink-0 flex-wrap gap-x-4 gap-y-1 border-b px-4 py-3 lg:w-52 lg:flex-col lg:flex-nowrap lg:gap-y-1.5 lg:border-r lg:border-b-0">
-      <span className="type-label text-ink-faint lg:mb-1">Files</span>
-      {paths.map((path) => (
-        <button
-          key={path}
-          type="button"
-          onClick={() => onChoose(path)}
-          aria-pressed={path === chosen}
-          title={path}
-          className={cn(
-            "type-code max-w-full cursor-pointer truncate text-left",
-            path === chosen ? "text-ink" : "text-ink-faint hover:text-ink",
-          )}
-        >
-          {path}
-        </button>
-      ))}
+    <div className="border-rule shrink-0 border-b lg:w-52 lg:border-r lg:border-b-0">
+      <div className="bg-panel-sunken flex flex-wrap gap-x-4 gap-y-1 px-4 py-3 lg:sticky lg:top-0 lg:flex-col lg:flex-nowrap lg:gap-y-1.5">
+        <span className="type-label text-ink-faint lg:mb-1">Files</span>
+        {paths.map((path) => (
+          <button
+            key={path}
+            type="button"
+            onClick={() => onChoose(path)}
+            aria-pressed={path === chosen}
+            title={path}
+            className={cn(
+              "type-code max-w-full cursor-pointer truncate text-left",
+              path === chosen ? "text-ink" : "text-ink-faint hover:text-ink",
+            )}
+          >
+            {path}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -8,12 +8,12 @@
 export type Kind = "component" | "image";
 
 /**
- * An attempt's verdict: where the artifact ended up, not a grade.
+ * Where an artifact ended up, not a grade.
  *
- * ``candidate`` is an attempt nobody has turned down yet, which is what an
- * attempt is while its run is in flight. One that was turned down is
- * ``rejected`` — by the sandbox that would not build it or by the judge that
- * scored it below its bar — and it is kept either way.
+ * ``candidate`` is what a run is while nobody has turned it down; ``rejected``
+ * is a run the sandbox would not build or the judge scored below its bar, and it
+ * is kept either way. A task makes one artifact, so this is the artifact's fate
+ * rather than one step of a history.
  */
 export type Verdict = "candidate" | "published" | "rejected";
 
@@ -98,14 +98,20 @@ export interface HarnessChecks {
   violations: HarnessViolation[];
 }
 
-/** One attempt: the code it produced, what the judge said, and where it went. */
+/**
+ * The artifact one task produced: its project, what the judge said, where it went.
+ *
+ * One per task — the API still calls it a generation and still returns a list,
+ * because that is the published shape — so a view reads the one there is rather
+ * than walking a history.
+ */
 export interface Generation {
   id: string;
   task_id: string | null;
   component_id: string | null;
   attempt_no: number;
   code: string;
-  /** The project, as the attempt left it. `code` is its entry file. */
+  /** The project, as the run left it. `code` is its entry file. */
   files: Record<string, string> | null;
   screenshot_path: string | null;
   checks: HarnessChecks | null;
@@ -163,7 +169,7 @@ export interface Task {
   steps: TaskStep[];
 }
 
-/** A task with its attempts; the list keeps tasks lean, the detail carries them. */
+/** A task with the artifact it produced; the list keeps tasks lean, the detail carries it. */
 export interface TaskDetail extends Task {
   generations: Generation[];
 }

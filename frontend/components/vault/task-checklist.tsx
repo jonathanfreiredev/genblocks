@@ -26,9 +26,8 @@ function detailLine(detail: Record<string, unknown> | null): string | null {
 /**
  * The checklist a task is followed by.
  *
- * It has the same shape as the attempt ledger on purpose: a task and a block are
- * both read as records, and nobody should have to learn a second table to follow
- * the work.
+ * A task is read as a record: numbered steps, each closing as the worker reaches
+ * it, and the state in a word rather than an icon nobody has learned yet.
  */
 export function TaskChecklist({
   steps,
