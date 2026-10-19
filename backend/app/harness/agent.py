@@ -24,6 +24,8 @@ database is the runner's (``app.tasks.runner``).
 """
 
 import base64
+import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from hashlib import sha256
 from typing import Any
@@ -77,11 +79,21 @@ class NothingWritten(Exception):
 
 @dataclass(frozen=True)
 class Placed:
-    """A picture, the slot it was asked for, and the type it was filed under."""
+    """A picture, the slot it was asked for, and the type it was filed under.
+
+    A run either makes a picture or finds one the library already had; both end up
+    as an address and its proportions, and only the first has bytes behind it. The
+    library id is what lets the runner link the block to the picture that already
+    exists instead of filing a second copy of it.
+    """
 
     slot: str
     category: str
-    image: images.Generated
+    url: str
+    width: int
+    height: int
+    image: images.Generated | None = None
+    library_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -111,6 +123,17 @@ def harness_model() -> BaseChatModel:
     return ChatOpenAI(model=settings.llm_model, api_key=settings.openai_api_key)
 
 
+@dataclass(frozen=True)
+class Reused:
+    """A picture the library already had, as the tool reads it back."""
+
+    id: uuid.UUID
+    url: str
+    width: int
+    height: int
+    prompt: str
+
+
 @dataclass
 class _Draft:
     """One run's project, and what the agent has already been shown.
@@ -119,6 +142,11 @@ class _Draft:
     rather than graph state because everything the loop decides about — did it
     look, did anything change, how many pictures — is a fact about the artifact,
     not about the conversation.
+
+    ``library`` is the caller's way into the picture library: given a description
+    and a type, it answers with what the registry already has. It is handed in
+    rather than reached for, because the harness holds no session (PLAN.md,
+    decision 33).
     """
 
     image_categories: list[str]
@@ -127,6 +155,7 @@ class _Draft:
     looks: int = 0
     shown: SandboxResult | None = None
     digest: str | None = None
+    library: Callable[[str, str], Awaitable[Reused | None]] | None = None
 
     @property
     def project(self) -> list[SandboxFile]:
@@ -147,6 +176,7 @@ async def build(
     brief: str,
     category: str,
     image_categories: list[str] | None = None,
+    library: Callable[[str, str], Awaitable[Reused | None]] | None = None,
     model: BaseChatModel | None = None,
 ) -> Built:
     """Build one block for a brief, looking at it until it is worth keeping.
@@ -154,9 +184,11 @@ async def build(
     ``model`` is how a test drives the loop without paying for it; production
     passes nothing and gets the configured one. ``image_categories`` is the image
     taxonomy the pictures may be filed under, read by the caller from the database
-    — the harness is handed the list rather than reaching for it.
+    — the harness is handed the list rather than reaching for it. ``library``
+    answers with a picture the registry already has, so a run asks for what is
+    missing instead of generating everything again.
     """
-    draft = _Draft(image_categories=list(image_categories or []))
+    draft = _Draft(image_categories=list(image_categories or []), library=library)
     agent = create_agent(
         model or harness_model(),
         tools=_tools(draft),
@@ -281,9 +313,11 @@ def _tools(draft: _Draft) -> list[Any]:
     ) -> str:
         """Ask the library for a picture, and get back the address to use.
 
-        Do this once the layout is settled — the composition decides the prompt —
-        and once per picture, not once per attempt. Then look at the block again
-        with the picture in place.
+        The library is checked first: a picture the registry already holds for
+        this description is handed back instead of being generated again, and the
+        answer says which of the two happened. Do this once the layout is settled
+        — the composition decides the prompt — and once per picture, not once per
+        attempt. Then look at the block again with the picture in place.
 
         Args:
             slot: A short name for where it goes ("hero", "avatar-1"), unique in
@@ -327,8 +361,44 @@ def _tools(draft: _Draft) -> list[Any]:
                 f"{', '.join(draft.image_categories)}."
             )
 
+        kept = await draft.library(prompt, category) if draft.library else None
+        if kept is not None:
+            # The registry already holds this picture, and a library is worth
+            # what it can be reused for: asking the photographer again for a
+            # photograph we have pays twice for the same thing.
+            if any(one.library_id == kept.id for one in draft.pictures):
+                return (
+                    "That is a picture already in this block. Say what is different "
+                    "about this one — another scene, another light, another subject."
+                )
+
+            draft.pictures.append(
+                Placed(
+                    slot=slot,
+                    category=category,
+                    url=kept.url,
+                    width=kept.width,
+                    height=kept.height,
+                    library_id=kept.id,
+                )
+            )
+
+            return (
+                f"already in the library: use {kept.url} — it is {kept.width}x"
+                f"{kept.height}, so give it a box with those proportions."
+            )
+
         made = await images.generate(prompt=prompt, width=width, height=height)
-        draft.pictures.append(Placed(slot=slot, category=category, image=made))
+        draft.pictures.append(
+            Placed(
+                slot=slot,
+                category=category,
+                url=made.url,
+                width=made.width,
+                height=made.height,
+                image=made,
+            )
+        )
 
         return (
             f"generated and filed: use {made.url} — it is {made.width}x{made.height}, "

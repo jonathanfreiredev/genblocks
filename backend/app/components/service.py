@@ -7,6 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.components.models import Component
+from app.generations.models import Generation
 from app.pagination import ListParams
 
 
@@ -55,3 +56,42 @@ async def get_component_by_slug(session: AsyncSession, *, slug: str) -> Componen
     return await session.scalar(
         select(Component).where(Component.slug == slug, Component.deleted_at.is_(None))
     )
+
+
+async def by_ids(
+    session: AsyncSession, *, ids: Sequence[uuid.UUID]
+) -> list[Component]:
+    """The blocks with these ids, in the order they were asked for.
+
+    Retrieval answers with ids and distances; this turns the ids into rows without
+    losing that order, which is the only thing ranking means.
+    """
+    if not ids:
+        return []
+
+    found = await session.scalars(
+        select(Component).where(Component.id.in_(ids), Component.deleted_at.is_(None))
+    )
+    by_id = {component.id: component for component in found}
+
+    return [by_id[one] for one in ids if one in by_id]
+
+
+async def renders(
+    session: AsyncSession, *, ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, str | None]:
+    """The render each block was published from, by block id.
+
+    A card in a conversation shows the block the way the vault does: its picture,
+    not its title. The render lives on the attempt, so this is the one join.
+    """
+    if not ids:
+        return {}
+
+    found = await session.execute(
+        select(Component.id, Generation.screenshot_path)
+        .join(Generation, Generation.id == Component.winning_generation_id)
+        .where(Component.id.in_(ids))
+    )
+
+    return {component_id: path for component_id, path in found.all()}

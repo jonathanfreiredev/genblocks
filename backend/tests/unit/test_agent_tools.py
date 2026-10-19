@@ -9,6 +9,7 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
+from app.agent.schemas import Suggestions
 from app.agent.tools import build_tools
 from app.tasks.schemas import BRIEF_MAX_LENGTH, BRIEF_MIN_LENGTH
 from app.users.models import User
@@ -22,13 +23,17 @@ def caller() -> User:
 
 
 def _tool(name: str, queued: list) -> object:
-    return next(tool for tool in build_tools(caller=caller(), queued=queued) if tool.name == name)
+    return next(
+        tool
+        for tool in build_tools(caller=caller(), queued=queued, suggested=Suggestions())
+        if tool.name == name
+    )
 
 
-def test_the_conversation_reaches_the_two_published_tools_by_name():
-    tools = build_tools(caller=caller(), queued=[])
+def test_the_conversation_reaches_the_published_tools_by_name():
+    tools = build_tools(caller=caller(), queued=[], suggested=Suggestions())
 
-    assert [tool.name for tool in tools] == ["search_components", "create_component"]
+    assert [tool.name for tool in tools] == ["search_components", "find_images", "create_component"]
     assert all(tool.description for tool in tools)
 
 

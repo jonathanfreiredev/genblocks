@@ -44,3 +44,16 @@ async def get_image(session: AsyncSession, *, image_id: uuid.UUID) -> Image | No
     return await session.scalar(
         select(Image).where(Image.id == image_id, Image.deleted_at.is_(None))
     )
+
+
+async def by_ids(session: AsyncSession, *, ids: Sequence[uuid.UUID]) -> list[Image]:
+    """The pictures with these ids, in the order they were asked for."""
+    if not ids:
+        return []
+
+    found = await session.scalars(
+        select(Image).where(Image.id.in_(ids), Image.deleted_at.is_(None))
+    )
+    by_id = {image.id: image for image in found}
+
+    return [by_id[one] for one in ids if one in by_id]

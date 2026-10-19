@@ -22,7 +22,7 @@ from langchain_core.messages import HumanMessage
 
 from app.agent.graph import build_agent
 from app.agent.model import get_chat_model
-from app.agent.schemas import ChatRequest
+from app.agent.schemas import ChatRequest, Suggestions
 from app.agent.stream import Event, TurnReader, encode
 from app.agent.tools import build_tools
 from app.authz.dependencies import get_first_party_user
@@ -52,7 +52,11 @@ async def chat(
     decided here and not by the model.
     """
     queued: list[Task] = []
-    agent = build_agent(model=model, tools=build_tools(caller=user, queued=queued))
+    suggested = Suggestions()
+    agent = build_agent(
+        model=model,
+        tools=build_tools(caller=user, queued=queued, suggested=suggested),
+    )
 
     # The checkpointer is one per process and the thread id comes from the
     # browser, so the user is part of the key: a guessed thread id finds nothing
@@ -61,7 +65,7 @@ async def chat(
     config = {"configurable": {"thread_id": thread}}
 
     async def frames() -> AsyncIterator[str]:
-        reader = TurnReader(queued=queued)
+        reader = TurnReader(queued=queued, suggested=suggested)
 
         try:
             async for chunk, _metadata in agent.astream(

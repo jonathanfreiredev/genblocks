@@ -130,6 +130,9 @@ def picture(slot: str = "hero", category: str = CATEGORY) -> Placed:
     return Placed(
         slot=slot,
         category=category,
+        url="https://cdn.test/genblocks/images/abc123",
+        width=1024,
+        height=768,
         image=Generated(
             prompt="A wide photograph of an empty road at dawn",
             path="genblocks/images/abc123",
@@ -152,6 +155,7 @@ class Harness:
 
     def __init__(self) -> None:
         self.asked: list[dict] = []
+        self.library = None
         self.checked: list[list[SandboxFile]] = []
         self.uploaded: list[str] = []
         self.answer = findings()
@@ -227,11 +231,13 @@ def harness(monkeypatch) -> Harness:
         brief: str,
         category: str,
         image_categories: list[str] | None = None,
+        library=None,
         model=None,
     ) -> Built:
         harness.asked.append(
             {"brief": brief, "category": category, "image_categories": image_categories}
         )
+        harness.library = library
 
         return harness.built
 
@@ -618,7 +624,7 @@ async def test_a_run_with_no_render_is_still_judged_and_publishes_without_a_phot
 
 async def test_a_harness_that_writes_nothing_fails_the_task(runner_session, harness, monkeypatch):
     async def wrote_nothing(
-        *, brief: str, category: str, image_categories=None, model=None
+        *, brief: str, category: str, image_categories=None, library=None, model=None
     ) -> Built:
         raise agent.NothingWritten(
             "The harness finished without writing anything into the project."

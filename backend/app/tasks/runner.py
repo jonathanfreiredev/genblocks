@@ -29,6 +29,7 @@ two different rows, told apart without any heartbeats.
 import asyncio
 import re
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 import structlog
@@ -50,6 +51,7 @@ from app.judge.schemas import Judged
 from app.settings import settings
 from app.tasks import canned, service
 from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
+from app.vectors import service as vectors
 
 logger = structlog.get_logger("app.tasks.runner")
 
@@ -225,6 +227,7 @@ async def _build(
         brief=task.brief,
         category=spec.category_slug,
         image_categories=list(picture_types),
+        library=_picture_library(session, types=picture_types),
     )
     pictures = await _keep(session, task=task, built=built, types=picture_types)
 
@@ -284,6 +287,21 @@ async def _keep(
     pictures: list[Image] = []
 
     for placed in built.images:
+        if placed.library_id is not None:
+            # Already the library's: reused, not re-filed. It was scored when it
+            # came in, and scoring it again would be a second opinion on the same
+            # bytes.
+            existing = await session.get(Image, placed.library_id)
+            if existing is None:
+                raise PictureUnfiled(
+                    "The picture this block reused is no longer in the library."
+                )
+            pictures.append(existing)
+            continue
+
+        if placed.image is None:
+            raise PictureUnfiled("A picture was placed with neither bytes nor a library id.")
+
         category_id = types.get(placed.category)
         if category_id is None:
             raise PictureUnfiled(
@@ -313,6 +331,23 @@ async def _keep(
 
     if pictures:
         await session.commit()
+
+    # Remembered after the rows exist: a picture is the library's from the moment
+    # it is filed, whether or not the block that asked for it is published.
+    for placed, picture in zip(built.images, pictures, strict=True):
+        if placed.library_id is not None:
+            # A picture the library already had: it is remembered once, and this
+            # run did not make it.
+            continue
+
+        remembered = await vectors.remember_image(
+            image_id=picture.id,
+            prompt=picture.prompt,
+            picture=placed.image.data if placed.image else None,
+            category=placed.category,
+        )
+        if not remembered:
+            logger.warning("filed picture is not searchable", path=picture.path)
 
     return pictures
 
@@ -468,6 +503,74 @@ async def _publish(
             "pictures": len(made.pictures),
         },
     )
+
+    # Remembered after the block is committed, and after the step is closed: the
+    # registry is the truth and the index is a way to find it again, so a store
+    # that is having a bad day costs a search result, not a published block.
+    remembered = await vectors.remember_component(
+        component_id=component.id,
+        text=_remembered_as(component),
+        screenshot=made.found.screenshot,
+        slug=component.slug,
+        category=spec.category_slug,
+    )
+    if not remembered:
+        logger.warning("published block is not searchable", slug=component.slug)
+
+
+def _picture_library(
+    session: AsyncSession, *, types: dict[str, uuid.UUID]
+) -> Callable[[str, str], Awaitable[harness.Reused | None]]:
+    """The library as the harness asks it: a description and a type, a picture back.
+
+    The nearest picture in the same type is reused when it is close enough that
+    generating another would be paying twice for the same photograph
+    (``settings.image_reuse_distance``). Retrieval failing is not a reason to stop
+    a run, so anything that goes wrong here answers "nothing in the library" and
+    the picture is made.
+
+    The session is opened per call rather than held: the harness is a separate
+    concern and must not be handed one to keep.
+    """
+
+    async def look(prompt: str, category: str) -> harness.Reused | None:
+        category_id = types.get(category)
+        if category_id is None:
+            return None
+
+        try:
+            found = await vectors.find_images(prompt, limit=1, category=category)
+        except Exception as broke:  # noqa: BLE001 - a search is not worth a failed run
+            logger.warning("image library not searched", error=str(broke))
+            return None
+
+        if not found or found[0].distance > settings.image_reuse_distance:
+            return None
+
+        async with async_session_maker() as own:
+            picture = await own.get(Image, found[0].id)
+
+            if picture is None or picture.deleted_at is not None:
+                return None
+
+            return harness.Reused(
+                id=picture.id,
+                url=cloudinary.delivery_url(picture.path),
+                width=picture.width,
+                height=picture.height,
+                prompt=picture.prompt,
+            )
+
+    return look
+
+
+def _remembered_as(component: Component) -> str:
+    """What a block is remembered as: what it is called, and what it was asked for.
+
+    The brief is in it on purpose — it is the sentence a future brief will be
+    compared with, and a block named "Proof sheet" does not say "hero" anywhere.
+    """
+    return f"{component.title}. {component.description}\n\n{component.delivery_prompt}"
 
 
 def slug_for(*, title: str, task_id: uuid.UUID) -> str:

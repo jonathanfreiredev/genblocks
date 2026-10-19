@@ -78,12 +78,22 @@ class Settings(BaseSettings):
     harness_timeout_seconds: int = 900
 
     # Chroma stores the retrieval vectors. Left blank in development it falls
-    # back to a local persistent client; in production it points at Chroma
-    # Cloud, which needs all four.
+    # back to a local persistent client, in this directory; in production it
+    # points at Chroma Cloud, which needs all four.
     chroma_host: str | None = None
     chroma_api_key: str | None = None
     chroma_tenant: str | None = None
     chroma_database: str | None = None
+    chroma_path: str = ".chroma"
+
+    # How close is too close. Retrieval answers with cosine distance, so smaller
+    # is nearer: a brief within ``duplicate_distance`` of a published block is
+    # that block again, and the library already has it. A picture within
+    # ``image_reuse_distance`` of what a block asked for is the picture it would
+    # have generated, so it is reused instead. Both are calibration, measured
+    # against real briefs — not taste.
+    duplicate_distance: float = 0.18
+    image_reuse_distance: float = 0.15
 
     # --- Generation loop -----------------------------------------------------
     # How many times the harness may build the block and look at it before it has

@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 
+from app.agent.schemas import Suggestion, Suggestions
 from app.agent.stream import Event, TurnReader, encode
 from app.tasks.models import Task
 
@@ -35,7 +36,7 @@ def test_an_event_is_a_name_and_one_line_of_json():
 
 
 def test_the_words_arrive_as_tokens():
-    events = TurnReader(queued=[]).read(AIMessageChunk(content="Queued"))
+    events = TurnReader(queued=[], suggested=Suggestions()).read(AIMessageChunk(content="Queued"))
 
     assert events == [Event("token", {"text": "Queued"})]
 
@@ -43,11 +44,11 @@ def test_the_words_arrive_as_tokens():
 def test_a_wordless_chunk_says_nothing():
     # The graph closes a streamed call with an empty chunk, and a model thinking
     # about a tool has nothing to say. Neither is a token.
-    assert TurnReader(queued=[]).read(AIMessageChunk(content="")) == []
+    assert TurnReader(queued=[], suggested=Suggestions()).read(AIMessageChunk(content="")) == []
 
 
 def test_a_call_is_announced_once_however_many_pieces_it_arrives_in():
-    reader = TurnReader(queued=[])
+    reader = TurnReader(queued=[], suggested=Suggestions())
 
     first = reader.read(
         AIMessageChunk(
@@ -83,7 +84,7 @@ def test_a_call_is_announced_once_however_many_pieces_it_arrives_in():
 
 
 def test_a_call_that_arrives_whole_is_announced_too():
-    events = TurnReader(queued=[]).read(
+    events = TurnReader(queued=[], suggested=Suggestions()).read(
         AIMessage(
             content="",
             tool_calls=[
@@ -101,7 +102,7 @@ def test_a_call_that_arrives_whole_is_announced_too():
 
 
 def test_a_tool_that_answered_is_finished():
-    events = TurnReader(queued=[]).read(
+    events = TurnReader(queued=[], suggested=Suggestions()).read(
         ToolMessage(content="{}", name="search_components", tool_call_id="call_1")
     )
 
@@ -128,8 +129,8 @@ def test_the_task_a_tool_queued_reaches_the_dialog_with_the_answer():
 
 
 def test_a_turn_ends_whether_or_not_it_queued_anything():
-    assert TurnReader(queued=[]).close() == [Event("done", {})]
+    assert TurnReader(queued=[], suggested=Suggestions()).close() == [Event("done", {})]
 
 
 def test_a_message_the_reader_does_not_know_is_left_alone():
-    assert TurnReader(queued=[]).read(HumanMessage(content="build a hero")) == []
+    assert TurnReader(queued=[], suggested=Suggestions()).read(HumanMessage(content="build a hero")) == []
