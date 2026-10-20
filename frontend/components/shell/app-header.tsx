@@ -11,7 +11,8 @@ import { SearchDialog } from "@/components/shell/search-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { sectionFromPath } from "@/lib/vault/links";
+import { SECTION_KIND, sectionFromPath, typeFromPath } from "@/lib/vault/links";
+import type { Category } from "@/lib/vault/types";
 
 /**
  * The thin band above the page.
@@ -23,15 +24,22 @@ import { sectionFromPath } from "@/lib/vault/links";
  */
 export function AppHeader({
   session,
+  categories,
 }: {
   session: { user: { name: string } } | null;
+  categories: Category[];
 }) {
   const pathname = usePathname();
   const section = sectionFromPath(pathname);
+  const kind = SECTION_KIND[section];
+  const typeSlugs = categories
+    .filter((category) => category.kind === kind && category.level === 2)
+    .map((category) => category.slug);
+  const type = typeFromPath(pathname, section, typeSlugs);
   const { toggleSidebar } = useSidebar();
 
   return (
-    <header className="sticky top-0 z-30 flex h-[var(--header-height)] shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-4">
+    <header className="bg-background/80 supports-[backdrop-filter]:bg-background/70 sticky top-0 z-30 flex h-[var(--header-height)] shrink-0 items-center gap-2 border-b px-3 backdrop-blur md:px-4">
       <Button
         type="button"
         variant="ghost"
@@ -50,7 +58,7 @@ export function AppHeader({
       </div>
 
       <div className="ml-auto flex items-center gap-1 md:gap-2">
-        <SearchDialog section={section} />
+        <SearchDialog section={section} type={type} />
 
         {session ? (
           <DropdownAvatarMenu user={{ name: session.user.name }} />

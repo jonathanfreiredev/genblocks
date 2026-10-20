@@ -1,7 +1,7 @@
 import pytest
 
 from app.images.models import Image
-from app.images.service import get_image, list_images
+from app.images.service import get_image, get_image_by_slug, list_images
 from app.pagination import ListParams
 from tests.helpers import create_category
 
@@ -53,6 +53,17 @@ async def test_an_image_can_be_read_by_id(db_session):
 
     assert loaded is not None
     assert loaded.license == "MIT"
+
+
+async def test_an_image_can_be_read_by_slug(db_session):
+    scenes = await create_category(db_session, slug="scene", kind="image")
+    image = await _image(db_session, category_id=scenes.id, path="images/landscape")
+
+    loaded = await get_image_by_slug(db_session, slug=image.slug)
+
+    assert loaded is not None
+    assert loaded.id == image.id
+    assert loaded.slug == "landscape"
 
 
 async def test_an_image_carries_its_generation_panel(db_session):

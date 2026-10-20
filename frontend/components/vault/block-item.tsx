@@ -8,9 +8,10 @@ import type { Component, Generation } from "@/lib/vault/types";
 /**
  * One block, as a page rather than a dialog.
  *
- * The title is the only thing above the render. Below it the page splits the way
- * a reader works: the code and the brief on the left, the evidence on the right
- * in a column deliberately narrower than half.
+ * The render comes first. Below it the page splits the way a reader works: the
+ * code and the brief on the left, the evidence on the right in a column
+ * deliberately narrower than half. The title belongs with the facts, not above
+ * the picture — the prompt tab already carries the words that made it.
  */
 export function BlockItem({
   component,
@@ -28,11 +29,7 @@ export function BlockItem({
 
   return (
     <div className="flex flex-1 flex-col px-3 py-4 md:px-4">
-      <h1 className="text-2xl font-semibold tracking-tight text-balance">
-        {component.title}
-      </h1>
-
-      <div className="bg-muted/20 mt-4 rounded-xl border p-2 sm:p-3">
+      <div className="bg-muted/20 rounded-xl border p-2 sm:p-3">
         <div className="relative mx-auto aspect-[16/10] max-h-[58svh] w-full max-w-6xl">
           <AssetPlate
             path={
@@ -66,7 +63,7 @@ export function BlockItem({
             showTrace={false}
             details={
               <ItemDetails
-                description={component.description}
+                title={component.title}
                 category={categoryName}
                 date={component.created_at}
                 model={generation?.model ?? null}

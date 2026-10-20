@@ -284,7 +284,7 @@ Do not introduce a display face, a third family, or a second type scale. Heading
 - `2xl` 18px — larger surfaces.
 - `3xl` 22px, `4xl` 26px — reserved; not used by the shell.
 
-Buttons and inputs are `rounded-lg`, not pills. The avatar is the only circle.
+Buttons and inputs are `rounded-lg`, not pills. The account avatar and the chat's 32px message avatars are the circles; nothing else is.
 
 ### Spacing and layout
 
@@ -346,7 +346,7 @@ There is no search field in the mobile header: the magnifier opens the same dial
 
 ### Sidebar — phone
 
-The same sidebar becomes a sheet that starts **below** the header (`top: var(--header-height)`), so the header keeps its full width and stays visible. It has its own header row: `MENU` on the left and a close button on the right. Links close the sheet when tapped. The footer keeps the theme toggle.
+The same sidebar becomes a **full-height** sheet from the very top of the screen (`top: 0`, `100dvh`), covering the header while it is open. It has its own header row: `MENU` on the left and a close button on the right. Links close the sheet when tapped. The footer keeps the theme toggle. The assistant is **not** in this sheet on a phone; it is the floating button below.
 
 ### Breadcrumb band
 
@@ -360,10 +360,14 @@ There is no `Home` crumb. The section is the root.
 
 ## The assistant
 
-The vault has one conversation, opened from **Ask AI** in the sidebar. It answers
+The vault has one conversation. On a laptop it opens from **Ask AI** in the sidebar; on a phone it opens from a floating primary button at the bottom-left, above the safe area and outside the navigation sheet. It answers
 questions about blocks and pictures, and it can turn a request into a task. The
 surface is the shadcn chat set, not a hand-rolled scroll box.
 
+- **Entry** — one `AgentChatProvider` owns the transcript and the dialog; the
+  sidebar button and the phone's floating button are two triggers for the same
+  conversation, not two dialogs. The phone button is `position: fixed`, bottom-left,
+  offset by `env(safe-area-inset-bottom)`, and the mobile sheet hides its copy.
 - **Frame** — `Dialog` at `sm:max-w-3xl`, 760px tall on a laptop, full height on
   a phone. The header is the mark, the title `Ask GenBlocks`, one line of scope,
   a new-chat button and the close button.
@@ -374,18 +378,23 @@ surface is the shadcn chat set, not a hand-rolled scroll box.
 - **Transcript** — `MessageScroller` with `Message`, `MessageAvatar`,
   `MessageHeader` and `Bubble`. The user's turn is right-aligned in a primary
   bubble; the assistant's is left, full width, in a ghost bubble. Every turn has
-  a small name and an avatar; the assistant's avatar is a sparkle, the user's is
-  their initials.
+  a small name and a 32px circular avatar; the assistant's is a sparkle, the
+  user's is their initials.
 - **Activity** — a `Trace` above the assistant's words. Each tool is a
   `TraceLine`: `Spinner` plus a running phrase while it works, `Check` plus the
   past-tense phrase when it is done. The labels are human (`Searching the
   blocks`, `Queueing the build`), never the tool's Python name. While nothing has
   happened yet, a `Marker` with a spinner says `Thinking…`.
-- **Answers** — stream as text; no bubble around the assistant's prose, so a
-  long answer stays readable. `whitespace-pre-wrap` keeps the model's paragraphs.
+- **Answers** — streamed as Markdown and rendered by Streamdown under a ghost
+  bubble: bold names, short lists, links and fenced code arrive as themselves,
+  not as asterisks. It is streaming-aware, so an unfinished emphasis or fence
+  stays readable while the answer arrives. The user's own turn stays plain text.
+  Streamdown's stylesheet is imported in the root layout and its classes are
+  scanned from `node_modules/streamdown/dist` in `globals.css`.
 - **Suggestions** — the cards the tools found belong to the turn that found them,
-  in a horizontal rail under the answer. Each card opens its item page and closes
-  the dialog.
+  in a horizontal rail under the answer. The tools only offer a result close
+  enough to be the thing asked for; a weak nearest is not a card. Each card
+  opens its item page (by slug) and closes the dialog.
 - **Task card** — when a task is queued, it becomes a bordered card inside the
   same turn: heading (`Building the block`, `Block published`, `The build
   stopped`, `Already in the registry`), the brief, a status badge, one `TraceLine`
@@ -396,8 +405,9 @@ surface is the shadcn chat set, not a hand-rolled scroll box.
   send button (`ArrowUp`), a stop button while a turn is streaming, and the hint
   `Enter to send · Shift+Enter for a new line`. Enter sends; Shift+Enter breaks
   the line; IME composition is respected.
-- **New chat** — the plus in the header. It aborts the turn in flight, clears the
-  transcript and the task cards, and rotates the thread id.
+- **New chat** — the labelled button in the header, next to the close. It aborts
+  the turn in flight, clears the transcript and the task cards, and rotates the
+  thread id. The label is the affordance; a bare plus next to the close was not.
 - **Continuity** — the thread id lives in `localStorage` under
   `genblocks-chat-thread`. It is the only thing kept between visits: the
   transcript is React state, and the agent's memory is on the server. Closing the
@@ -427,13 +437,12 @@ Loading and missing assets are honest: the `AssetPlate` shows a muted frame with
 
 ## The item page
 
-Opening a tile is a navigation, not a dialog: `/blocks/<uuid>` or `/images/<uuid>`.
+Opening a tile is a navigation, not a dialog: `/blocks/<slug>` or `/images/<slug>`.
 
 Top to bottom:
 
-1. **The title** — the block's title, or the image's category. One h1, 24px semibold.
-2. **The render** — inside a muted, bordered frame with 8–12px padding. No tab, no `Render` label. The frame is capped at `58svh` (images at `60svh`) and centred; the whole artifact is contained, never cropped.
-3. **Two columns** below, aligned at the top:
+1. **The render** — inside a muted, bordered frame with 8–12px padding. No tab, no `Render` label. The frame is capped at `58svh` (images at `60svh`) and centred; the whole artifact is contained, never cropped. A block's title is not above it.
+2. **Two columns** below, aligned at the top:
    - **Left, flexible**: the `code` and `prompt` tabs for a block; the prompt card for an image.
    - **Right, 20rem (22rem on a wide screen)**: the evidence.
 
@@ -443,6 +452,8 @@ Top to bottom:
 - The rail lists every path, highlights the current one and truncates long paths. On a phone it scrolls horizontally.
 - Collapsing it leaves a 40px rail with the reopen button; the code takes the width.
 - The code itself is shadcn's `CodeBlock`: a bordered, `rounded-lg`, monospaced surface with line numbers, horizontal scroll and a copy action that appears on hover, focus or touch. Inside the tab card it is flush (`rounded-none border-0`) with a faint muted background.
+- The lines are syntax-highlighted by shiki through shadcn's `useHighlightedCode` hook: `github-light` and `github-dark`, chosen from the file extension (`.tsx`, `.ts`, `.js`, `.json`, `.css`, `.py`, `.sh`, `.sql`, `.md`, `.yml`). An unknown extension stays plain; the highlighter loads the grammar on first use rather than in the first paint.
+- An item is addressed by its slug, not its id: `/blocks/proof-sheet-hero`, `/images/stone-harbour`. An old id link redirects to the slug; the page's canonical URL and its `generateMetadata` title/description use the slug.
 - A line with a package to install sits under the code as a mono command with its own copy button. React and React DOM are implied and never listed.
 - The `code` and `prompt` labels are lowercase.
 
@@ -454,7 +465,10 @@ The delivery prompt as body copy, with a copy button in the tab header. The imag
 
 A bordered `rounded-xl` card, 16px padding, 24px between groups. The order is fixed:
 
-1. **Description**, when the artifact has one. Images put the prompt on the left instead.
+1. **Title** on a block: the page h1, 16px semibold, at the top of the column. The
+   render is first and the prompt tab already carries the brief, so repeating
+   either above the picture would be a second copy. An image keeps its category
+   above the render and has no title here.
 2. **Category, date, model and trace** as a definition list. Labels 14px muted; values 14px medium and truncated. The trace is a link when a Langfuse host is configured and `Not recorded` otherwise.
 3. **Judge** — the score rows. Label 14px muted on the left, score on the right: 18px semibold tabular numerals over a 56px, 4px-high muted track. One row per rubric dimension.
 4. **Harness** — one row per check, label 14px, state 12px (`ok` muted, `failed` destructive). A failed check may carry the sandbox's own sentence underneath. Accessibility violations follow as 14px lines with id, impact and node count.
@@ -463,8 +477,8 @@ The panel narrows rather than widening the page: never give the evidence more th
 
 ### Block and image differences
 
-- A block has a title, a project, a delivery prompt, an attempt and harness checks.
-- An image has no code and no separate prompt section; its category is the h1, the prompt is the left card, and the evidence keeps the same order without a harness.
+- A block has a title, a project, a delivery prompt, an attempt and harness checks. Its title is the h1 at the top of the evidence column; the render is first on the page.
+- An image has no code and no separate prompt section; its category is the h1 above the render, the prompt is the left card, and the evidence keeps the same order without a harness or title.
 
 ## Tasks and account
 
@@ -479,7 +493,7 @@ The panel narrows rather than widening the page: never give the evidence more th
 - **InputGroup** — the search field: a magnifier addon, the input, and an inline `Search` button.
 - **Search dialog** — a title, one sentence of scope, the input group. Submit on Enter. It searches the section on screen and keeps the current category.
 - **Tabs** — shadcn's line variant. Triggers live inside a `TabsList`; the active line is the foreground.
-- **CodeBlock** — shadcn's component: header/actions/content/footer, line numbers, copy button, horizontal scroll.
+- **CodeBlock** — shadcn's component: header/actions/content/footer, line numbers, copy button, horizontal scroll, and shiki highlighting through `useHighlightedCode`.
 - **Dialog / Sheet / Dropdown** — shadcn defaults. Overlays are the only place a shadow appears. Every dialog and sheet has a title (visually hidden when needed).
 - **Badge** — status words and verdicts. `secondary` for running, `destructive` for failed, `outline` for queued or done; verdicts use the functional emerald/destructive pairs.
 - **Sidebar** — the real shadcn sidebar with menu buttons, group labels, tooltips in icon mode and a sheet on mobile.

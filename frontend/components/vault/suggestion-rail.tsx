@@ -15,7 +15,7 @@ import type { Suggestion } from "@/lib/vault/types";
 
 /** Where a card goes: the item page of the section it belongs to. */
 function hrefFor(item: Suggestion): string {
-  return itemHref(KIND_SECTION[item.kind], item.id);
+  return itemHref(KIND_SECTION[item.kind], item.slug ?? item.id);
 }
 
 /** What a card is, in the words of the registry rather than of the model. */

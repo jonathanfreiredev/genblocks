@@ -141,6 +141,8 @@ export interface Generation {
  */
 export interface Image {
   id: string;
+  /** The readable address of the picture; the id is only the fallback. */
+  slug?: string;
   prompt: string;
   path: string;
   width: number;
@@ -200,6 +202,8 @@ export interface TaskDetail extends Task {
 export interface Suggestion {
   kind: "component" | "image";
   id: string;
+  /** The readable address of the thing; absent on an old stream. */
+  slug?: string | null;
   title: string;
   detail: string;
   path: string | null;

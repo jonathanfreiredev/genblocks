@@ -27,6 +27,7 @@ class ImageRead(BaseModel):
     """
 
     id: uuid.UUID
+    slug: str
     prompt: str
     path: str
     width: int

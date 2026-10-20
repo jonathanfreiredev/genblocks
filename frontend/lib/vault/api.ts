@@ -126,6 +126,13 @@ export function getComponent(id: string): Promise<Component | null> {
   return readOrNull<Component>(`/components/${id}`);
 }
 
+/** One block by its readable address, or `null` when nothing has it. */
+export function getComponentBySlug(slug: string): Promise<Component | null> {
+  return readOrNull<Component>(
+    `/components/by-slug/${encodeURIComponent(slug)}`,
+  );
+}
+
 /** A block's whole attempt history, oldest first. */
 export function listComponentGenerations(id: string): Promise<Generation[]> {
   return read<Generation[]>(`/components/${id}/generations`);
@@ -144,6 +151,11 @@ export function listImages(
 
 export function getImage(id: string): Promise<Image | null> {
   return readOrNull<Image>(`/images/${id}`);
+}
+
+/** One picture by its readable address, or `null` when nothing has it. */
+export function getImageBySlug(slug: string): Promise<Image | null> {
+  return readOrNull<Image>(`/images/by-slug/${encodeURIComponent(slug)}`);
 }
 
 /** The caller's own tasks. The token decides whose they are; nothing else does. */

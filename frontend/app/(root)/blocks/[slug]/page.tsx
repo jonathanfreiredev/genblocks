@@ -1,27 +1,49 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { BlockItem } from "@/components/vault/block-item";
 import { CataloguePage } from "@/components/vault/catalogue-page";
 import {
   getComponent,
+  getComponentBySlug,
   listCategories,
   listComponentGenerations,
 } from "@/lib/vault/api";
 import { isUuid } from "@/lib/vault/links";
 
-export const metadata: Metadata = {
-  title: "Block",
-};
-
 type Params = { slug: string };
 type SearchParams = Record<string, string | string[] | undefined>;
 
+/** One block by its readable address, or by an old id link, once per request. */
+const loadComponent = cache(async (slug: string) =>
+  isUuid(slug) ? getComponent(slug) : getComponentBySlug(slug),
+);
+
 /**
- * One address serves a category and an item: a type is a word, an item is a
- * uuid. The shape is the same as the rest of the vault, so a link to either
- * survives a reload and the Back button.
+ * One address serves a category and an item: a type is a word the taxonomy
+ * knows, an item is its slug. The page tries the item first, so the same URL
+ * shape carries both; a UUID from an older link redirects to the slug.
  */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<Params>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const component = await loadComponent(slug);
+
+  if (!component) {
+    return { title: "Block" };
+  }
+
+  return {
+    title: component.title,
+    description: component.description,
+    alternates: { canonical: `/blocks/${component.slug}` },
+  };
+}
+
 export default async function BlockRoute({
   params,
   searchParams,
@@ -30,8 +52,9 @@ export default async function BlockRoute({
   searchParams: Promise<SearchParams>;
 }) {
   const { slug } = await params;
+  const component = await loadComponent(slug);
 
-  if (!isUuid(slug)) {
+  if (!component) {
     return (
       <CataloguePage
         section="blocks"
@@ -41,9 +64,9 @@ export default async function BlockRoute({
     );
   }
 
-  const component = await getComponent(slug);
-  if (!component) {
-    notFound();
+  // A UUID still resolves, but the address a person shares is the slug.
+  if (slug !== component.slug) {
+    redirect(`/blocks/${component.slug}`);
   }
 
   const [generations, categories] = await Promise.all([

@@ -42,6 +42,7 @@ export function sectionFromPath(pathname: string): Section {
 export function typeFromPath(
   pathname: string,
   section: Section,
+  typeSlugs: readonly string[],
 ): string | undefined {
   const segments = pathname.split("/").filter(Boolean);
 
@@ -49,7 +50,9 @@ export function typeFromPath(
     return undefined;
   }
 
-  return segments[1];
+  // An item slug is a word too. Only a slug the taxonomy knows is a type; the
+  // rest is the item at this address.
+  return typeSlugs.includes(segments[1]) ? segments[1] : undefined;
 }
 
 function single(value: string | string[] | undefined): string | undefined {
@@ -97,8 +100,8 @@ export function catalogueHref(view: CatalogueView): string {
   return query ? `${path}?${query}` : path;
 }
 
-export function itemHref(section: Section, itemId: string): string {
-  return `/${section}/${itemId}`;
+export function itemHref(section: Section, slug: string): string {
+  return `/${section}/${slug}`;
 }
 
 export function offsetFor(view: CatalogueView): number {

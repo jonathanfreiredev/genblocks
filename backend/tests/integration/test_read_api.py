@@ -29,6 +29,7 @@ async def test_the_vault_reads_are_public(client, db_session):
         "/v1/components/by-slug/alpha",
         "/v1/images",
         f"/v1/images/{image.id}",
+        f"/v1/images/by-slug/{image.slug}",
     ]
 
     for url in urls:
@@ -246,3 +247,14 @@ async def test_an_image_is_read_by_id(client, db_session):
 
     assert (await client.get(f"/v1/images/{image.id}")).json()["id"] == str(image.id)
     assert (await client.get(f"/v1/images/{uuid.uuid4()}")).status_code == 404
+
+
+async def test_an_image_is_read_by_slug(client, db_session):
+    scenes = await create_category(db_session, slug="scene", kind="image")
+    image = await create_image(db_session, category_id=scenes.id, path="images/landscape")
+
+    body = (await client.get(f"/v1/images/by-slug/{image.slug}")).json()
+
+    assert body["id"] == str(image.id)
+    assert body["slug"] == "landscape"
+    assert (await client.get("/v1/images/by-slug/nope")).status_code == 404

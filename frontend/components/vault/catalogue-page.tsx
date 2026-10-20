@@ -239,14 +239,14 @@ export async function CataloguePage({
                     <ImageCell
                       key={image.id}
                       image={image}
-                      href={itemHref(section, image.id)}
+                      href={itemHref(section, image.slug ?? image.id)}
                     />
                   ))
                 : (items as ComponentSummary[]).map((component) => (
                     <ComponentCell
                       key={component.id}
                       component={component}
-                      href={itemHref(section, component.id)}
+                      href={itemHref(section, component.slug)}
                     />
                   ))}
             </ItemGrid>

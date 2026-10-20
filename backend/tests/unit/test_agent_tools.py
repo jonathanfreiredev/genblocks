@@ -127,3 +127,45 @@ async def test_a_month_that_is_spent_is_told_to_the_person(monkeypatch):
     assert answer["queued"] is False
     assert "1 November" in answer["limit"]
     assert "do not retry" in answer["message"]
+
+
+async def test_a_search_offers_only_the_matches_near_enough_to_be_one(monkeypatch):
+    """A card is a claim that the registry has the thing, so a far row is not one."""
+    from types import SimpleNamespace
+
+    from app.agent import tools as agent_tools
+    from app.agent.schemas import Suggestions
+    from app.components import service as components_service
+
+    near = SimpleNamespace(
+        id=uuid.uuid4(),
+        slug="tiered-pricing",
+        title="Tiered pricing",
+        description="Three plans in a ruled table",
+    )
+    far = SimpleNamespace(
+        id=uuid.uuid4(),
+        slug="proof-sheet-hero",
+        title="Proof-sheet hero",
+        description="A left-aligned headline on a rule grid",
+    )
+
+    async def nearest(session, *, query):
+        return [(near, 0.29), (far, 0.68)]
+
+    async def renders(session, *, ids):
+        return {}
+
+    monkeypatch.setattr(agent_tools, "_nearest_components", nearest)
+    monkeypatch.setattr(components_service, "renders", renders)
+
+    suggested = Suggestions()
+    tool = next(
+        one
+        for one in build_tools(caller=caller(), queued=[], suggested=suggested)
+        if one.name == "search_components"
+    )
+    answer = await tool.ainvoke({"query": "pricing table"})
+
+    assert [match["slug"] for match in answer["matches"]] == ["tiered-pricing"]
+    assert [one.slug for one in suggested.items] == ["tiered-pricing"]

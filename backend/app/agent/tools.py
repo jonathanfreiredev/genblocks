@@ -47,6 +47,17 @@ SEARCH_LIMIT = 5
 # How many pictures the library offers for one description.
 PICTURE_LIMIT = 3
 
+# How near a result has to be before it is offered as a match. Cosine distance,
+# smaller is nearer: the measured examples put "pricing block" at 0.51 for the
+# pricing table and the next block at 0.63. Cards are a claim that the registry
+# has the thing, so the far ones stay out of the conversation.
+SEARCH_DISTANCE = 0.58
+
+# Pictures are compared by a prompt against a photograph, so the same query sits
+# further away than it would against code. The nearest unrelated scene is around
+# 0.78; a workshop at 0.67 is still the workshop.
+PICTURE_DISTANCE = 0.72
+
 
 def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> list[BaseTool]:
     """The tools one conversation can reach, with the caller already bound.
@@ -99,15 +110,28 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
         """
         async with async_session_maker() as session:
             found = await _nearest_components(session, query=query)
+            relevant = [
+                (block, distance) for block, distance in found if distance <= SEARCH_DISTANCE
+            ]
             renders = await components_service.renders(
-                session, ids=[block.id for block, _ in found]
+                session, ids=[block.id for block, _ in relevant]
             )
 
-        for block, _distance in found:
+        for block, _distance in relevant:
             suggested.add(_suggested(block, renders.get(block.id)))
 
+        if not relevant:
+            return {
+                "matches": [],
+                "note": (
+                    "Nothing in the registry is close enough to call a match. Say "
+                    "so plainly and offer to build the block instead; do not name a "
+                    "near miss as if it were the thing asked for."
+                ),
+            }
+
         return {
-            "matches": [_described(block, distance) for block, distance in found],
+            "matches": [_described(block, distance) for block, distance in relevant],
             "note": (
                 "Nearest first. Name the ones that fit; the cards show the "
                 "render. A block that already exists is not worth building twice."
@@ -130,11 +154,18 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
             nearest = await vectors.find_images(query, limit=PICTURE_LIMIT, category=category)
             pictures = await _pictures(session, ids=[one.id for one in nearest])
 
-        for picture in pictures:
+        relevant = [
+            (picture, match.distance)
+            for picture, match in zip(pictures, nearest, strict=False)
+            if match.distance <= PICTURE_DISTANCE
+        ]
+
+        for picture, _distance in relevant:
             suggested.add(
                 Suggestion(
                     kind="image",
                     id=picture.id,
+                    slug=picture.slug,
                     title=picture.prompt,
                     detail=f"{picture.width}×{picture.height}",
                     path=picture.path,
@@ -143,16 +174,27 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
                 )
             )
 
+        if not relevant:
+            return {
+                "images": [],
+                "note": (
+                    "Nothing in the library is close enough to the scene asked "
+                    "for. Say so; ask for a new picture only if the block genuinely "
+                    "needs one."
+                ),
+            }
+
         return {
             "images": [
                 {
                     "id": str(picture.id),
+                    "slug": picture.slug,
                     "prompt": picture.prompt,
                     "width": picture.width,
                     "height": picture.height,
-                    "distance": round(match.distance, 3),
+                    "distance": round(distance, 3),
                 }
-                for picture, match in zip(pictures, nearest, strict=False)
+                for picture, distance in relevant
             ],
             "note": (
                 "These are already in the library. Name the ones that fit; the "
@@ -276,6 +318,7 @@ def _suggested(block: Component, path: str | None) -> Suggestion:
     return Suggestion(
         kind="component",
         id=block.id,
+        slug=block.slug,
         title=block.title,
         detail=block.description,
         path=path,

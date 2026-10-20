@@ -47,6 +47,7 @@ from app.harness import agent as harness
 from app.harness import checks, cloudinary
 from app.harness.schemas import SandboxFile, SandboxResult
 from app.images.models import Image
+from app.images.slug import image_slug
 from app.judge import scoring as judge
 from app.judge.schemas import Judged
 from app.moderation import service as moderation
@@ -412,6 +413,7 @@ async def _keep(
             media_type=placed.image.media_type,
         )
         picture = Image(
+            slug=image_slug(prompt=placed.image.prompt, path=placed.image.path),
             prompt=placed.image.prompt,
             path=placed.image.path,
             width=placed.image.width,

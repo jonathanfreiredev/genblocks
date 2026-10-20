@@ -188,7 +188,7 @@ function Sidebar({
           data-slot="sidebar"
           data-mobile="true"
           className={cn(
-            "bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 data-[side=left]:top-[var(--header-height)] data-[side=left]:h-[calc(100dvh-var(--header-height))] [&>button]:hidden",
+            "bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden",
             className,
           )}
           style={

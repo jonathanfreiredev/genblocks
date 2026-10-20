@@ -1,7 +1,7 @@
 "use client";
 
 import { SearchIcon } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -19,11 +19,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import {
-  catalogueHref,
-  typeFromPath,
-  type Section,
-} from "@/lib/vault/links";
+import { catalogueHref, type Section } from "@/lib/vault/links";
 
 const NOUN: Record<Section, string> = {
   blocks: "blocks",
@@ -38,10 +34,15 @@ const NOUN: Record<Section, string> = {
  * field. The section on screen decides what is searched: the same words mean a
  * title in Blocks and a prompt in Images.
  */
-export function SearchDialog({ section }: { section: Section }) {
+export function SearchDialog({
+  section,
+  type,
+}: {
+  section: Section;
+  /** The category on screen, when the page is a category rather than an item. */
+  type?: string;
+}) {
   const router = useRouter();
-  const pathname = usePathname();
-  const type = typeFromPath(pathname, section);
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
 
@@ -72,7 +73,7 @@ export function SearchDialog({ section }: { section: Section }) {
         render={
           <Button
             variant="outline"
-            className="hidden h-8 w-56 justify-start gap-2 rounded-lg px-2.5 font-normal text-muted-foreground md:inline-flex"
+            className="text-muted-foreground hidden h-8 w-56 justify-start gap-2 rounded-lg px-2.5 font-normal md:inline-flex"
           >
             <SearchIcon className="size-4" />
             <span>search</span>

@@ -87,12 +87,19 @@ describe("where the URL is", () => {
     expect(sectionFromPath("/tasks")).toBe("blocks");
   });
 
-  test("reads a type, but not an item id", () => {
-    expect(typeFromPath("/blocks/hero", "blocks")).toBe("hero");
+  test("reads a known type, but not an item slug or an id", () => {
+    expect(typeFromPath("/blocks/hero", "blocks", ["hero", "pricing"])).toBe(
+      "hero",
+    );
     expect(
-      typeFromPath("/blocks/0199f1ab-2c3d-4e5f-8a9b-0c1d2e3f4a5b", "blocks"),
+      typeFromPath("/blocks/tiered-pricing", "blocks", ["hero", "pricing"]),
     ).toBeUndefined();
-    expect(typeFromPath("/images", "images")).toBeUndefined();
+    expect(
+      typeFromPath("/blocks/0199f1ab-2c3d-4e5f-8a9b-0c1d2e3f4a5b", "blocks", [
+        "hero",
+      ]),
+    ).toBeUndefined();
+    expect(typeFromPath("/images", "images", ["scene"])).toBeUndefined();
   });
 });
 

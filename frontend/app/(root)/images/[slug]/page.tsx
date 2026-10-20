@@ -1,17 +1,42 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { CataloguePage } from "@/components/vault/catalogue-page";
 import { ImageItem } from "@/components/vault/image-item";
-import { getImage, listCategories } from "@/lib/vault/api";
+import { getImage, getImageBySlug, listCategories } from "@/lib/vault/api";
 import { isUuid } from "@/lib/vault/links";
-
-export const metadata: Metadata = {
-  title: "Image",
-};
 
 type Params = { slug: string };
 type SearchParams = Record<string, string | string[] | undefined>;
+
+/** One picture by its readable address, or by an old id link, once per request. */
+const loadImage = cache(async (slug: string) =>
+  isUuid(slug) ? getImage(slug) : getImageBySlug(slug),
+);
+
+/**
+ * A picture is addressed by its slug; an old id link redirects to it. A word
+ * the taxonomy knows is the image catalogue for that type.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<Params>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const image = await loadImage(slug);
+
+  if (!image) {
+    return { title: "Image" };
+  }
+
+  return {
+    title: image.prompt,
+    description: image.prompt,
+    alternates: { canonical: `/images/${image.slug ?? image.id}` },
+  };
+}
 
 export default async function ImageRoute({
   params,
@@ -21,8 +46,9 @@ export default async function ImageRoute({
   searchParams: Promise<SearchParams>;
 }) {
   const { slug } = await params;
+  const image = await loadImage(slug);
 
-  if (!isUuid(slug)) {
+  if (!image) {
     return (
       <CataloguePage
         section="images"
@@ -32,9 +58,8 @@ export default async function ImageRoute({
     );
   }
 
-  const image = await getImage(slug);
-  if (!image) {
-    notFound();
+  if (image.slug && slug !== image.slug) {
+    redirect(`/images/${image.slug}`);
   }
 
   const categories = await listCategories();

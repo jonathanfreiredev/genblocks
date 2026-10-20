@@ -10,14 +10,40 @@ import {
   CodeBlockActions,
   CodeBlockContent,
   CodeBlockCopyButton,
+  CodeBlockLine,
 } from "@/components/ui/code-block";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 import { cn } from "@/lib/utils";
 
 /**
  * What a block needs installed beside it. React is the language, not a request.
  */
 const IMPLIED_INSTALLS = new Set(["react", "react-dom"]);
+
+/** Shiki grammar per file extension; anything else is shown as plain text. */
+const LANGUAGE_BY_EXTENSION: Record<string, string> = {
+  css: "css",
+  html: "html",
+  js: "javascript",
+  jsx: "jsx",
+  json: "json",
+  md: "markdown",
+  mdx: "markdown",
+  py: "python",
+  sh: "bash",
+  sql: "sql",
+  ts: "typescript",
+  tsx: "tsx",
+  yaml: "yaml",
+  yml: "yaml",
+};
+
+function languageFor(path: string): string {
+  const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+
+  return LANGUAGE_BY_EXTENSION[extension] ?? "text";
+}
 
 /**
  * The project's files.
@@ -140,6 +166,7 @@ export function CodeTabs({
 
   const shown = paths.includes(chosen) ? chosen : entry;
   const code = files[shown] ?? "";
+  const lines = useHighlightedCode(code, languageFor(shown));
 
   return (
     <Tabs
@@ -175,7 +202,9 @@ export function CodeTabs({
               <CodeBlockCopyButton value={code} />
             </CodeBlockActions>
             <CodeBlockContent lineNumbers className="min-h-0 flex-1">
-              {code}
+              {lines.map((line, index) => (
+                <CodeBlockLine key={index}>{line}</CodeBlockLine>
+              ))}
             </CodeBlockContent>
           </CodeBlock>
         </div>

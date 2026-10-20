@@ -66,10 +66,13 @@ export function buildBreadcrumbs(
         category.slug === second,
     );
 
-    return [
-      { label, href: `/${section}` },
-      { label: type?.name ?? humanize(second) },
-    ];
+    // An item's own h1 is its name; the band only needs the way back. A second
+    // segment that is not a type is the item, not a category.
+    if (!type) {
+      return [{ label, href: `/${section}` }];
+    }
+
+    return [{ label, href: `/${section}` }, { label: type.name }];
   }
 
   if (first === "tasks") {

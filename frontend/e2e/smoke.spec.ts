@@ -81,3 +81,32 @@ test("your tasks redirects unauthenticated users to login", async ({
 
   await expect(page).toHaveURL(/\/auth\/login/);
 });
+
+test("the mobile navigation is full height and the assistant floats outside it", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/blocks");
+
+  // The assistant is a floating control on the page, bottom-left, not an item
+  // buried in the sheet.
+  const ask = page.getByRole("button", { name: "Ask AI" });
+  await expect(ask).toBeVisible();
+
+  const askBox = await ask.boundingBox();
+  expect(askBox).not.toBeNull();
+  expect(askBox!.x).toBeLessThan(100);
+  expect(askBox!.y).toBeGreaterThan(700);
+
+  await page.getByRole("button", { name: "Open the navigation" }).click();
+
+  const sheet = page.getByRole("dialog");
+  const sheetBox = await sheet.boundingBox();
+  expect(sheetBox).not.toBeNull();
+  expect(sheetBox!.y).toBe(0);
+  expect(sheetBox!.height).toBe(844);
+
+  // It starts at the top of the screen, not under the header, and the assistant
+  // is not duplicated inside it.
+  await expect(sheet.getByRole("button", { name: "Ask AI" })).toHaveCount(0);
+});

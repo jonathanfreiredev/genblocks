@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_async_db_session
 from app.images.schemas import ImageListQuery, ImageRead
-from app.images.service import get_image, list_images
+from app.images.service import get_image, get_image_by_slug, list_images
 from app.pagination import OffsetPage
 from app.users.service import display_names
 
@@ -41,6 +41,23 @@ async def read_images(
         total=total,
         limit=params.limit,
         offset=params.offset,
+    )
+
+
+@images_router.get("/by-slug/{slug}", response_model=ImageRead)
+async def read_image_by_slug(
+    slug: str,
+    session: Annotated[AsyncSession, Depends(get_async_db_session)],
+) -> ImageRead:
+    """Return one image by slug, the identifier a link uses."""
+    image = await get_image_by_slug(session, slug=slug)
+    if image is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
+
+    names = await display_names(session, ids=[image.created_by])
+
+    return ImageRead.model_validate(image).model_copy(
+        update={"author": names.get(image.created_by) if image.created_by else None}
     )
 
 

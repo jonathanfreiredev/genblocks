@@ -22,16 +22,19 @@ function Row({
  * is, when it joined, what made it, and where the run can be read.
  *
  * It sits above the scores in the evidence panel rather than beside them, which
- * is why the trace is a row here and not a section of its own.
+ * is why the trace is a row here and not a section of its own. A block puts its
+ * title here, below the render: the picture is the first thing, and the prompt
+ * tab already carries the brief, so repeating it above the facts would be a
+ * second copy.
  */
 export function ItemDetails({
-  description,
+  title,
   category,
   date,
   model,
   traceId,
 }: {
-  description?: string | null;
+  title?: string | null;
   category: string;
   date: string;
   model: string | null;
@@ -42,10 +45,10 @@ export function ItemDetails({
 
   return (
     <div className="flex flex-col gap-4">
-      {description ? (
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          {description}
-        </p>
+      {title ? (
+        <h1 className="text-base font-semibold tracking-tight text-balance">
+          {title}
+        </h1>
       ) : null}
 
       <dl className="flex flex-col">

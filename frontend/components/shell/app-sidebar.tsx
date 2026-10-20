@@ -26,7 +26,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { AgentChat } from "@/components/vault/agent-chat";
+import { AgentChatTrigger } from "@/components/vault/agent-chat";
 import { cn } from "@/lib/utils";
 import {
   SECTION_KIND,
@@ -50,15 +50,7 @@ const SECTIONS: { section: Section; label: string; icon: typeof LayoutGrid }[] =
  * component becomes a sheet that starts under the header, so the header keeps
  * the way back and the sheet keeps the list.
  */
-export function AppSidebar({
-  categories,
-  signedIn,
-  userName,
-}: {
-  categories: Category[];
-  signedIn: boolean;
-  userName: string | null;
-}) {
+export function AppSidebar({ categories }: { categories: Category[] }) {
   const pathname = usePathname();
   const { isMobile, open, setOpenMobile, toggleSidebar } = useSidebar();
 
@@ -71,11 +63,18 @@ export function AppSidebar({
   // Outside the vault (tasks, profile) the categories still belong to Blocks:
   // there is no third kind and an empty column would read as a bug.
   const section: Section = inSection ? sectionFromPath(pathname) : "blocks";
-  const activeType = inSection ? typeFromPath(pathname, section) : undefined;
   const kind = SECTION_KIND[section];
   const types = categories.filter(
     (category) => category.kind === kind && category.level === 2,
   );
+  // Only a taxonomy slug selects a category; an item slug is just an item.
+  const activeType = inSection
+    ? typeFromPath(
+        pathname,
+        section,
+        types.map((type) => type.slug),
+      )
+    : undefined;
 
   function closeOnMobile() {
     if (isMobile) {
@@ -86,9 +85,12 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="h-[var(--header-height)] justify-center border-b p-2 group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:py-2">
-        <div className="hidden items-center gap-1 md:flex group-data-[collapsible=icon]:flex-col">
+        <div className="hidden items-center gap-1 group-data-[collapsible=icon]:flex-col md:flex">
           <Brand className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden" />
-          <Brand compact className="hidden group-data-[collapsible=icon]:flex" />
+          <Brand
+            compact
+            className="hidden group-data-[collapsible=icon]:flex"
+          />
           <Button
             type="button"
             variant="ghost"
@@ -102,7 +104,7 @@ export function AppSidebar({
         </div>
 
         <div className="flex items-center justify-between md:hidden">
-          <span className="px-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <span className="text-muted-foreground px-2 text-xs font-medium tracking-wide uppercase">
             Menu
           </span>
           <Button
@@ -118,13 +120,10 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
+        {/* On a phone the assistant floats at the bottom of the page instead. */}
+        <SidebarGroup className="hidden md:block">
           <SidebarGroupContent>
-            <AgentChat
-              signedIn={signedIn}
-              userName={userName}
-              className="h-9 w-full group-data-[collapsible=icon]:px-0"
-            />
+            <AgentChatTrigger className="h-9 w-full group-data-[collapsible=icon]:px-0" />
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -138,9 +137,7 @@ export function AppSidebar({
                 return (
                   <SidebarMenuItem key={one}>
                     <SidebarMenuButton
-                      render={
-                        <Link href={`/${one}`} onClick={closeOnMobile} />
-                      }
+                      render={<Link href={`/${one}`} onClick={closeOnMobile} />}
                       isActive={active}
                       tooltip={label}
                     >
@@ -160,14 +157,12 @@ export function AppSidebar({
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  render={
-                    <Link href={`/${section}`} onClick={closeOnMobile} />
-                  }
+                  render={<Link href={`/${section}`} onClick={closeOnMobile} />}
                   isActive={inSection && !activeType}
                   size="sm"
                   className="pl-7"
                 >
-                  <span className="text-xs text-muted-foreground">All</span>
+                  <span className="text-muted-foreground text-xs">All</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -211,7 +206,7 @@ export function AppSidebar({
             href="https://github.com/jonathanfreiredev/genblocks"
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground group-data-[collapsible=icon]:hidden"
+            className="text-muted-foreground hover:text-foreground text-xs transition-colors group-data-[collapsible=icon]:hidden"
           >
             Source
           </a>

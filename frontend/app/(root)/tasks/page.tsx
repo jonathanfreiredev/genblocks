@@ -10,7 +10,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { AgentChat } from "@/components/vault/agent-chat";
+import { AgentChatTrigger } from "@/components/vault/agent-chat";
 import { StatusWord } from "@/components/vault/status-word";
 import { getSession } from "@/server/auth/auth.lib";
 import { VaultUnreadable, listTasks } from "@/lib/vault/api";
@@ -89,7 +89,7 @@ export default async function TasksPage() {
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <AgentChat userName={session?.user.name ?? null} />
+            <AgentChatTrigger />
           </EmptyContent>
         </Empty>
       ) : (

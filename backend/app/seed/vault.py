@@ -1204,6 +1204,7 @@ async def _seed_images(session: AsyncSession, *, categories: dict[str, Category]
             image = Image(id=image_id, path=spec.path)
             session.add(image)
 
+        image.slug = spec.key
         image.prompt = spec.prompt
         image.width = spec.width
         image.height = spec.height

@@ -50,6 +50,8 @@ class Suggestion:
     id: uuid.UUID
     title: str
     detail: str
+    # The readable address of the thing; the id is only the fallback.
+    slug: str | None = None
     # Cloudinary public id of what to show: a block's render, a picture itself.
     # None when there is nothing to show, and the card falls back to its words.
     path: str | None = None
@@ -60,6 +62,7 @@ class Suggestion:
         return {
             "kind": self.kind,
             "id": str(self.id),
+            "slug": self.slug,
             "title": self.title,
             "detail": self.detail,
             "path": self.path,

@@ -42,7 +42,8 @@ test("an item opens as a page on its render", async ({ page }) => {
   const title = await cell.getAttribute("aria-label");
   await cell.click();
 
-  await expect(page).toHaveURL(/\/blocks\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/blocks\/[a-z0-9-]+$/);
+  await expect(page).not.toHaveURL(/\/[0-9a-f]{8}-[0-9a-f]{4}-/);
   await expect(
     page.getByRole("heading", { level: 1, name: title ?? "" }),
   ).toBeVisible();
