@@ -50,9 +50,20 @@ class Settings(BaseSettings):
     image_model: str = "flux-2-pro"
     bfl_base_url: str = "https://api.bfl.ai/v1"
 
-    # Groq powers moderation only, with a free-tier safety model.
+    # Groq powers the text moderation fallback, with a free-tier safety model.
     groq_api_key: str | None = None
     moderation_model: str = "openai/gpt-oss-safeguard-20b"
+    # OpenAI moderation is the primary text and image gate when its key is set.
+    # The moderation endpoint is deliberately not the generation model: it is a
+    # classifier, not a chat that a brief can talk into a verdict.
+    openai_moderation_model: str = "omni-moderation-latest"
+
+    # A CSAM hash-matching service is not interchangeable with a generic image
+    # classifier. Point this at an adapter that accepts the contract documented
+    # in ``app.moderation.service``. In production its absence refuses image
+    # work rather than publishing unchecked pictures.
+    csam_scan_url: str | None = None
+    csam_scan_api_key: str | None = None
 
     # Voyage embeds screenshots and images for retrieval.
     voyage_api_key: str | None = None

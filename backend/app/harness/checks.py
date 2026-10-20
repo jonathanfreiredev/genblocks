@@ -39,6 +39,16 @@ LINK = re.compile(
     r"""<link\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')""",
     re.IGNORECASE,
 )
+ANCHOR = re.compile(
+    r"""<a\b[^>]*?\bhref\s*=\s*
+        (?:"([^"]*)"|'([^']*)'|\{\s*["'`]([^"'`]*)["'`]\s*\})""",
+    re.VERBOSE | re.IGNORECASE,
+)
+SVG_REF = re.compile(
+    r"""<(?:use|image)\b[^>]*?\b(?:xlink:)?href\s*=\s*
+        (?:"([^"]*)"|'([^']*)'|\{\s*["'`]([^"'`]*)["'`]\s*\})""",
+    re.VERBOSE | re.IGNORECASE,
+)
 CSS_URL = re.compile(
     r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"]*))\s*\)""",
     re.IGNORECASE,
@@ -63,6 +73,59 @@ FORBIDDEN: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("writes markup with document.write", re.compile(r"\bdocument\s*\.\s*write(?:ln)?\b")),
     ("injects HTML with dangerouslySetInnerHTML", re.compile(r"\bdangerouslySetInnerHTML\b")),
     ("links a javascript: URL", re.compile(r"""["'`]\s*javascript\s*:""", re.IGNORECASE)),
+    (
+        "links a data: URL",
+        re.compile(
+            r"""<(?:a|use)\b[^>]*?\bhref\s*=\s*
+                (?:"data:|'data:|\{\s*["'`]\s*data:)""",
+            re.VERBOSE | re.IGNORECASE,
+        ),
+    ),
+    # Tags that bring their own execution, framing or navigation. A block is a
+    # component; it does not need any of them.
+    ("embeds a script tag", re.compile(r"<\s*script\b", re.IGNORECASE)),
+    ("embeds an iframe", re.compile(r"<\s*iframe\b", re.IGNORECASE)),
+    ("embeds an object", re.compile(r"<\s*object\b", re.IGNORECASE)),
+    ("embeds an embed", re.compile(r"<\s*embed\b", re.IGNORECASE)),
+    ("embeds an applet", re.compile(r"<\s*applet\b", re.IGNORECASE)),
+    ("embeds a frame", re.compile(r"<\s*frameset\b|<\s*frame\b", re.IGNORECASE)),
+    ("sets a base URL", re.compile(r"<\s*base\b", re.IGNORECASE)),
+    ("pings a link", re.compile(r"<a\b[^>]*?\bping\s*=", re.IGNORECASE)),
+    (
+        "refreshes the page",
+        re.compile(
+            r"<meta\b[^>]*?(?:http-equiv|httpEquiv)\s*=\s*[\"']refresh[\"']",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "posts a form to an address",
+        re.compile(r"<form\b[^>]*?\baction\s*=", re.IGNORECASE),
+    ),
+    ("sets formAction", re.compile(r"\bformAction\s*=")),
+    # A URL in CSS can hide behind image-set() without url().
+    ("uses image-set", re.compile(r"\b(?:-webkit-)?image-set\s*\(", re.IGNORECASE)),
+    # Browser globals that turn a presentational block into a script. The CSP and
+    # route in the sandbox are the fence; these checks catch the obvious attempts
+    # before a container is spent on them.
+    ("reaches window", re.compile(r"\bwindow\s*[.\[]")),
+    ("reaches globalThis", re.compile(r"\bglobalThis\s*[.\[]")),
+    ("reaches self", re.compile(r"\bself\s*[.\[]")),
+    ("reaches document", re.compile(r"\bdocument\s*[.\[]")),
+    ("reaches navigator", re.compile(r"\bnavigator\s*[.\[]")),
+    ("reaches a parent frame", re.compile(r"\b(?:top|parent|frames|opener)\s*[.\[]")),
+    ("uses a service worker", re.compile(r"\bserviceWorker\b")),
+    ("opens a peer connection", re.compile(r"\b(?:RTCPeerConnection|WebTransport)\b")),
+    ("imports a worker script", re.compile(r"\bimportScripts\s*\(")),
+    ("runs a timer as a string", re.compile(r"\b(?:setTimeout|setInterval)\s*\(\s*[\"'`]")),
+    ("uses localStorage", re.compile(r"\blocalStorage\b")),
+    ("uses sessionStorage", re.compile(r"\bsessionStorage\b")),
+    ("uses indexedDB", re.compile(r"\bindexedDB\b")),
+    ("navigates with location", re.compile(r"\blocation\s*(?:\.|\[|=)")),
+    ("creates an Image", re.compile(r"\bnew\s+(?:Image|Audio)\b")),
+    ("uses dynamic import", re.compile(r"\bimport\s*\(")),
+    ("uses require(", re.compile(r"\brequire\s*\(")),
+    ("reaches process", re.compile(r"\bprocess\s*[.\[]")),
 )
 
 # Where a value the browser will fetch is allowed to come from: the library's own
@@ -119,7 +182,7 @@ def _external_assets(file: SandboxFile, hosts: tuple[str, ...]) -> list[str]:
     found: list[tuple[int, str]] = []
     seen: set[tuple[int, str]] = set()
 
-    for pattern in (LOADING, LINK, CSS_URL, CSS_IMPORT):
+    for pattern in (LOADING, LINK, ANCHOR, SVG_REF, CSS_URL, CSS_IMPORT):
         for match in pattern.finditer(file.content):
             # The patterns capture the same URL from different angles — an
             # ``@import url(...)`` is both — and one finding is enough.
@@ -179,7 +242,7 @@ def _travels(value: str, hosts: tuple[str, ...]) -> bool:
     if value.startswith("#") or value.startswith("data:"):
         return True
     if value.startswith("//"):
-        return _host_of(value[2:]) in hosts
+        return _host_allowed(value[2:], hosts)
 
     scheme, found, rest = value.partition(":")
     if not found or not SCHEME.match(scheme):
@@ -190,7 +253,28 @@ def _travels(value: str, hosts: tuple[str, ...]) -> bool:
     if scheme.lower() not in ("http", "https"):
         return False
 
-    return _host_of(rest.lstrip("/")) in hosts
+    return _host_allowed(rest.lstrip("/"), hosts)
+
+
+def _host_allowed(authority_and_path: str, hosts: tuple[str, ...]) -> bool:
+    """Whether a URL is on an allowed host, and on our own Cloudinary account.
+
+    A host allowlist alone would let a block load from any Cloudinary customer,
+    which is both a third-party image and a way to put data in somebody else's
+    access log. When the deployment names its cloud, the path has to belong to it.
+    """
+    host = _host_of(authority_and_path)
+    if host not in hosts:
+        return False
+    if host != "res.cloudinary.com":
+        return True
+
+    cloud = settings.cloudinary_cloud_name
+    if not cloud:
+        return True
+
+    _, _, path = authority_and_path.partition("/")
+    return path.startswith(f"{cloud}/")
 
 
 def _host_of(value: str) -> str:

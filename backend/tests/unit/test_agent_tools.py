@@ -10,7 +10,7 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from app.agent.schemas import Suggestions
+from app.agent.schemas import Proposals, Suggestions
 from app.agent.tools import build_tools
 from app.tasks.schemas import BRIEF_MAX_LENGTH, BRIEF_MIN_LENGTH
 from app.users.models import User
@@ -110,23 +110,34 @@ async def test_a_brief_the_registry_already_has_is_not_queued(monkeypatch):
     assert [one.id for one in suggested.items] == [found.id]
 
 
-async def test_a_month_that_is_spent_is_told_to_the_person(monkeypatch):
-    """The tool does not raise at the person: it answers, and the agent speaks."""
-    from datetime import UTC, datetime
-
+async def test_a_valid_brief_becomes_a_proposal_not_a_task(monkeypatch):
+    """The model prepares; the person's click is what spends the quota."""
+    from app.components import service as components_service
     from app.tasks import service as tasks_service
-    from app.tasks.limits import MonthlyQuotaReached
 
-    async def spent(*args, **kwargs):
-        raise MonthlyQuotaReached(used=10, limit=10, reopens=datetime(2026, 11, 1, tzinfo=UTC))
+    async def nothing_close(session, *, brief):
+        return None
 
-    monkeypatch.setattr(tasks_service, "enqueue_task", spent)
+    async def queued_nothing(*args, **kwargs):
+        raise AssertionError("the tool must not queue without the person's confirmation")
 
-    answer = await _tool("create_component", []).ainvoke({"brief": "A hero with one headline"})
+    monkeypatch.setattr(components_service, "already_built", nothing_close)
+    monkeypatch.setattr(tasks_service, "enqueue_task", queued_nothing)
+
+    proposals = Proposals()
+    tool = next(
+        one
+        for one in build_tools(
+            caller=caller(), queued=[], suggested=Suggestions(), proposals=proposals
+        )
+        if one.name == "create_component"
+    )
+    answer = await tool.ainvoke({"brief": "A hero with one headline"})
 
     assert answer["queued"] is False
-    assert "1 November" in answer["limit"]
-    assert "do not retry" in answer["message"]
+    assert answer["proposed"] is True
+    assert "Nothing is queued yet" in answer["message"]
+    assert [one.brief for one in proposals.items] == ["A hero with one headline"]
 
 
 async def test_a_search_offers_only_the_matches_near_enough_to_be_one(monkeypatch):

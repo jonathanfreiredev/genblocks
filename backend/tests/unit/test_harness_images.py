@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from app.harness import cloudinary, images
+from app.moderation import service as moderation
 from app.settings import settings
 
 pytestmark = pytest.mark.anyio
@@ -97,12 +98,28 @@ async def test_a_picture_is_queued_with_the_prompt_and_the_size(key, stored):
     assert made.media_type == "image/jpeg"
 
 
-async def test_the_picture_is_stored_as_the_bytes_it_arrived_as(key, stored):
-    await images.generate(prompt=PROMPT, width=512, height=512, client=client_for({}))
+async def test_the_picture_is_stored_only_after_the_safety_gate(key, stored):
+    made = await images.generate(prompt=PROMPT, width=512, height=512, client=client_for({}))
 
+    assert made.path.startswith("genblocks/images/")
+    assert made.url.startswith("https://cdn.test/genblocks/images/")
+    assert made.data == PICTURE
+    assert made.screened is True
     assert stored[0]["data"] == PICTURE
     assert stored[0]["media_type"] == "image/jpeg"
     assert stored[0]["name"].startswith("genblocks/images/")
+
+
+async def test_a_refused_picture_is_never_stored(key, stored, monkeypatch):
+    async def refused(data, *, media_type="image/png", client=None):
+        return "it is not a stock picture we would file"
+
+    monkeypatch.setattr(moderation, "image_refusal", refused)
+
+    with pytest.raises(images.ImagesRefused, match="not a stock picture"):
+        await images.generate(prompt=PROMPT, width=512, height=512, client=client_for({}))
+
+    assert stored == []
 
 
 async def test_a_request_is_waited_for_rather_than_guessed(key, stored):

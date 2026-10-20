@@ -361,8 +361,9 @@ There is no `Home` crumb. The section is the root.
 ## The assistant
 
 The vault has one conversation. On a laptop it opens from **Ask AI** in the sidebar; on a phone it opens from a floating primary button at the bottom-left, above the safe area and outside the navigation sheet. It answers
-questions about blocks and pictures, and it can turn a request into a task. The
-surface is the shadcn chat set, not a hand-rolled scroll box.
+questions about blocks and pictures, and it can prepare a brief for a task. A
+brief is only queued when the person confirms it. The surface is the shadcn chat
+set, not a hand-rolled scroll box.
 
 - **Entry** — one `AgentChatProvider` owns the transcript and the dialog; the
   sidebar button and the phone's floating button are two triggers for the same
@@ -383,8 +384,8 @@ surface is the shadcn chat set, not a hand-rolled scroll box.
 - **Activity** — a `Trace` above the assistant's words. Each tool is a
   `TraceLine`: `Spinner` plus a running phrase while it works, `Check` plus the
   past-tense phrase when it is done. The labels are human (`Searching the
-  blocks`, `Queueing the build`), never the tool's Python name. While nothing has
-  happened yet, a `Marker` with a spinner says `Thinking…`.
+  blocks`, `Preparing the brief`), never the tool's Python name. While nothing
+  has happened yet, a `Marker` with a spinner says `Thinking…`.
 - **Answers** — streamed as Markdown and rendered by Streamdown under a ghost
   bubble: bold names, short lists, links and fenced code arrive as themselves,
   not as asterisks. It is streaming-aware, so an unfinished emphasis or fence
@@ -395,12 +396,16 @@ surface is the shadcn chat set, not a hand-rolled scroll box.
   in a horizontal rail under the answer. The tools only offer a result close
   enough to be the thing asked for; a weak nearest is not a card. Each card
   opens its item page (by slug) and closes the dialog.
-- **Task card** — when a task is queued, it becomes a bordered card inside the
-  same turn: heading (`Building the block`, `Block published`, `The build
-  stopped`, `Already in the registry`), the brief, a status badge, one `TraceLine`
-  per step with its elapsed time, and `Follow the task` / `Open the block`. The card
-  polls while the task is live; the composer stays available, because the chat
-  does not end when a build starts.
+- **Proposal card** — a brief the agent prepared is shown as a bordered card
+  inside the turn: `Ready to build`, the brief, and one primary `Queue block`
+  button. The model cannot press it. The button is the only path from the
+  conversation to a task; after it succeeds the card is replaced by the task card.
+- **Task card** — when the person confirms a brief and a task is queued, it becomes
+  a bordered card inside the same turn: heading (`Building the block`,
+  `Block published`, `The build stopped`, `Already in the registry`), the brief, a
+  status badge, one `TraceLine` per step with its elapsed time, and `Follow the
+  task` / `Open the block`. The card polls while the task is live; the composer
+  stays available, because the chat does not end when a build starts.
 - **Composer** — `InputGroup` with `InputGroupTextarea` (two rows, capped), a
   send button (`ArrowUp`), a stop button while a turn is streaming, and the hint
   `Enter to send · Shift+Enter for a new line`. Enter sends; Shift+Enter breaks

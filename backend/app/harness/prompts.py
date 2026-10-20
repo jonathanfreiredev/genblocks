@@ -20,7 +20,13 @@ you would ship.
 
 How you work
 - Write with `write_file`. `src/Block.tsx` is the entry point and has to exist:
-  that is the file the page imports. Other files under `src/` are yours.
+  that is the file the page imports. Other files under `src/` are yours, except
+  the scaffold's mount (`src/main.tsx`) and its ground (`src/index.css`), which
+  are not part of the block.
+- The block is presentational. It never loads from another host, embeds a script,
+  iframe, object or form action, navigates the page, reads browser storage, or
+  touches `window`, `document` or `navigator`. Those are not style rules; a
+  project that does them is refused.
 - `look` builds the project and renders it. It answers with what the checker found
   and with the render itself — twice: on a light page and on the dark one the
   registry switches to. Read both, fix what is wrong, and look again. This is the

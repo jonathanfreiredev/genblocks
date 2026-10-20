@@ -1,10 +1,10 @@
 """One turn of the graph, as the frames the dialog reads.
 
 The graph speaks in messages; the dialog wants five things: the words as they
-arrive, the tools being reached for, the task a tool queued, the things worth
-showing, and an end. This module is that translation and nothing else. It keeps no
-history of the conversation — only of what it has already said in this turn, so a
-chunk that repeats does not become a second event.
+arrive, the tools being reached for, the briefs awaiting confirmation, the things
+worth showing, and an end. This module is that translation and nothing else. It
+keeps no history of the conversation — only of what it has already said in this
+turn, so a chunk that repeats does not become a second event.
 """
 
 import json
@@ -14,7 +14,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from app.agent.schemas import Suggestions
+from app.agent.schemas import Proposals, Suggestions
 from app.tasks.models import Task
 from app.tasks.schemas import TaskRead
 
@@ -41,18 +41,20 @@ def encode(event: Event) -> str:
 class TurnReader:
     """Reads the graph's stream and says what the dialog should show.
 
-    ``queued`` is the list the tools append to. Reading it here rather than
-    parsing the tool's message is what lets the task reach the dialog the moment
-    it exists, and in the order it happened. ``suggested`` works the same way for
-    the blocks and pictures the agent found: the tools keep them, the stream sends
-    the ones the dialog has not been told about.
+    ``proposals`` is the list the tools append to. Reading it here rather than
+    parsing the tool's message is what lets the confirmation card reach the dialog
+    the moment the brief is ready, and in the order it happened. ``suggested``
+    works the same way for the blocks and pictures the agent found: the tools keep
+    them, the stream sends the ones the dialog has not been told about.
     """
 
     queued: list[Task]
     suggested: Suggestions
+    proposals: Proposals = field(default_factory=Proposals)
     _announced: set[str] = field(default_factory=set)
     _shown: set[uuid.UUID] = field(default_factory=set)
     _surfaced: set[tuple[str, uuid.UUID]] = field(default_factory=set)
+    _proposed: set[str] = field(default_factory=set)
 
     def read(self, chunk: Any) -> list[Event]:
         """The events one chunk of the stream becomes."""
@@ -61,6 +63,7 @@ class TurnReader:
                 Event("tool", {"name": chunk.name, "state": "finished"}),
                 *self._tasks(),
                 *self._suggestions(),
+                *self._proposals(),
             ]
 
         if isinstance(chunk, AIMessage):
@@ -70,7 +73,7 @@ class TurnReader:
 
     def close(self) -> list[Event]:
         """The events that end a turn, whatever else the stream did."""
-        return [*self._tasks(), *self._suggestions(), Event("done", {})]
+        return [*self._tasks(), *self._suggestions(), *self._proposals(), Event("done", {})]
 
     def _tools(self, message: AIMessage) -> list[Event]:
         """The tool calls this chunk is the first to name.
@@ -129,6 +132,15 @@ class TurnReader:
             self._surfaced.add((one.kind, one.id))
 
         return [Event("suggestions", {"items": fresh})] if fresh else []
+
+    def _proposals(self) -> list[Event]:
+        """Briefs waiting for the person's confirmation, each said once."""
+        fresh = [one.as_body() for one in self.proposals.items if one.brief not in self._proposed]
+
+        for one in self.proposals.items:
+            self._proposed.add(one.brief)
+
+        return [Event("proposal", one) for one in fresh]
 
 
 def _text(content: Any) -> str:

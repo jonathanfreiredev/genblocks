@@ -32,6 +32,11 @@ export function Markdown({
       )}
       controls={false}
       isAnimating={streaming}
+      // Cards already carry the pictures. An image in model prose is an
+      // unrequested network request to a host the model chose, so it is not
+      // rendered at all.
+      components={{ img: () => null }}
+      linkSafety={{ enabled: true }}
     >
       {children}
     </Streamdown>

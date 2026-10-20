@@ -35,7 +35,10 @@ async def check(files: list[SandboxFile], *, function: Any = None) -> SandboxRes
     ``function`` is the deployed function, injected by a test that has no
     deployment to call; production reaches for it by name.
     """
-    request = SandboxRequest(files=files).model_dump(mode="json")
+    cloud = settings.cloudinary_cloud_name
+    prefixes = [f"https://res.cloudinary.com/{cloud}/"] if cloud else []
+
+    request = SandboxRequest(files=files, asset_prefixes=prefixes).model_dump(mode="json")
 
     try:
         call = function or _deployed()

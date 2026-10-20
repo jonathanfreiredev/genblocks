@@ -47,6 +47,10 @@ class SandboxRequest(BaseModel):
     """A project for the sandbox to check."""
 
     files: list[SandboxFile]
+    # URL prefixes the page may load pictures from. The backend sends its own
+    # Cloudinary delivery prefix, so the sandbox does not have to infer the
+    # account from the project or from a deployment environment.
+    asset_prefixes: list[str] = Field(default_factory=list)
 
 
 class SandboxCheck(BaseModel):
@@ -73,7 +77,7 @@ class SandboxViolation(BaseModel):
 class SandboxResult(BaseModel):
     """Everything one run of the sandbox produced.
 
-    ``screenshot`` is the desktop render on a light page, as PNG bytes, or ``None``
+    ``screenshot`` is the desktop render on a light page, as JPEG bytes, or ``None``
     when the run never got as far as a page. ``screenshot_dark`` is the same page
     with the theme the registry switches on: a block is expected to hold on both
     grounds, and the only way to know is to look. Only the light one is stored —
@@ -89,6 +93,9 @@ class SandboxResult(BaseModel):
     dependencies: dict[str, str] = Field(default_factory=dict)
     screenshot: bytes | None = None
     screenshot_dark: bytes | None = None
+    # The bytes above are JPEG from the sandbox, not the PNG a naive reader might
+    # assume; the judge and the model both need the right data-URL media type.
+    screenshot_media_type: str = "image/png"
 
     @property
     def blocked(self) -> bool:

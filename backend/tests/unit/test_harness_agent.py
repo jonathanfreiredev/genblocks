@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage
 from app.harness import agent, images, skills
 from app.harness import sandbox as harness_sandbox
 from app.harness.schemas import SandboxCheck, SandboxFile, SandboxResult
+from app.moderation import service as moderation
 from app.settings import settings
 from tests.agent_stub import ScriptedChatModel
 
@@ -266,6 +267,33 @@ async def test_only_the_projects_own_source_is_writable(sandbox):
     assert "belong to the block" in said
 
 
+async def test_an_image_prompt_the_moderator_refuses_never_reaches_the_provider(
+    sandbox, pictures, monkeypatch
+):
+    async def refused(text, *, client=None):
+        return "it asks for a minor"
+
+    monkeypatch.setattr(moderation, "image_prompt_refusal", refused)
+    model = scripted(
+        calls("write_file", path=agent.ENTRY, content=FIRST),
+        calls("look"),
+        calls(
+            "generate_image",
+            slot="hero",
+            prompt="a child on a beach",
+            category="photography",
+            width=1024,
+            height=768,
+        ),
+        says("Built it without that picture."),
+    )
+
+    await agent.build(brief=BRIEF, category="hero", image_categories=["photography"], model=model)
+
+    assert pictures == []
+    assert "cannot be made" in said_by_tools(model)
+
+
 async def test_a_picture_before_a_look_is_refused(sandbox, pictures):
     model = scripted(
         calls("write_file", path=agent.ENTRY, content=FIRST),
@@ -441,3 +469,23 @@ def test_a_deployment_with_no_key_is_told_what_is_missing(monkeypatch):
         agent.harness_model()
 
     assert "OPENAI_API_KEY" in str(refused.value)
+
+
+def test_the_mount_and_the_ground_belong_to_the_scaffold():
+    assert agent._unwritable("src/main.tsx") is not None
+    assert agent._unwritable("src/index.css") is not None
+    assert agent._unwritable("src/parts/Price.tsx") is None
+
+
+def test_a_path_cannot_hide_the_mount_behind_dots_or_double_slashes():
+    assert agent._unwritable("src//main.tsx") is not None
+    assert agent._unwritable("src/./main.tsx") is not None
+
+
+def test_a_project_is_bounded_before_it_reaches_the_sandbox():
+    assert agent._too_large({}, path=agent.ENTRY, content="x" * (agent.MAX_FILE_CHARS + 1))
+    assert agent._too_large(
+        {f"src/{index}.tsx": "x" * agent.MAX_FILE_CHARS for index in range(agent.MAX_FILES)},
+        path="src/one-more.tsx",
+        content="x",
+    )

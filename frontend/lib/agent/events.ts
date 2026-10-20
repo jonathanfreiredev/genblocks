@@ -4,7 +4,7 @@ import type { Suggestion, Task } from "@/lib/vault/types";
 /**
  * What the agent says while it works, as the dialog understands it.
  *
- * A union rather than the wire shapes: the dialog switches on six cases, and an
+ * A union rather than the wire shapes: the dialog switches on seven cases, and an
  * event nobody has heard of is dropped instead of drawn as a blank. The names on
  * the left are the backend's contract (`app/agent/stream.py`).
  */
@@ -12,6 +12,7 @@ export type AgentEvent =
   | { type: "token"; text: string }
   | { type: "tool"; name: string; state: "started" | "finished" }
   | { type: "suggestions"; items: Suggestion[] }
+  | { type: "proposal"; brief: string; force: boolean }
   | { type: "task"; task: Task }
   | { type: "error"; message: string }
   | { type: "done" };
@@ -44,6 +45,15 @@ export function readAgentEvent(frame: SseEvent): AgentEvent | null {
 
       return items.length > 0 ? { type: "suggestions", items } : null;
     }
+
+    case "proposal":
+      return typeof payload.brief === "string"
+        ? {
+            type: "proposal",
+            brief: payload.brief,
+            force: payload.force === true,
+          }
+        : null;
 
     case "task":
       return isTask(payload) ? { type: "task", task: payload } : null;

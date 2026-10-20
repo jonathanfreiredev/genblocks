@@ -24,6 +24,7 @@ database is the runner's (``app.tasks.runner``).
 """
 
 import base64
+import posixpath
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -41,6 +42,7 @@ from langgraph.errors import GraphRecursionError
 from app.harness import checks, images, skills
 from app.harness.prompts import ASK, HARNESS_PROMPT
 from app.harness.schemas import SandboxFile, SandboxResult
+from app.moderation import service as moderation
 from app.settings import settings
 
 logger = structlog.get_logger("app.harness.agent")
@@ -51,9 +53,17 @@ ENTRY = "src/Block.tsx"
 
 # What the agent may write, and what it may write there. It is handed the scaffold,
 # and editing the scaffold is not building a block: a tool that allowed it would be
-# a tool that lets a run change the ruler it is being measured with.
+# a tool that lets a run change the ruler it is being measured with. The mount and
+# the global stylesheet are part of the ruler even though they live under ``src``.
 WRITABLE = "src/"
 WRITABLE_SUFFIXES = (".tsx", ".ts", ".css")
+RESERVED = frozenset({"src/main.tsx", "src/index.css"})
+
+# A block is a component, not a project to smuggle a payload into. These are far
+# above any real block and low enough that a runaway write cannot fill the sandbox.
+MAX_FILES = 40
+MAX_FILE_CHARS = 120_000
+MAX_TOTAL_CHARS = 400_000
 
 # How many model turns one look is allowed to take. The recursion limit is a safety
 # net under the real budget (looks), not a second one: it is here so a model that
@@ -244,6 +254,8 @@ def _tools(draft: _Draft) -> list[Any]:
         """
         if complaint := _unwritable(path):
             return complaint
+        if complaint := _too_large(draft.files, path=path, content=content):
+            return complaint
 
         draft.files[path] = content
 
@@ -384,6 +396,13 @@ def _tools(draft: _Draft) -> list[Any]:
                 f"{', '.join(draft.image_categories)}."
             )
 
+        why = await moderation.image_prompt_refusal(prompt)
+        if why is not None:
+            return (
+                f"That picture cannot be made: {why} Describe a different scene, or "
+                "build the block without it."
+            )
+
         kept = await draft.library(prompt, category) if draft.library else None
         if kept is not None:
             # The registry already holds this picture, and a library is worth
@@ -411,7 +430,14 @@ def _tools(draft: _Draft) -> list[Any]:
                 f"{kept.height}, so give it a box with those proportions."
             )
 
-        made = await images.generate(prompt=prompt, width=width, height=height)
+        try:
+            made = await images.generate(prompt=prompt, width=width, height=height)
+        except images.ImagesRefused as refused:
+            return (
+                f"That picture cannot be made: {refused} Describe a different scene, "
+                "or build the block without it."
+            )
+
         draft.pictures.append(
             Placed(
                 slot=slot,
@@ -449,10 +475,31 @@ def _unwritable(path: str) -> str | None:
     """Why a file cannot go into the project, or ``None`` when it can."""
     if path.startswith("/") or ".." in path.split("/"):
         return f"{path!r} is not a path inside the project."
+    if path != posixpath.normpath(path):
+        return f"{path!r} is not a normalized path inside the project."
     if not path.startswith(WRITABLE):
         return f"Only files under {WRITABLE} belong to the block; {path!r} is the scaffold's."
+    if path in RESERVED:
+        return (
+            f"{path!r} mounts the block or carries the registry's ground. It belongs "
+            "to the scaffold and cannot be replaced by a block."
+        )
     if not path.endswith(WRITABLE_SUFFIXES):
         return f"Only {', '.join(WRITABLE_SUFFIXES)} files can be written ({path!r})."
+
+    return None
+
+
+def _too_large(files: dict[str, str], *, path: str, content: str) -> str | None:
+    """Why a project would be too large, or ``None`` when it still fits."""
+    if path not in files and len(files) >= MAX_FILES:
+        return f"The project already has {MAX_FILES} files, which is the limit."
+    if len(content) > MAX_FILE_CHARS:
+        return f"{path!r} is larger than the {MAX_FILE_CHARS:,}-character limit."
+
+    total = sum(len(one) for name, one in files.items() if name != path) + len(content)
+    if total > MAX_TOTAL_CHARS:
+        return f"The project would exceed the {MAX_TOTAL_CHARS:,}-character limit."
 
     return None
 
@@ -475,21 +522,21 @@ def _seen(found: SandboxResult, *, note: str | None = None) -> list[dict[str, An
 
     parts: list[dict[str, Any]] = [
         {"type": "text", "text": f"{said}\n\n{ATTACHED}"},
-        _image(found.screenshot),
+        _image(found.screenshot, found.screenshot_media_type),
     ]
     if found.screenshot_dark is not None:
         parts += [
             {"type": "text", "text": DARK_ATTACHED},
-            _image(found.screenshot_dark),
+            _image(found.screenshot_dark, found.screenshot_media_type),
         ]
 
     return parts
 
 
-def _image(png: bytes) -> dict[str, Any]:
+def _image(data: bytes, media_type: str = "image/png") -> dict[str, Any]:
     return {
         "type": "image_url",
-        "image_url": {"url": f"data:image/png;base64,{base64.b64encode(png).decode()}"},
+        "image_url": {"url": f"data:{media_type};base64,{base64.b64encode(data).decode()}"},
     }
 
 

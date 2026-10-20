@@ -36,7 +36,12 @@ def no_moderation(monkeypatch):
     async def allowed(text, *, client=None):
         return None
 
+    async def allowed_image(data, *, media_type="image/png", client=None):
+        return None
+
     monkeypatch.setattr(moderation, "refusal", allowed)
+    monkeypatch.setattr(moderation, "image_prompt_refusal", allowed)
+    monkeypatch.setattr(moderation, "image_refusal", allowed_image)
 
 
 @pytest.fixture(autouse=True)

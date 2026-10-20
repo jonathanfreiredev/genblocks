@@ -56,10 +56,11 @@ def delivery_url(public_id: str) -> str:
     """The URL a browser reads an asset from.
 
     A block is served from somebody else's page, so it needs an address rather
-    than an id. The transform is left out: whoever renders the block decides what
-    size it needs, and Cloudinary takes it in the path.
+    than an id. ``f_auto,q_auto`` lets Cloudinary choose WebP/AVIF and a sensible
+    quality at the edge; the width stays with whoever renders the block, which is
+    the one decision this function cannot make for them.
     """
-    return f"https://res.cloudinary.com/{_account()}/image/upload/{public_id}"
+    return f"https://res.cloudinary.com/{_account()}/image/upload/f_auto,q_auto/{public_id}"
 
 
 def signature(params: dict[str, str], *, api_secret: str) -> str:
@@ -114,6 +115,39 @@ def _account() -> str:
         )
 
     return settings.cloudinary_cloud_name
+
+
+async def destroy(public_id: str, *, client: httpx.AsyncClient | None = None) -> None:
+    """Remove one public asset, when a picture passed storage but not publication.
+
+    A safety refusal never gets here: the picture is checked before it is stored.
+    A rubric refusal can happen after storage, and this is what keeps the library
+    from keeping an asset the registry decided not to publish.
+    """
+    account = _account()
+    params = {"public_id": public_id, "timestamp": str(int(time.time()))}
+    fields = {
+        **params,
+        "api_key": settings.cloudinary_api_key or "",
+        "signature": signature(params, api_secret=settings.cloudinary_api_secret or ""),
+    }
+    url = f"https://api.cloudinary.com/v1_1/{account}/image/destroy"
+
+    if client is not None:
+        await _delete(client, url, fields)
+        return
+
+    async with httpx.AsyncClient(timeout=UPLOAD_TIMEOUT_SECONDS) as http:
+        await _delete(http, url, fields)
+
+
+async def _delete(client: httpx.AsyncClient, url: str, fields: dict[str, str]) -> None:
+    response = await client.post(url, data=fields)
+
+    if response.status_code >= 400:
+        raise StorageUnavailable(
+            f"Cloudinary refused the delete ({response.status_code}): {response.text[:200]}"
+        )
 
 
 async def _send(

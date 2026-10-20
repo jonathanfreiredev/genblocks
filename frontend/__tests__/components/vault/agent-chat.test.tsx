@@ -170,6 +170,40 @@ describe("AgentChat", () => {
     expect(screen.getByLabelText("Message")).toBeInTheDocument();
   });
 
+  test("prepares a brief and queues only when the person confirms", async () => {
+    let confirmed: unknown = null;
+
+    server.use(
+      http.post("/api/agent/chat", () =>
+        turn(
+          ["proposal", { brief: MESSAGE, force: false }],
+          ["token", { text: "The brief is ready." }],
+          ["done", {}],
+        ),
+      ),
+      http.post("/api/agent/confirm", async ({ request }) => {
+        confirmed = await request.json();
+        return HttpResponse.json(QUEUED, { status: 202 });
+      }),
+      http.get("/api/tasks/:id", () => HttpResponse.json(QUEUED)),
+    );
+
+    await send();
+
+    // The agent prepared the brief; nothing was queued by the model.
+    expect(await screen.findByText("Ready to build")).toBeInTheDocument();
+    expect(screen.getAllByText(MESSAGE).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Waiting for a worker/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Queue block" }));
+
+    expect(
+      await screen.findByText(/Waiting for a worker to open it/),
+    ).toBeInTheDocument();
+    expect(confirmed).toEqual({ brief: MESSAGE, force: false });
+    expect(screen.queryByText("Ready to build")).toBeNull();
+  });
+
   test("says the registry already had the block instead of pretending it built one", async () => {
     const cached: Task = {
       ...QUEUED,
@@ -309,9 +343,7 @@ describe("AgentChat", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Ask AI" }));
 
-    expect(
-      await screen.findByText(/needs an account/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/needs an account/)).toBeInTheDocument();
 
     expect(screen.queryByLabelText("Message")).toBeNull();
     expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(

@@ -17,6 +17,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, StringConstraints
 
+from app.tasks.schemas import Brief
+
 # What one message may say and how a conversation is named. The same bounds are
 # enforced by the dialog, and these are the ones the API acts on.
 MESSAGE_MAX_LENGTH = 4000
@@ -71,6 +73,36 @@ class Suggestion:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class Proposal:
+    """A brief the agent prepared, waiting for the person to confirm it.
+
+    The model writes the brief; the person owns the consequence. Keeping the two
+    apart is what makes prompt injection into a search result unable to spend
+    somebody's quota or start a run.
+    """
+
+    brief: str
+    force: bool = False
+
+    def as_body(self) -> dict:
+        return {"brief": self.brief, "force": self.force}
+
+
+@dataclass
+class Proposals:
+    """The briefs one turn prepared, deduplicated by their exact words."""
+
+    items: list[Proposal] = field(default_factory=list)
+
+    def add(self, proposal: Proposal) -> bool:
+        if any(one.brief == proposal.brief for one in self.items):
+            return False
+
+        self.items.append(proposal)
+        return True
+
+
 @dataclass
 class Suggestions:
     """What the agent has put in front of the person, and what it already said.
@@ -100,3 +132,14 @@ class ChatRequest(BaseModel):
 
     message: Message
     thread_id: ThreadId
+
+
+class ConfirmRequest(BaseModel):
+    """A prepared brief the person pressed "queue" on.
+
+    ``force`` is the same escape hatch the conversation offers: the registry has
+    something close, and the person has said they want their own version anyway.
+    """
+
+    brief: Brief
+    force: bool = False

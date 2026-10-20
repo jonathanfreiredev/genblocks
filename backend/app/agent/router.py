@@ -1,9 +1,9 @@
 """The conversation, over HTTP.
 
-One endpoint and one stream: the dialog sends what was said and reads back what
-the agent does about it as it does it. It is a first-party door like the rest of
-this API — the caller's own token, and a task that belongs to them before it
-exists.
+One stream for the conversation and one endpoint for the consequence: the dialog
+sends what was said, watches the agent prepare a brief, and queues it only when
+the person presses the button. It is a first-party door like the rest of this API
+— the caller's own token, and a task that belongs to them before it exists.
 
 Server-sent events rather than a websocket: the traffic goes one way, there is no
 session to keep open, and the stream ends on its own when the turn does. It is
@@ -15,18 +15,24 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.graph import build_agent
 from app.agent.model import get_chat_model
-from app.agent.schemas import ChatRequest, Suggestions
+from app.agent.schemas import ChatRequest, ConfirmRequest, Proposals, Suggestions
 from app.agent.stream import Event, TurnReader, encode
 from app.agent.tools import build_tools
 from app.authz.dependencies import get_first_party_user
+from app.db.session import get_async_db_session
+from app.moderation.service import BriefRejected
+from app.tasks.limits import MonthlyQuotaReached
 from app.tasks.models import Task
+from app.tasks.schemas import TaskRead
+from app.tasks.service import enqueue_task
 from app.users.models import User
 
 agent_router = APIRouter(prefix="/agent", tags=["agent"])
@@ -53,9 +59,15 @@ async def chat(
     """
     queued: list[Task] = []
     suggested = Suggestions()
+    proposals = Proposals()
     agent = build_agent(
         model=model,
-        tools=build_tools(caller=user, queued=queued, suggested=suggested),
+        tools=build_tools(
+            caller=user,
+            queued=queued,
+            suggested=suggested,
+            proposals=proposals,
+        ),
     )
 
     # The checkpointer is one per process and the thread id comes from the
@@ -65,7 +77,7 @@ async def chat(
     config = {"configurable": {"thread_id": thread}}
 
     async def frames() -> AsyncIterator[str]:
-        reader = TurnReader(queued=queued, suggested=suggested)
+        reader = TurnReader(queued=queued, suggested=suggested, proposals=proposals)
 
         try:
             async for chunk, _metadata in agent.astream(
@@ -93,3 +105,47 @@ async def chat(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@agent_router.post(
+    "/confirm",
+    response_model=TaskRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def confirm_brief(
+    payload: ConfirmRequest,
+    user: Annotated[User, Depends(get_first_party_user)],
+    session: Annotated[AsyncSession, Depends(get_async_db_session)],
+    response: Response,
+) -> TaskRead:
+    """Queue a brief the person has confirmed, and return its task.
+
+    This is the only path from the conversation to a task. The model prepares a
+    brief; this endpoint is called by the button the person presses. A prompt
+    injection in a registry result can therefore change what the assistant says,
+    but it cannot spend a month's quota or start a run by itself.
+
+    202 for a new task, 200 for a brief the registry already answered.
+    """
+    try:
+        task = await enqueue_task(
+            session,
+            brief=payload.brief,
+            created_by=user.id,
+            fresh=payload.force,
+        )
+    except MonthlyQuotaReached as reached:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(reached),
+        ) from reached
+    except BriefRejected as refused:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(refused),
+        ) from refused
+
+    if task.cached:
+        response.status_code = status.HTTP_200_OK
+
+    return TaskRead.model_validate(task)

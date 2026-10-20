@@ -30,6 +30,8 @@ checks, because it is the one that runs them.
 from __future__ import annotations
 
 import json
+import os
+import posixpath
 import re
 import shutil
 import subprocess
@@ -65,6 +67,13 @@ VIEWPORTS = (
     {"name": "phone", "width": 390, "height": 844},
 )
 KEPT_VIEWPORT = "desktop"
+
+# A screenshot is a picture of text on a flat ground, not a transparent asset.
+# JPEG at this quality is a fraction of the PNG and is what Cloudinary delivers
+# anyway; there is no reason to pay to store the uncompressed frame.
+SCREENSHOT_TYPE = "jpeg"
+SCREENSHOT_QUALITY = 85
+SCREENSHOT_MEDIA_TYPE = "image/jpeg"
 
 # axe findings that fail the accessibility check. A minor finding is recorded
 # and left to the judge: this phase reports, it does not rule.
@@ -132,6 +141,34 @@ SOURCE_SUFFIXES = (".ts", ".tsx", ".css")
 COMMAND_TIMEOUT_SECONDS = 300
 DETAIL_LIMIT = 400
 
+# The agent already bounds writes, but the sandbox is the last place that has to
+# believe it. A corrupt or older caller cannot turn one render into a disk fill.
+MAX_FILES = 40
+MAX_FILE_BYTES = 200_000
+MAX_TOTAL_BYTES = 2_000_000
+
+# The scaffold owns these two even though they live under ``src``. The harness
+# already refuses them; the sandbox repeats the rule because it is the last door.
+RESERVED_PATHS = frozenset({"src/main.tsx", "src/index.css"})
+
+# How long the browser may spend on one operation before Playwright gives up. The
+# render loop has its own deadline; this is the net under a page that blocks its
+# own JavaScript thread.
+BROWSER_TIMEOUT_MS = 20_000
+
+# A route and a CSP do not cover every browser side channel. WebRTC can reach a
+# STUN server over UDP without passing through either, so the page is given no
+# constructor to open it with.
+_NO_SIDE_CHANNELS = """\
+for (const name of ["RTCPeerConnection", "webkitRTCPeerConnection", "WebTransport"]) {
+    try {
+        Object.defineProperty(window, name, { value: undefined, configurable: false });
+    } catch {
+        // A browser that does not define it has nothing to remove.
+    }
+}
+"""
+
 IMAGE = (
     modal.Image.from_registry("node:22-bookworm-slim", add_python="3.12")
     .pip_install("playwright")
@@ -168,6 +205,7 @@ def check(request: dict) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as workdir:
         project = Path(workdir)
         _lay_out(project, request["files"])
+        asset_prefixes = tuple(request.get("asset_prefixes") or ())
 
         imports, dependencies = _imports(request["files"])
         checks = [
@@ -184,9 +222,10 @@ def check(request: dict) -> dict[str, Any]:
                 "dependencies": dependencies,
                 "screenshot": None,
                 "screenshot_dark": None,
+                "screenshot_media_type": SCREENSHOT_MEDIA_TYPE,
             }
 
-        rendered = _render(project)
+        rendered = _render(project, asset_prefixes=asset_prefixes)
 
         return {
             "checks": [*checks, *rendered["checks"]],
@@ -194,6 +233,7 @@ def check(request: dict) -> dict[str, Any]:
             "dependencies": dependencies,
             "screenshot": rendered["screenshot"],
             "screenshot_dark": rendered["screenshot_dark"],
+            "screenshot_media_type": rendered["screenshot_media_type"],
         }
 
 
@@ -259,6 +299,26 @@ def _package_of(specifier: str) -> str | None:
 
 def _lay_out(project: Path, files: list[dict[str, str]]) -> None:
     """One project: the scaffold, then the files the caller sent."""
+    if len(files) > MAX_FILES:
+        raise ValueError(f"A project may hold at most {MAX_FILES} files.")
+
+    total = sum(len(sent.get("content", "")) for sent in files)
+    if total > MAX_TOTAL_BYTES:
+        raise ValueError(f"A project may hold at most {MAX_TOTAL_BYTES} bytes.")
+
+    root = project.resolve()
+    for sent in files:
+        if sent["path"] != posixpath.normpath(sent["path"]):
+            raise ValueError(f"A file path was not normalized: {sent['path']}")
+        if sent["path"] in RESERVED_PATHS:
+            raise ValueError(f"The scaffold owns {sent['path']}.")
+
+        path = (project / sent["path"]).resolve()
+        if not path.is_relative_to(root):
+            raise ValueError(f"A file was sent outside the project: {sent['path']}")
+        if len(sent["content"]) > MAX_FILE_BYTES:
+            raise ValueError(f"A file may hold at most {MAX_FILE_BYTES} bytes: {sent['path']}")
+
     shutil.copytree(
         REMOTE_SCAFFOLD,
         project,
@@ -275,12 +335,8 @@ def _lay_out(project: Path, files: list[dict[str, str]]) -> None:
         REMOTE_SCAFFOLD / "node_modules", target_is_directory=True
     )
 
-    root = project.resolve()
     for sent in files:
         path = (project / sent["path"]).resolve()
-        if not path.is_relative_to(root):
-            raise ValueError(f"A file was sent outside the project: {sent['path']}")
-
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(sent["content"], encoding="utf-8")
 
@@ -305,21 +361,55 @@ def _npm(project: Path, *, script: str, name: str) -> dict[str, Any]:
     }
 
 
-def _render(project: Path) -> dict[str, Any]:
-    """Serve the built page, look at it at every viewport, and photograph both grounds."""
+def _render(project: Path, *, asset_prefixes: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Serve the built page, look at it at every viewport, and photograph both grounds.
+
+    The page is untrusted. It runs in a browser context with no network, no
+    downloads, no popups, no service workers and no permissions; the HTTP server
+    sends a CSP that repeats the same rules at the layer the page cannot argue
+    with. The static checks catch what a reader can see; this is what catches the
+    network a page tries to reach anyway.
+    """
     # Imported here rather than at the top: Playwright lives in the image, not in
     # the service, and this module has to be importable wherever the service runs.
     from playwright.sync_api import sync_playwright
 
-    server, port = _served(project / "dist")
+    # Axe travels through the project's own server, so the page's `script-src
+    # 'self'` still holds: the checker is not an exception to the policy it checks.
+    shutil.copyfile(
+        REMOTE_SCAFFOLD / "node_modules" / "axe-core" / "axe.min.js",
+        project / "dist" / "axe.min.js",
+    )
+    server, port = _served(project / "dist", asset_prefixes=asset_prefixes)
     violations: list[dict[str, Any]] = []
     screenshot: bytes | None = None
     screenshot_dark: bytes | None = None
 
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch()
-            page = browser.new_page(viewport=_size(KEPT_VIEWPORT))
+            browser = playwright.chromium.launch(args=_browser_args())
+            context = browser.new_context(
+                viewport=_size(KEPT_VIEWPORT),
+                accept_downloads=False,
+                service_workers="block",
+                permissions=[],
+            )
+            context.add_init_script(_NO_SIDE_CHANNELS)
+
+            # Only the project's own server is reachable. A navigation, image,
+            # stylesheet, fetch or module from anywhere else is aborted before a
+            # packet leaves the container.
+            context.route(
+                "**/*",
+                lambda route: _only_local(route, port, asset_prefixes=asset_prefixes),
+            )
+            if hasattr(context, "route_web_socket"):
+                context.route_web_socket("**/*", lambda socket: socket.close())
+
+            page = context.new_page()
+            page.set_default_timeout(BROWSER_TIMEOUT_MS)
+            page.on("popup", lambda popup: popup.close())
+            page.on("download", lambda download: download.cancel())
 
             trouble: list[str] = []
             page.on("pageerror", lambda error: trouble.append(str(error)))
@@ -335,9 +425,9 @@ def _render(project: Path) -> dict[str, Any]:
             if rendered["ok"]:
                 _settled(page)
                 rest.extend(_layouts(page, port))
-                accessibility, violations = _accessible(page)
+                accessibility, violations = _accessible(page, port=port)
                 rest.append(accessibility)
-                screenshot = page.screenshot()
+                screenshot = _shot(page)
 
                 # The registry switches the whole library at once, by putting on
                 # the page the class the scaffold's `dark:` answers to. The same
@@ -347,11 +437,12 @@ def _render(project: Path) -> dict[str, Any]:
                 page.evaluate(f"document.documentElement.classList.add('{DARK_CLASS}')")
                 page.emulate_media(color_scheme="dark")
                 _settled(page)
-                dark, dark_violations = _accessible(page, scheme="dark")
+                dark, dark_violations = _accessible(page, port=port, scheme="dark")
                 rest.append(dark)
                 violations.extend(dark_violations)
-                screenshot_dark = page.screenshot()
+                screenshot_dark = _shot(page)
 
+            context.close()
             browser.close()
     finally:
         server.shutdown()
@@ -361,7 +452,64 @@ def _render(project: Path) -> dict[str, Any]:
         "violations": violations,
         "screenshot": screenshot,
         "screenshot_dark": screenshot_dark,
+        "screenshot_media_type": SCREENSHOT_MEDIA_TYPE,
     }
+
+
+def _shot(page: Page) -> bytes:
+    """One screenshot, in the format the registry actually stores."""
+    return page.screenshot(type=SCREENSHOT_TYPE, quality=SCREENSHOT_QUALITY)
+
+
+def _browser_args() -> list[str]:
+    """Chromium flags that keep it from reaching anything but its own server."""
+    return [
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--disable-default-apps",
+        "--disable-sync",
+        "--no-first-run",
+        "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+    ]
+
+
+def _cloudinary_prefix() -> str:
+    """The delivery path a block is allowed to load from, when it is known."""
+    cloud = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+
+    return f"https://res.cloudinary.com/{cloud}/" if cloud else "https://res.cloudinary.com/"
+
+
+def _only_local(route: Any, port: int, *, asset_prefixes: tuple[str, ...] = ()) -> None:
+    """Let the project's server and our pictures through, and abort the rest.
+
+    The prefixes come from the backend, which knows its own Cloudinary account.
+    When they are absent the host is allowed as a fallback, but the static check
+    still narrows the account. Everything else — a fetch, a stylesheet, a font, a
+    navigation, a metadata endpoint — is aborted.
+    """
+    request = route.request
+    url = request.url
+    pictures = asset_prefixes or (_cloudinary_prefix(),)
+
+    if url.startswith(f"http://127.0.0.1:{port}/"):
+        route.continue_()
+        return
+
+    # A data URL is fine as a picture, font or media source; it is not a
+    # navigable page and not a script.
+    if url.startswith("data:"):
+        if getattr(request, "resource_type", "") in ("image", "font", "media"):
+            route.continue_()
+        else:
+            route.abort()
+        return
+
+    if any(url.startswith(prefix) for prefix in pictures):
+        route.continue_()
+        return
+
+    route.abort()
 
 
 def _rendered(page: Page, trouble: list[str]) -> dict[str, Any]:
@@ -461,7 +609,7 @@ def _size(name: str) -> dict[str, int]:
 
 
 def _accessible(
-    page: Page, *, scheme: str = "light"
+    page: Page, *, port: int, scheme: str = "light"
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """axe's verdict as a check, and its findings as themselves.
 
@@ -471,7 +619,7 @@ def _accessible(
     the dark page is a different fact from the same id on the light one.
     """
     page.set_viewport_size(_size(KEPT_VIEWPORT))
-    page.add_script_tag(path=str(REMOTE_SCAFFOLD / "node_modules" / "axe-core" / "axe.min.js"))
+    page.add_script_tag(url=f"http://127.0.0.1:{port}/axe.min.js")
 
     violations = page.evaluate(
         """async () => {
@@ -510,7 +658,9 @@ def _kept(trouble: list[str], message: Any) -> None:
         trouble.append(message.text)
 
 
-def _served(directory: Path) -> tuple[ThreadingHTTPServer, int]:
+def _served(
+    directory: Path, *, asset_prefixes: tuple[str, ...] = ()
+) -> tuple[ThreadingHTTPServer, int]:
     """Serve a built page over loopback, in a thread.
 
     Over HTTP rather than off the filesystem because Chromium refuses to load a
@@ -520,7 +670,11 @@ def _served(directory: Path) -> tuple[ThreadingHTTPServer, int]:
     Port 0, so the system picks a free one. Containers take one input at a time by
     default, but nothing here should depend on that being true for ever.
     """
-    handler = partial(_Quiet, directory=str(directory))
+    handler = partial(
+        _Quiet,
+        directory=str(directory),
+        asset_prefixes=asset_prefixes,
+    )
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
@@ -528,10 +682,72 @@ def _served(directory: Path) -> tuple[ThreadingHTTPServer, int]:
 
 
 class _Quiet(SimpleHTTPRequestHandler):
-    """A server that does not narrate every request into the logs."""
+    """A server that does not narrate every request into the logs.
+
+    It also sends the policy the browser would otherwise have to infer from the
+    code. The route handler stops requests that are already in flight; the CSP
+    stops most of them from being attempted, and blocks a navigation that tries
+    to leave the page.
+    """
+
+    asset_prefixes: tuple[str, ...] = ()
+
+    def __init__(self, *args: Any, asset_prefixes: tuple[str, ...] = (), **kwargs: Any) -> None:
+        self.asset_prefixes = asset_prefixes
+        super().__init__(*args, **kwargs)
 
     def log_message(self, *args: Any) -> None:
         return None
+
+    def end_headers(self) -> None:
+        for name, value in _headers(self.asset_prefixes).items():
+            self.send_header(name, value)
+
+        super().end_headers()
+
+
+def _headers(asset_prefixes: tuple[str, ...] = ()) -> dict[str, str]:
+    """What every rendered page is served with."""
+    return {
+        "Content-Security-Policy": _policy(asset_prefixes),
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+        "Cache-Control": "no-store",
+    }
+
+
+def _policy(asset_prefixes: tuple[str, ...] = ()) -> str:
+    """A CSP for a page that may draw our pictures and nothing else.
+
+    The Cloudinary path is narrowed to the deployment's own cloud when its
+    prefix is available. The static check enforces the same account; this is the
+    runtime half of that rule.
+    """
+    if asset_prefixes:
+        pictures = " ".join(asset_prefixes)
+    else:
+        cloud = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+        pictures = f"https://res.cloudinary.com/{cloud}/" if cloud else "https://res.cloudinary.com"
+
+    return (
+        "default-src 'none'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        f"img-src 'self' data: {pictures}; "
+        "font-src 'self' data:; "
+        "media-src 'self' data:; "
+        "connect-src 'none'; "
+        "frame-src 'none'; "
+        "child-src 'none'; "
+        "worker-src 'none'; "
+        "object-src 'none'; "
+        "base-uri 'none'; "
+        "form-action 'none'; "
+        "frame-ancestors 'none'"
+    )
 
 
 def _trimmed(text: str) -> str:

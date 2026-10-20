@@ -68,7 +68,15 @@ async def test_the_request_is_the_contract():
 
     await sandbox.check(FILES, function=function)
 
-    assert function.sent == {"files": [{"path": "src/Block.tsx", "content": FILES[0].content}]}
+    prefixes = (
+        [f"https://res.cloudinary.com/{settings.cloudinary_cloud_name}/"]
+        if settings.cloudinary_cloud_name
+        else []
+    )
+    assert function.sent == {
+        "files": [{"path": "src/Block.tsx", "content": FILES[0].content}],
+        "asset_prefixes": prefixes,
+    }
 
 
 async def test_the_function_is_reached_by_the_name_it_was_deployed_under(monkeypatch):

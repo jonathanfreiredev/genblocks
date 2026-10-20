@@ -127,7 +127,7 @@ async def test_an_agents_own_token_cannot_hold_a_conversation(client):
     assert response.status_code == 403
 
 
-async def test_a_turn_streams_the_words_the_tools_and_the_task(
+async def test_a_turn_prepares_a_brief_and_the_person_queues_it(
     client, db_session, agent_db, scripted
 ):
     token, user = await _sign_in(client, db_session, "maker@example.com")
@@ -136,7 +136,7 @@ async def test_a_turn_streams_the_words_the_tools_and_the_task(
             turns=[
                 call("search_components", query="pricing"),
                 call("create_component", brief=BRIEF),
-                says("Queued. The checklist below is the task's own record."),
+                says("The brief is ready. Queue it when you want."),
             ]
         )
     )
@@ -149,30 +149,62 @@ async def test_a_turn_streams_the_words_the_tools_and_the_task(
     events = _frames(response)
     names = [name for name, _ in events]
 
-    # The model reaches for what the registry holds, then for the queue, and the
-    # dialog is told about each call before it is told the call is over.
+    # The model reaches for what the registry holds, then prepares a brief, and
+    # the dialog is told about each call before it is told the call is over.
     assert events[0] == ("tool", {"name": "search_components", "state": "started"})
     assert ("tool", {"name": "search_components", "state": "finished"}) in events
     assert ("tool", {"name": "create_component", "state": "started"}) in events
     assert ("tool", {"name": "create_component", "state": "finished"}) in events
 
-    # The task is on the wire as soon as the tool that made it returns, and
-    # before the agent has finished the sentence about it.
-    task = next(data for name, data in events if name == "task")
-    assert names.index("task") < names.index("token")
+    # The proposal is on the wire before the sentence about it, and no task has
+    # been created by the model.
+    proposal = next(data for name, data in events if name == "proposal")
+    assert names.index("proposal") < names.index("token")
+    assert proposal["brief"] == BRIEF
+    assert proposal["force"] is False
+    assert "task" not in names
+    assert await db_session.scalar(select(Task)) is None
+
+    # The person's click is the door. The endpoint takes the proposal and writes
+    # the task for the same caller.
+    confirmed = await client.post(
+        "/v1/agent/confirm",
+        json={"brief": proposal["brief"]},
+        headers=auth_header(token),
+    )
+    assert confirmed.status_code == 202, confirmed.text
+    task = confirmed.json()
     assert task["status"] == "pending"
     assert task["brief"] == BRIEF
     assert task["component_id"] is None
     assert task["steps"] == []
 
-    # Words arrive in pieces rather than whole, which is the point of the stream.
-    assert names.count("token") > 1
-    assert _words(events).startswith("Queued.")
-    assert events[-1] == ("done", {})
-
     queued = await db_session.scalar(select(Task).where(Task.id == uuid.UUID(task["id"])))
     assert queued is not None
     assert queued.created_by == user.id
+
+    # Words arrive in pieces rather than whole, which is the point of the stream.
+    assert names.count("token") > 1
+    assert _words(events).startswith("The brief is ready.")
+    assert events[-1] == ("done", {})
+
+
+async def test_confirming_a_brief_requires_a_first_party_token(client):
+    response = await client.post("/v1/agent/confirm", json={"brief": BRIEF})
+
+    assert response.status_code == 401
+
+
+async def test_confirming_a_brief_takes_the_same_brief_contract(client, db_session):
+    token, _ = await _sign_in(client, db_session, "confirmer@example.com")
+
+    response = await client.post(
+        "/v1/agent/confirm",
+        json={"brief": "hero"},
+        headers=auth_header(token),
+    )
+
+    assert response.status_code == 422
 
 
 async def test_the_overview_tells_the_model_what_the_registry_holds(

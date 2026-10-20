@@ -23,19 +23,16 @@ from typing import Any
 from langchain_core.tools import BaseTool, tool
 from sqlalchemy import func, select
 
-from app.agent.schemas import Suggestion, Suggestions
+from app.agent.schemas import Proposal, Proposals, Suggestion, Suggestions
 from app.categories import service as categories_service
 from app.components import service as components_service
 from app.components.models import Component
 from app.db.session import async_session_maker
 from app.images import service as images_service
 from app.images.models import Image
-from app.moderation import service as moderation
 from app.pagination import ListParams
-from app.tasks import limits
-from app.tasks import service as tasks_service
 from app.tasks.models import Task
-from app.tasks.schemas import Brief, TaskCreate, TaskRead
+from app.tasks.schemas import Brief, TaskCreate
 from app.users.models import User
 from app.vectors import service as vectors
 
@@ -59,14 +56,24 @@ SEARCH_DISTANCE = 0.58
 PICTURE_DISTANCE = 0.72
 
 
-def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> list[BaseTool]:
+def build_tools(
+    *,
+    caller: User,
+    queued: list[Task],
+    suggested: Suggestions,
+    proposals: Proposals | None = None,
+) -> list[BaseTool]:
     """The tools one conversation can reach, with the caller already bound.
 
-    ``queued`` collects what this conversation creates. The endpoint reads it to
-    put the task on the stream the moment the tool returns, instead of parsing it
-    back out of the messages. ``suggested`` is the same idea for what the person
-    may want to look at.
+    ``proposals`` collects the briefs this conversation prepared. The endpoint
+    reads them to put a confirmation card on the stream; the task itself is only
+    created after the person clicks, through ``/v1/agent/confirm``. ``suggested``
+    is the same idea for what the person may want to look at.
+
+    ``queued`` is kept for the stream's shape, but no tool queues directly: a
+    model talking to registry text must not be able to spend a month's quota.
     """
+    prepared = proposals if proposals is not None else Proposals()
 
     @tool
     async def registry_overview() -> dict[str, Any]:
@@ -204,16 +211,16 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
 
     @tool
     async def create_component(brief: Brief, force: bool = False) -> dict[str, Any]:
-        """Queue the one task that builds the block, and return it.
+        """Prepare the one task that would build the block.
 
         Call this once the brief says what the block is for, what it contains and
         what it must avoid. The brief is what the builder receives, so it is
         written as the request you would make of a designer rather than as a
-        title. The call returns as soon as the work is queued; it does not wait
-        for the block. Do not call it twice for the same brief.
+        title. This call **does not queue anything**: it prepares the brief and
+        the person confirms it. Do not call it twice for the same brief.
 
         It refuses when the registry already holds this block: the answer names
-        what it found instead, and nothing is queued. The person may still want
+        what it found instead, and nothing is prepared. The person may still want
         their own version — only after they have said so, call it again with
         ``force``.
         """
@@ -234,39 +241,25 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
                 suggested.add(_suggested(block, None))
                 return {
                     "queued": False,
+                    "proposed": False,
                     "already": _described(block, distance),
                     "message": (
                         "This block is already in the registry, so nothing was "
-                        "queued. Tell the person what it is, and let them decide "
+                        "prepared. Tell the person what it is, and let them decide "
                         "whether they still want a new one."
                     ),
                 }
 
-            try:
-                task = await tasks_service.enqueue_task(
-                    session, brief=payload.brief, created_by=caller.id, fresh=force
-                )
-            except limits.MonthlyQuotaReached as reached:
-                return {
-                    "queued": False,
-                    "limit": str(reached),
-                    "message": (
-                        "Nothing was queued: the person has used this month's blocks. "
-                        "Tell them when the next one opens; do not retry."
-                    ),
-                }
-            except moderation.BriefRejected as refused:
-                return {
-                    "queued": False,
-                    "refused": refused.reason,
-                    "message": (
-                        "Nothing was queued: the brief was refused. Say why, briefly, "
-                        "and offer to write a different one."
-                    ),
-                }
-
-        queued.append(task)
-        return TaskRead.model_validate(task).model_dump(mode="json")
+        prepared.add(Proposal(brief=payload.brief, force=force))
+        return {
+            "queued": False,
+            "proposed": True,
+            "brief": payload.brief,
+            "message": (
+                "The brief is ready. Nothing is queued yet: the person sees it and "
+                "chooses whether to run it."
+            ),
+        }
 
     return [registry_overview, search_components, find_images, create_component]
 

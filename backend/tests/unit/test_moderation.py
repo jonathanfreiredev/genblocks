@@ -81,7 +81,7 @@ async def test_the_question_carries_the_model_and_the_key():
 
     await moderation.review("A hero", client=groq)
 
-    assert groq.asked["url"] == moderation.ENDPOINT
+    assert groq.asked["url"] == moderation.GROQ_ENDPOINT
     assert groq.asked["headers"]["Authorization"] == f"Bearer {KEY}"
     assert groq.asked["body"]["model"] == settings.moderation_model
     assert groq.asked["body"]["messages"][-1]["content"] == "A hero"
@@ -127,10 +127,107 @@ async def test_refusal_is_the_reason_when_it_does_not():
     assert await moderation.refusal("A weapon", client=groq) == "it describes a weapon"
 
 
-async def test_without_a_key_the_check_is_off_and_says_so(monkeypatch):
+async def test_without_a_key_the_check_is_off_in_development(monkeypatch):
     monkeypatch.setattr(settings, "groq_api_key", None)
+    monkeypatch.setattr(settings, "openai_api_key", None)
+    monkeypatch.setattr(settings, "env", "development")
 
     assert await moderation.refusal("Anything at all") is None
+
+
+async def test_without_a_key_production_refuses_the_text(monkeypatch):
+    monkeypatch.setattr(settings, "groq_api_key", None)
+    monkeypatch.setattr(settings, "openai_api_key", None)
+    monkeypatch.setattr(settings, "env", "production")
+
+    with pytest.raises(moderation.ModerationUnavailable, match="moderation is off"):
+        await moderation.refusal("Anything at all")
+
+
+def test_the_moderation_endpoint_answer_is_read_as_categories():
+    answer = httpx.Response(
+        200,
+        json={
+            "results": [
+                {
+                    "flagged": True,
+                    "categories": {"violence": True, "hate": False},
+                }
+            ]
+        },
+        request=httpx.Request("POST", moderation.OPENAI_MODERATION_ENDPOINT),
+    )
+
+    verdict = moderation._read_openai(answer)
+
+    assert verdict.allowed is False
+    assert verdict.reason == "violence"
+
+
+class Images:
+    """The image moderation endpoint, answered without a provider."""
+
+    def __init__(self, *, flagged: bool = False) -> None:
+        self.flagged = flagged
+        self.asked: dict = {}
+
+    async def post(self, url: str, *, headers: dict, json: dict) -> httpx.Response:
+        self.asked = {"url": url, "headers": headers, "body": json}
+
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "flagged": self.flagged,
+                        "categories": {"sexual/minors": self.flagged},
+                    }
+                ]
+            },
+            request=httpx.Request("POST", url),
+        )
+
+
+async def test_an_image_that_clears_the_classifier_is_allowed(monkeypatch):
+    monkeypatch.setattr(settings, "openai_api_key", "test-openai")
+    monkeypatch.setattr(settings, "env", "development")
+    monkeypatch.setattr(settings, "csam_scan_url", None)
+
+    assert await moderation.image_refusal(b"jpeg-bytes", client=Images()) is None
+
+
+async def test_an_image_the_classifier_flags_as_sexual_minors_is_a_csam_event(monkeypatch):
+    monkeypatch.setattr(settings, "openai_api_key", "test-openai")
+    monkeypatch.setattr(settings, "env", "development")
+
+    with pytest.raises(moderation.CSAMDetected, match="sexual content involving minors"):
+        await moderation.image_refusal(b"jpeg-bytes", client=Images(flagged=True))
+
+
+async def test_a_csam_match_never_reaches_the_generic_moderator(monkeypatch):
+    monkeypatch.setattr(settings, "openai_api_key", "test-openai")
+    monkeypatch.setattr(settings, "env", "development")
+
+    async def matched(data, *, media_type="image/png"):
+        raise moderation.CSAMDetected("it matches a known fingerprint")
+
+    class NeverAsked(Images):
+        async def post(self, *args, **kwargs):
+            raise AssertionError("a CSAM match must not reach the generic moderator")
+
+    monkeypatch.setattr(moderation, "_csam_refusal", matched)
+
+    with pytest.raises(moderation.CSAMDetected):
+        await moderation.image_refusal(b"jpeg-bytes", client=NeverAsked())
+
+
+async def test_production_refuses_an_image_without_a_csam_scanner(monkeypatch):
+    monkeypatch.setattr(settings, "openai_api_key", "test-openai")
+    monkeypatch.setattr(settings, "env", "production")
+    monkeypatch.setattr(settings, "csam_scan_url", None)
+
+    with pytest.raises(moderation.ModerationUnavailable, match="CSAM"):
+        await moderation.image_refusal(b"jpeg-bytes", client=Images())
 
 
 def test_the_brief_refusal_says_what_it_is():

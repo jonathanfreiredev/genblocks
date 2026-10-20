@@ -2,14 +2,14 @@
 
 The API is asynchronous — a request is queued and answered with a polling URL, and
 the sample it finally returns is a signed URL that expires in ten minutes and is
-not meant to be served to anybody. So every image is downloaded here and uploaded
-to Cloudinary, and what travels on is a public id of ours; no BFL URL is ever
-stored or handed to a block.
+not meant to be served to anybody. So every image is downloaded here, and what
+travels on is a public id of ours; no BFL URL is ever stored or handed to a block.
 
-What this module does **not** do is write a row. The library's rows belong to the
-runner (``app.tasks.runner``), which holds a session; what comes back from here is
-everything a row needs, plus the bytes — so the judge can score the picture without
-fetching it a second time.
+What this module does **not** do is write a row or put the bytes in a public CDN.
+The library's rows belong to the runner (``app.tasks.runner``), which holds a
+session; what comes back from here is everything a row needs, plus the bytes. The
+runner moderates and scores the picture first, and only then uploads it. A
+picture that should not exist never gets an address that could be served.
 """
 
 import asyncio
@@ -18,6 +18,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.harness import cloudinary
+from app.moderation import service as moderation
 from app.settings import settings
 
 # The statuses BFL reports while a task is alive, and the ones that mean it is not
@@ -45,6 +46,10 @@ class ImagesUnavailable(Exception):
     """The library cannot make a picture: no key, no credits, or nobody answered."""
 
 
+class ImagesRefused(Exception):
+    """The picture was made, and the safety gate refused it."""
+
+
 @dataclass(frozen=True)
 class Generated:
     """One picture, ready to be a row and to be referenced by a block."""
@@ -58,6 +63,9 @@ class Generated:
     media_type: str
     # The bytes, kept so the judge scores what was actually made.
     data: bytes
+    # The safety gate ran here, before storage, and cleared the bytes. The runner
+    # does not pay for the same check twice.
+    screened: bool = False
 
 
 def size_complaint(width: int, height: int) -> str | None:
@@ -123,6 +131,14 @@ async def _generate(
 
     data = picture.content
     media_type = picture.headers.get("content-type", DEFAULT_MEDIA_TYPE).split(";")[0]
+
+    # Safety before storage. A picture that should not exist never gets a public
+    # address, and a picture that passes can be used in the next render because it
+    # already has one.
+    why = await moderation.image_refusal(data, media_type=media_type)
+    if why is not None:
+        raise ImagesRefused(why)
+
     path = await cloudinary.store(data, name=cloudinary.image_id(data), media_type=media_type)
 
     return Generated(
@@ -133,6 +149,7 @@ async def _generate(
         height=height,
         media_type=media_type,
         data=data,
+        screened=True,
     )
 
 

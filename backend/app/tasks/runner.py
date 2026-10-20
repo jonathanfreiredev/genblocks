@@ -131,6 +131,14 @@ class PictureUnfiled(Exception):
     """A picture came back for a type the library does not have."""
 
 
+class PictureRejected(Exception):
+    """A picture did not clear visual safety or the image rubric.
+
+    The reason is the moderator's or judge's own sentence. A rejected picture is
+    not written to the library and never reaches Cloudinary.
+    """
+
+
 @dataclass(frozen=True)
 class Made:
     """What the harness step produced: the attempt, and what it was built with."""
@@ -311,7 +319,21 @@ async def _build(
                 for path, content in sorted(built.files.items())
             ]
         )
-        stored = await _store(found, task=task)
+
+        # A render is content too. Text moderation sees the copy; it cannot see a
+        # hate symbol, a person, or an image inside the render. Both grounds are
+        # checked before the screenshot can become a public asset.
+        for screenshot in (found.screenshot, found.screenshot_dark):
+            if screenshot is None:
+                continue
+
+            why = await moderation.image_refusal(
+                screenshot,
+                media_type=found.screenshot_media_type,
+            )
+            if why is not None:
+                raise ModerationRefused(f"The render did not pass moderation — {why}")
+
         attempt = Generation(
             task_id=task.id,
             # One artifact per run: the number is the invariant the table enforces
@@ -322,7 +344,9 @@ async def _build(
             files=built.files,
             entry=harness.ENTRY,
             model=settings.llm_model,
-            screenshot_path=stored,
+            # Stored only after the judge publishes it: a rejected attempt must not
+            # leave a render in the public CDN.
+            screenshot_path=None,
             checks=found.record(),
             verdict=Verdict.REJECTED if found.blocked else Verdict.CANDIDATE,
             langfuse_trace_id=trace.id,
@@ -381,60 +405,104 @@ async def _keep(
 
     They are kept whether or not the block is published: a stock image is an
     artifact of its own, it is what the library browses, and it is what a later
-    run reuses instead of generating again (Fase 10).
+    run reuses instead of generating again (Fase 10). The safety gate ran before
+    the first upload; the rubric is the second door, and a picture that fails it
+    is removed from the CDN rather than left behind.
     """
-    pictures: list[Image] = []
+    pictures: list[Image | None] = [None] * len(built.images)
+    fresh: list[tuple[int, harness.Placed, Judged, str]] = []
+    stored: list[str] = []
 
-    for placed in built.images:
-        if placed.library_id is not None:
-            # Already the library's: reused, not re-filed. It was scored when it
-            # came in, and scoring it again would be a second opinion on the same
-            # bytes.
-            existing = await session.get(Image, placed.library_id)
-            if existing is None:
-                raise PictureUnfiled("The picture this block reused is no longer in the library.")
-            pictures.append(existing)
-            continue
+    try:
+        # First pass: score every new picture, and record the address it already
+        # has. The safety gate in ``images.generate`` ran before storage.
+        for index, placed in enumerate(built.images):
+            if placed.library_id is not None:
+                # Already the library's: reused, not re-filed. It was scored and
+                # moderated when it came in, and doing it again would be a second
+                # opinion on the same bytes.
+                existing = await session.get(Image, placed.library_id)
+                if existing is None:
+                    raise PictureUnfiled(
+                        "The picture this block reused is no longer in the library."
+                    )
+                pictures[index] = existing
+                continue
 
-        if placed.image is None:
-            raise PictureUnfiled("A picture was placed with neither bytes nor a library id.")
+            if placed.image is None:
+                raise PictureUnfiled("A picture was placed with neither bytes nor a library id.")
 
-        category_id = types.get(placed.category)
-        if category_id is None:
-            raise PictureUnfiled(
-                f"The image library has no {placed.category!r} type to file a picture under."
+            category_id = types.get(placed.category)
+            if category_id is None:
+                raise PictureUnfiled(
+                    f"The image library has no {placed.category!r} type to file a picture under."
+                )
+
+            if not placed.image.screened:
+                why = await moderation.image_refusal(
+                    placed.image.data,
+                    media_type=placed.image.media_type,
+                )
+                if why is not None:
+                    raise PictureRejected(f"The picture did not pass moderation — {why}")
+
+            path = placed.image.path
+            if not placed.image.screened:
+                path = await cloudinary.store(
+                    placed.image.data,
+                    name=path,
+                    media_type=placed.image.media_type,
+                )
+            stored.append(path)
+
+            judged = await judge.score_image(
+                prompt=placed.image.prompt,
+                image=placed.image.data,
+                width=placed.image.width,
+                height=placed.image.height,
+                media_type=placed.image.media_type,
             )
+            if not judged.passed:
+                missed = "; ".join(
+                    f"{dimension} {judged.scores[dimension]}, below "
+                    f"{judge.threshold_for(dimension)}: {judged.notes[dimension]}"
+                    for dimension in judged.below
+                )
+                raise PictureRejected(f"The picture did not pass the image rubric — {missed}")
 
-        judged = await judge.score_image(
-            prompt=placed.image.prompt,
-            image=placed.image.data,
-            width=placed.image.width,
-            height=placed.image.height,
-            media_type=placed.image.media_type,
-        )
-        picture = Image(
-            slug=image_slug(prompt=placed.image.prompt, path=placed.image.path),
-            prompt=placed.image.prompt,
-            path=placed.image.path,
-            width=placed.image.width,
-            height=placed.image.height,
-            category_id=category_id,
-            created_by=task.created_by,
-            model=settings.image_model,
-            scores=judged.scores,
-            rubric_version=judged.version,
-            langfuse_trace_id=trace.id,
-        )
-        session.add(picture)
-        pictures.append(picture)
+            fresh.append((index, placed, judged, path))
 
-    if pictures:
+        # Second pass: every picture cleared the rubric, so each one can have a row.
+        for index, placed, judged, path in fresh:
+            if placed.image is None:  # pragma: no cover - guarded in the first pass
+                raise PictureUnfiled("A picture was placed with neither bytes nor a library id.")
+
+            picture = Image(
+                slug=image_slug(prompt=placed.image.prompt, path=path),
+                prompt=placed.image.prompt,
+                path=path,
+                width=placed.image.width,
+                height=placed.image.height,
+                category_id=types[placed.category],
+                created_by=task.created_by,
+                model=settings.image_model,
+                scores=judged.scores,
+                rubric_version=judged.version,
+                langfuse_trace_id=trace.id,
+            )
+            session.add(picture)
+            pictures[index] = picture
+    except Exception:
+        await _discard_pictures(session, stored)
+        raise
+
+    if any(picture is not None for picture in pictures):
         await session.commit()
 
     # Remembered after the rows exist: a picture is the library's from the moment
     # it is filed, whether or not the block that asked for it is published.
     for placed, picture in zip(built.images, pictures, strict=True):
-        if placed.library_id is not None:
+        if placed.library_id is not None or picture is None:
             # A picture the library already had: it is remembered once, and this
             # run did not make it.
             continue
@@ -448,7 +516,25 @@ async def _keep(
         if not remembered:
             logger.warning("filed picture is not searchable", path=picture.path)
 
-    return pictures
+    return [picture for picture in pictures if picture is not None]
+
+
+async def _discard_pictures(session: AsyncSession, paths: list[str]) -> None:
+    """Remove assets this run uploaded and will not turn into library rows.
+
+    Pictures are content-addressed, so the same bytes can already belong to an
+    existing row. That asset is not ours to delete; only an unreferenced object
+    from this run is removed.
+    """
+    for path in dict.fromkeys(paths):
+        referenced = await session.scalar(select(Image.id).where(Image.path == path))
+        if referenced is not None:
+            continue
+
+        try:
+            await cloudinary.destroy(path)
+        except Exception as broke:  # noqa: BLE001 - a cleanup failure is a warning
+            logger.warning("unpublished picture could not be removed", path=path, error=str(broke))
 
 
 async def _picture_categories(session: AsyncSession) -> dict[str, uuid.UUID]:
@@ -476,6 +562,7 @@ async def _store(result: SandboxResult, *, task: Task) -> str | None:
     return await cloudinary.store(
         result.screenshot,
         name=cloudinary.screenshot_id(task.id, 1),
+        media_type=result.screenshot_media_type,
     )
 
 
@@ -577,6 +664,11 @@ async def _publish(
     await _begin(session, step)
 
     async with trace.step(STEP_NAMES[3], input={"category": spec.category_slug}) as span:
+        # The render becomes a public asset only now, after moderation and the
+        # judge have both cleared it. A rejected attempt keeps no picture.
+        if made.found.screenshot is not None:
+            made.attempt.screenshot_path = await _store(made.found, task=task)
+
         slug = slug_for(title=spec.title, task_id=task.id)
         component = Component(
             slug=slug,

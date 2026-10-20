@@ -104,8 +104,8 @@ const TOOL_COPY: Record<string, { running: string; done: string }> = {
     done: "Looked through the pictures",
   },
   create_component: {
-    running: "Queueing the build",
-    done: "Queued the build",
+    running: "Preparing the brief",
+    done: "Prepared the brief",
   },
 };
 
@@ -117,12 +117,18 @@ type Activity = {
   state: "started" | "finished";
 };
 
+type Proposal = {
+  brief: string;
+  force: boolean;
+};
+
 type Turn = {
   id: number;
   from: "you" | "agent";
   text: string;
   activities: Activity[];
   suggestions: Suggestion[];
+  proposals: Proposal[];
   taskIds: string[];
   stopped: boolean;
   streaming: boolean;
@@ -210,6 +216,28 @@ function addSuggestions(
   });
 }
 
+/** Keep one confirmation card per prepared brief. */
+function addProposal(turns: Turn[], id: number, proposal: Proposal): Turn[] {
+  return turns.map((turn) =>
+    turn.id === id &&
+    !turn.proposals.some((one) => one.brief === proposal.brief)
+      ? { ...turn, proposals: [...turn.proposals, proposal] }
+      : turn,
+  );
+}
+
+/** Drop a proposal once the person has queued it. */
+function removeProposal(turns: Turn[], id: number, brief: string): Turn[] {
+  return turns.map((turn) =>
+    turn.id === id
+      ? {
+          ...turn,
+          proposals: turn.proposals.filter((one) => one.brief !== brief),
+        }
+      : turn,
+  );
+}
+
 /** Attach a queued task to the answer that queued it. */
 function addTask(turns: Turn[], id: number, taskId: string): Turn[] {
   return turns.map((turn) =>
@@ -227,6 +255,7 @@ function dropIfUnsaid(turns: Turn[], id: number): Turn[] {
       turn.text !== "" ||
       turn.activities.length > 0 ||
       turn.suggestions.length > 0 ||
+      turn.proposals.length > 0 ||
       turn.taskIds.length > 0,
   );
 }
@@ -402,16 +431,65 @@ function TaskCard({ task }: { task: Task }) {
   );
 }
 
+function ProposalCard({
+  proposal,
+  onQueue,
+}: {
+  proposal: Proposal;
+  onQueue: () => Promise<boolean>;
+}) {
+  const [pending, setPending] = useState(false);
+
+  async function queue() {
+    setPending(true);
+    try {
+      await onQueue();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="bg-muted/20 flex flex-col gap-3 rounded-lg border p-3">
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-medium">
+          {proposal.force ? "A new version, ready to build" : "Ready to build"}
+        </p>
+        <p className="text-muted-foreground text-sm whitespace-pre-wrap">
+          {proposal.brief}
+        </p>
+      </div>
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => void queue()}
+          disabled={pending}
+        >
+          {pending ? (
+            <Spinner data-icon="inline-start" />
+          ) : (
+            <SparklesIcon data-icon="inline-start" />
+          )}
+          Queue block
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function TurnView({
   turn,
   tasks,
   userName,
   onOpenItem,
+  onQueue,
 }: {
   turn: Turn;
   tasks: Record<string, Task>;
   userName: string | null;
   onOpenItem: () => void;
+  onQueue: (proposal: Proposal) => Promise<boolean>;
 }) {
   const mine = turn.from === "you";
   const waiting =
@@ -421,6 +499,7 @@ function TurnView({
     !turn.stopped &&
     turn.activities.length === 0 &&
     turn.suggestions.length === 0 &&
+    turn.proposals.length === 0 &&
     turn.taskIds.length === 0;
 
   return (
@@ -473,6 +552,14 @@ function TurnView({
         {turn.suggestions.length > 0 ? (
           <SuggestionRail items={turn.suggestions} onOpenItem={onOpenItem} />
         ) : null}
+
+        {turn.proposals.map((proposal) => (
+          <ProposalCard
+            key={proposal.brief}
+            proposal={proposal}
+            onQueue={() => onQueue(proposal)}
+          />
+        ))}
 
         {turn.taskIds.map((id) =>
           tasks[id] ? <TaskCard key={id} task={tasks[id]} /> : null,
@@ -547,9 +634,9 @@ function useAgentChat(): AgentChatContextValue {
  * The provider owns the transcript and the dialog; triggers only ask it to open.
  * That is what lets the sidebar have a button on a laptop and the floating
  * mobile button have the same conversation, instead of two dialogs with two
- * different transcripts. It answers questions about the registry and turns a
- * request into a task. The thread id is the only thing kept between visits: the
- * memory is on the other end.
+ * different transcripts. It answers questions about the registry, prepares a
+ * brief when asked, and lets the person decide whether to queue it. The thread id
+ * is the only thing kept between visits: the memory is on the other end.
  */
 export function AgentChatProvider({
   signedIn = true,
@@ -709,6 +796,42 @@ export function AgentChatProvider({
     };
   }, [liveKey, router]);
 
+  async function confirmProposal(
+    turnId: number,
+    proposal: Proposal,
+  ): Promise<boolean> {
+    setTrouble(null);
+
+    try {
+      const response = await fetch("/api/agent/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(proposal),
+      });
+
+      if (!response.ok) {
+        setTrouble(await unreadable(response));
+        return false;
+      }
+
+      const task = (await response.json()) as Task;
+      setTasks((current) => ({ ...current, [task.id]: task }));
+      setTurns((current) =>
+        addTask(
+          removeProposal(current, turnId, proposal.brief),
+          turnId,
+          task.id,
+        ),
+      );
+      router.refresh();
+
+      return true;
+    } catch {
+      setTrouble("The task could not be queued. Nothing was created.");
+      return false;
+    }
+  }
+
   async function say(text?: string) {
     const message = (text ?? draft).trim();
 
@@ -735,6 +858,7 @@ export function AgentChatProvider({
         text: message,
         activities: [],
         suggestions: [],
+        proposals: [],
         taskIds: [],
         stopped: false,
         streaming: false,
@@ -745,6 +869,7 @@ export function AgentChatProvider({
         text: "",
         activities: [],
         suggestions: [],
+        proposals: [],
         taskIds: [],
         stopped: false,
         streaming: true,
@@ -789,6 +914,16 @@ export function AgentChatProvider({
 
         if (event.type === "suggestions") {
           setTurns((current) => addSuggestions(current, theirs, event.items));
+          return;
+        }
+
+        if (event.type === "proposal") {
+          setTurns((current) =>
+            addProposal(current, theirs, {
+              brief: event.brief,
+              force: event.force,
+            }),
+          );
           return;
         }
 
@@ -903,6 +1038,9 @@ export function AgentChatProvider({
                             tasks={tasks}
                             userName={userName}
                             onOpenItem={() => setOpen(false)}
+                            onQueue={(proposal) =>
+                              confirmProposal(turn.id, proposal)
+                            }
                           />
                         </MessageScrollerItem>
                       ))}

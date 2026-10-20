@@ -160,6 +160,7 @@ class Harness:
         self.library = None
         self.checked: list[list[SandboxFile]] = []
         self.uploaded: list[str] = []
+        self.destroyed: list[str] = []
         self.answer = findings()
         # A test that needs the sandbox to answer differently on a later call
         # writes the whole script; its last answer is repeated after that.
@@ -284,9 +285,13 @@ def harness(monkeypatch) -> Harness:
 
         return name
 
+    async def destroy(name: str, *, client=None) -> None:
+        harness.destroyed.append(name)
+
     monkeypatch.setattr(agent, "build", build)
     monkeypatch.setattr(sandbox, "check", check)
     monkeypatch.setattr(cloudinary, "store", store)
+    monkeypatch.setattr(cloudinary, "destroy", destroy)
 
     return harness
 
@@ -1058,3 +1063,89 @@ async def test_a_run_without_langfuse_is_the_same_run(runner_session, harness, j
     assert done is not None and done.status == TaskStatus.SUCCEEDED
     assert done.langfuse_trace_id is None
     assert attempts[0].langfuse_trace_id is None
+
+
+async def test_a_picture_the_moderator_refuses_is_not_filed(
+    runner_session, harness, judge, monkeypatch
+):
+    from app.moderation import service as moderation
+
+    await create_category(runner_session, slug="hero")
+    await create_category(runner_session, slug=CATEGORY, kind="image")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+    harness.built = Built(files=dict(PROJECT), images=[picture()], iterations=4, skills="1a2b3c4d")
+
+    async def refused(data, *, media_type="image/png", client=None):
+        return "it is not a stock picture we would file"
+
+    monkeypatch.setattr(moderation, "image_refusal", refused)
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    failed = await get_task(runner_session, task_id=task_id)
+    assert failed is not None and failed.status == TaskStatus.FAILED
+    assert "did not pass moderation" in (failed.error or "")
+    assert await runner_session.scalar(select(Image)) is None
+    assert harness.uploaded == []
+    assert judge.pictures == []
+
+
+async def test_a_picture_below_the_image_bar_is_not_filed(
+    runner_session, harness, judge, monkeypatch
+):
+    await create_category(runner_session, slug="hero")
+    await create_category(runner_session, slug=CATEGORY, kind="image")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+    harness.built = Built(files=dict(PROJECT), images=[picture()], iterations=4, skills="1a2b3c4d")
+
+    async def weak(*, prompt, image, width, height, media_type):
+        return judging.read(
+            judge._answer({"visual": 88, "prompt_fit": 91, "compliance": 10}),
+            IMAGES,
+        )
+
+    monkeypatch.setattr(judging, "score_image", weak)
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    failed = await get_task(runner_session, task_id=task_id)
+    assert failed is not None and failed.status == TaskStatus.FAILED
+    assert "compliance 10" in (failed.error or "")
+    assert await runner_session.scalar(select(Image)) is None
+    assert harness.uploaded == ["genblocks/images/abc123"]
+    assert harness.destroyed == ["genblocks/images/abc123"]
+
+
+async def test_a_render_the_moderator_refuses_is_not_judged_or_stored(
+    runner_session, harness, judge, monkeypatch
+):
+    from app.moderation import service as moderation
+
+    await create_category(runner_session, slug="hero")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+
+    async def refused(data, *, media_type="image/png", client=None):
+        return "the render shows something we do not publish"
+
+    monkeypatch.setattr(moderation, "image_refusal", refused)
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    failed = await get_task(runner_session, task_id=task_id)
+    assert failed is not None and failed.status == TaskStatus.FAILED
+    assert "render did not pass moderation" in (failed.error or "")
+    assert judge.shown == []
+    assert harness.uploaded == []
+    assert await _attempts(runner_session, task_id) == []
