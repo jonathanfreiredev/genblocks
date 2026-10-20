@@ -56,11 +56,12 @@ def delivery_url(public_id: str) -> str:
     """The URL a browser reads an asset from.
 
     A block is served from somebody else's page, so it needs an address rather
-    than an id. ``f_auto,q_auto`` lets Cloudinary choose WebP/AVIF and a sensible
-    quality at the edge; the width stays with whoever renders the block, which is
-    the one decision this function cannot make for them.
+    than an id. No transformation is added here on purpose: dynamic Cloudinary
+    transformations consume the plan's transformation credits, and a block copied
+    a thousand times would make that somebody else's bill. The stored bytes are
+    already the size and format the library decided to keep.
     """
-    return f"https://res.cloudinary.com/{_account()}/image/upload/f_auto,q_auto/{public_id}"
+    return f"https://res.cloudinary.com/{_account()}/image/upload/{public_id}"
 
 
 def signature(params: dict[str, str], *, api_secret: str) -> str:

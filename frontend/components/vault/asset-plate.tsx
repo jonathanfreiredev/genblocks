@@ -29,7 +29,7 @@ export function AssetPlate({
   fit?: "cover" | "contain";
   className?: string;
 }) {
-  const src = assetUrl(path, 1200);
+  const src = assetUrl(path);
   const [unavailable, setUnavailable] = useState(false);
 
   return (

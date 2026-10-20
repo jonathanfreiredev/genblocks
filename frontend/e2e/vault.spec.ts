@@ -95,7 +95,8 @@ test("an image whose asset cannot arrive says so rather than breaking", async ({
   page,
 }) => {
   // The rows have real assets, so the fallback is exercised the only way it
-  // happens in production: the delivery fails.
+  // happens in production: the delivery fails. The requests go through Next's
+  // image optimizer, so that is the request to abort.
   await page.route("**/_next/image**", (route) => route.abort());
 
   await page.goto("/images");

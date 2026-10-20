@@ -79,10 +79,7 @@ def test_an_image_is_named_after_its_own_bytes():
 def test_an_image_is_addressable_where_a_block_can_read_it(account):
     url = cloudinary.delivery_url("genblocks/images/abc123")
 
-    assert (
-        url == "https://res.cloudinary.com/genblocks/image/upload/f_auto,q_auto/"
-        "genblocks/images/abc123"
-    )
+    assert url == "https://res.cloudinary.com/genblocks/image/upload/genblocks/images/abc123"
 
 
 def test_a_deployment_with_no_cloud_cannot_address_anything(monkeypatch):
