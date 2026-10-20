@@ -210,6 +210,23 @@ components:
     border: "1px {colors.border}"
     rounded: "9999px"
     size: 36px
+  assistant-dialog:
+    backgroundColor: "{colors.popover}"
+    textColor: "{colors.popover-foreground}"
+    border: "1px {colors.border}"
+    rounded: "{rounded.xl}"
+    width: 768px
+    height: 760px
+  user-bubble:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.primary-foreground}"
+    rounded: "{rounded.xl}"
+    padding: "8px 12px"
+  assistant-composer:
+    backgroundColor: "{colors.background}"
+    border: "1px {colors.input}"
+    rounded: "{rounded.xl}"
+    padding: 12px
 ---
 
 ## Overview
@@ -341,6 +358,59 @@ A muted strip directly under the header (`bg-muted/40`, 1px bottom border, 8px b
 
 There is no `Home` crumb. The section is the root.
 
+## The assistant
+
+The vault has one conversation, opened from **Ask AI** in the sidebar. It answers
+questions about blocks and pictures, and it can turn a request into a task. The
+surface is the shadcn chat set, not a hand-rolled scroll box.
+
+- **Frame** — `Dialog` at `sm:max-w-3xl`, 760px tall on a laptop, full height on
+  a phone. The header is the mark, the title `Ask GenBlocks`, one line of scope,
+  a new-chat button and the close button.
+- **Welcome** — centered when there are no turns: the sparkle, `Ask about
+  anything in the vault`, one supporting line, and four prompt chips (overview,
+  find a block, look at pictures, build). A visitor sees the same welcome and a
+  sign-in footer instead of the composer.
+- **Transcript** — `MessageScroller` with `Message`, `MessageAvatar`,
+  `MessageHeader` and `Bubble`. The user's turn is right-aligned in a primary
+  bubble; the assistant's is left, full width, in a ghost bubble. Every turn has
+  a small name and an avatar; the assistant's avatar is a sparkle, the user's is
+  their initials.
+- **Activity** — a `Trace` above the assistant's words. Each tool is a
+  `TraceLine`: `Spinner` plus a running phrase while it works, `Check` plus the
+  past-tense phrase when it is done. The labels are human (`Searching the
+  blocks`, `Queueing the build`), never the tool's Python name. While nothing has
+  happened yet, a `Marker` with a spinner says `Thinking…`.
+- **Answers** — stream as text; no bubble around the assistant's prose, so a
+  long answer stays readable. `whitespace-pre-wrap` keeps the model's paragraphs.
+- **Suggestions** — the cards the tools found belong to the turn that found them,
+  in a horizontal rail under the answer. Each card opens its item page and closes
+  the dialog.
+- **Task card** — when a task is queued, it becomes a bordered card inside the
+  same turn: heading (`Building the block`, `Block published`, `The build
+  stopped`, `Already in the registry`), the brief, a status badge, one `TraceLine`
+  per step with its elapsed time, and `Follow the task` / `Open the block`. The card
+  polls while the task is live; the composer stays available, because the chat
+  does not end when a build starts.
+- **Composer** — `InputGroup` with `InputGroupTextarea` (two rows, capped), a
+  send button (`ArrowUp`), a stop button while a turn is streaming, and the hint
+  `Enter to send · Shift+Enter for a new line`. Enter sends; Shift+Enter breaks
+  the line; IME composition is respected.
+- **New chat** — the plus in the header. It aborts the turn in flight, clears the
+  transcript and the task cards, and rotates the thread id.
+- **Continuity** — the thread id lives in `localStorage` under
+  `genblocks-chat-thread`. It is the only thing kept between visits: the
+  transcript is React state, and the agent's memory is on the server. Closing the
+  dialog keeps the conversation; reloading the page starts a fresh transcript
+  with the same thread.
+- **Type** — 14px for messages, trace lines and task steps; 12px for the section
+  label `ALREADY IN THE REGISTRY` and status badges; 18px only for scores. The
+  names above each turn are 12px muted.
+
+Do not build a second chat surface with raw `div`s: the scroller, message, bubble,
+marker and trace primitives already own alignment, scroll following, the
+jump-to-latest button and the streaming states.
+
 ## The wall
 
 The gallery is a wall of pictures, not a list of records.
@@ -414,6 +484,7 @@ The panel narrows rather than widening the page: never give the evidence more th
 - **Badge** — status words and verdicts. `secondary` for running, `destructive` for failed, `outline` for queued or done; verdicts use the functional emerald/destructive pairs.
 - **Sidebar** — the real shadcn sidebar with menu buttons, group labels, tooltips in icon mode and a sheet on mobile.
 - **Empty / Alert** — the shadcn primitives, not bespoke markup.
+- **Chat** — `MessageScroller` + `Message` + `Bubble` + `Marker` + `Trace`; the assistant surface is a composition of these, not a new widget.
 - **ScoreReadout** — the product's one custom data component: 18px semibold tabular number over a 56px track. No donuts, rings or gauges.
 - **AssetPlate** — the product's one media component: a Cloudinary id, a transform width, `object-contain` in the gallery and item view, and an honest muted fallback.
 
@@ -426,6 +497,8 @@ Do:
 - Do keep the shell thin: 56px header, 16rem sidebar, 12px content padding.
 - Do keep the wall textless until hover, and keep the author the only label.
 - Do keep the evidence column narrow and its type scale consistent: 12px section labels, 14px labels and values, 18px scores.
+- Do keep the assistant's activity visible while it works, and keep the composer after a task is queued.
+- Do persist the conversation id, not the transcript.
 - Do keep the file rail visible and collapsible, with the file list on the left on a laptop and above the code on a phone.
 - Do cap renders at 58–60svh and contain them.
 - Do use `gap-*`, `size-*`, `truncate`, `cn()` and `data-icon`.
@@ -446,6 +519,8 @@ Don't:
 - Don't animate entrances, bounces or scroll reveals. Hover lifts and fades are enough.
 - Don't uppercase body copy; reserve uppercase for the 12px section labels.
 - Don't build a custom dialog, menu, tab or field when shadcn already ships one.
+- Don't hand-roll chat bubbles, auto-scroll or "thinking" states; compose the chat primitives.
+- Don't clear the conversation when the dialog closes, and don't store the transcript beside the thread id.
 
 ## Implementation notes
 

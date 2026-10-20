@@ -26,7 +26,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { GenerateDialog } from "@/components/vault/generate-dialog";
+import { AgentChat } from "@/components/vault/agent-chat";
 import { cn } from "@/lib/utils";
 import {
   SECTION_KIND,
@@ -53,9 +53,11 @@ const SECTIONS: { section: Section; label: string; icon: typeof LayoutGrid }[] =
 export function AppSidebar({
   categories,
   signedIn,
+  userName,
 }: {
   categories: Category[];
   signedIn: boolean;
+  userName: string | null;
 }) {
   const pathname = usePathname();
   const { isMobile, open, setOpenMobile, toggleSidebar } = useSidebar();
@@ -118,8 +120,9 @@ export function AppSidebar({
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <GenerateDialog
+            <AgentChat
               signedIn={signedIn}
+              userName={userName}
               className="h-9 w-full group-data-[collapsible=icon]:px-0"
             />
           </SidebarGroupContent>

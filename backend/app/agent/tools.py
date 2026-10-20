@@ -21,8 +21,10 @@ worse than a search that finds less.
 from typing import Any
 
 from langchain_core.tools import BaseTool, tool
+from sqlalchemy import func, select
 
 from app.agent.schemas import Suggestion, Suggestions
+from app.categories import service as categories_service
 from app.components import service as components_service
 from app.components.models import Component
 from app.db.session import async_session_maker
@@ -56,14 +58,44 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
     """
 
     @tool
-    async def search_components(query: str) -> dict[str, Any]:
-        """Find published blocks that may already answer the brief.
+    async def registry_overview() -> dict[str, Any]:
+        """What the registry holds: how many published blocks and pictures.
 
-        ``query`` is what the block is, in the words of the brief: the search
-        compares meaning, not spelling. The answer holds the nearest blocks, with
-        how near each one is; a block within about a fifth of the way is very
-        likely the same idea and the person should be shown it before anything is
-        built.
+        Use it for overview questions — "how many blocks are there?", "what can I
+        browse?", "which categories exist?" — before searching for a specific
+        thing. The categories in the answer are the ones the sidebar shows.
+        """
+        async with async_session_maker() as session:
+            blocks = await session.scalar(
+                select(func.count()).select_from(Component).where(Component.deleted_at.is_(None))
+            )
+            pictures = await session.scalar(
+                select(func.count()).select_from(Image).where(Image.deleted_at.is_(None))
+            )
+            categories = await categories_service.list_categories(session)
+
+        return {
+            "blocks": blocks or 0,
+            "images": pictures or 0,
+            "categories": [
+                {"kind": category.kind, "slug": category.slug, "name": category.name}
+                for category in categories
+                if category.level == 2
+            ],
+            "note": (
+                "These are published artifacts. Use search_components or "
+                "find_images to show examples of a category."
+            ),
+        }
+
+    @tool
+    async def search_components(query: str) -> dict[str, Any]:
+        """Find published blocks by what they are.
+
+        ``query`` describes the block in plain words; the search compares
+        meaning, not spelling. Use it to answer questions about blocks and to see
+        what already exists before building. The matches appear as cards in the
+        conversation, nearest first.
         """
         async with async_session_maker() as session:
             found = await _nearest_components(session, query=query)
@@ -77,18 +109,18 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
         return {
             "matches": [_described(block, distance) for block, distance in found],
             "note": (
-                "Nearest first. Show the person what you found before queueing "
-                "anything: a block that already exists is not worth building twice."
+                "Nearest first. Name the ones that fit; the cards show the "
+                "render. A block that already exists is not worth building twice."
             ),
         }
 
     @tool
     async def find_images(query: str, category: str | None = None) -> dict[str, Any]:
-        """Look in the picture library before asking for a new photograph.
+        """Look through the picture library.
 
-        The library is reused rather than regenerated: a block that needs a quiet
-        coastal photograph should use the one already filed if it is close enough,
-        and only ask for a new one when the scene is genuinely different.
+        Use it to answer what pictures exist, or to find one before asking a
+        block to make a photograph. The library is reused rather than
+        regenerated: a scene already filed is better than a new generation.
 
         Args:
             query: The scene, in the words a photographer would need.
@@ -123,8 +155,8 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
                 for picture, match in zip(pictures, nearest, strict=False)
             ],
             "note": (
-                "These are already in the library. Ask for a new picture only when "
-                "none of them is the scene the block needs."
+                "These are already in the library. Name the ones that fit; the "
+                "cards show the picture."
             ),
         }
 
@@ -136,7 +168,7 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
         what it must avoid. The brief is what the builder receives, so it is
         written as the request you would make of a designer rather than as a
         title. The call returns as soon as the work is queued; it does not wait
-        for the block, and there is no reason to call it twice.
+        for the block. Do not call it twice for the same brief.
 
         It refuses when the registry already holds this block: the answer names
         what it found instead, and nothing is queued. The person may still want
@@ -194,7 +226,7 @@ def build_tools(*, caller: User, queued: list[Task], suggested: Suggestions) -> 
         queued.append(task)
         return TaskRead.model_validate(task).model_dump(mode="json")
 
-    return [search_components, find_images, create_component]
+    return [registry_overview, search_components, find_images, create_component]
 
 
 async def _nearest_components(session: Any, *, query: str) -> list[tuple[Component, float | None]]:

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Empty,
   EmptyContent,
@@ -58,9 +58,12 @@ function Pager({ view, total }: { view: CatalogueView; total: number }) {
       className="mt-6 flex items-center justify-between gap-4"
     >
       {previous ? (
-        <Button variant="outline" size="sm" render={<Link href={previous} />}>
+        <Link
+          href={previous}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
           Previous
-        </Button>
+        </Link>
       ) : (
         <Button variant="outline" size="sm" disabled>
           Previous
@@ -72,9 +75,12 @@ function Pager({ view, total }: { view: CatalogueView; total: number }) {
       </p>
 
       {next ? (
-        <Button variant="outline" size="sm" render={<Link href={next} />}>
+        <Link
+          href={next}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
           Next
-        </Button>
+        </Link>
       ) : (
         <Button variant="outline" size="sm" disabled>
           Next
@@ -106,14 +112,12 @@ function NothingFiled({
       </EmptyHeader>
       {filtered ? (
         <EmptyContent>
-          <Button
-            variant="link"
-            render={
-              <Link href={catalogueHref({ section: view.section, page: 1 })} />
-            }
+          <Link
+            href={catalogueHref({ section: view.section, page: 1 })}
+            className={buttonVariants({ variant: "link" })}
           >
             Clear the filters
-          </Button>
+          </Link>
         </EmptyContent>
       ) : null}
     </Empty>
@@ -215,21 +219,16 @@ export async function CataloguePage({
             </p>
 
             {view.q ? (
-              <Button
-                variant="link"
-                size="xs"
-                render={
-                  <Link
-                    href={catalogueHref({
-                      section,
-                      type: view.type,
-                      page: 1,
-                    })}
-                  />
-                }
+              <Link
+                href={catalogueHref({
+                  section,
+                  type: view.type,
+                  page: 1,
+                })}
+                className={buttonVariants({ variant: "link", size: "xs" })}
               >
                 Clear search
-              </Button>
+              </Link>
             ) : null}
           </div>
 

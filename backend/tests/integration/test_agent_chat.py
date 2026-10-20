@@ -26,7 +26,7 @@ from app.tasks.models import Task
 from app.users.models import User
 from tests.agent_stub import ScriptedChatModel
 from tests.auth_stub import mint_token
-from tests.helpers import auth_header
+from tests.helpers import auth_header, create_category, create_component
 
 pytestmark = pytest.mark.anyio
 
@@ -173,6 +173,43 @@ async def test_a_turn_streams_the_words_the_tools_and_the_task(
     queued = await db_session.scalar(select(Task).where(Task.id == uuid.UUID(task["id"])))
     assert queued is not None
     assert queued.created_by == user.id
+
+
+async def test_the_overview_tells_the_model_what_the_registry_holds(
+    client, db_session, agent_db, scripted
+):
+    token, _ = await _sign_in(client, db_session, "reader@example.com")
+    category = await create_category(db_session, slug="hero")
+    await create_component(db_session, category_id=category.id, slug="alpha")
+
+    model = scripted(
+        ScriptedChatModel(
+            turns=[
+                call("registry_overview"),
+                says("One block so far, filed under Hero."),
+            ]
+        )
+    )
+
+    events = _frames(
+        await _turn(
+            client,
+            token,
+            message="what is in the registry?",
+            thread="thread-overview",
+        )
+    )
+
+    assert ("tool", {"name": "registry_overview", "state": "started"}) in events
+    assert ("tool", {"name": "registry_overview", "state": "finished"}) in events
+    assert _words(events) == "One block so far, filed under Hero."
+
+    # The overview is a read, not a build: the answer carries the counts and the
+    # categories the sidebar shows, and nothing was queued.
+    told = " ".join(str(message.content) for message in model.seen[1])
+    assert "blocks" in told
+    assert "hero" in told
+    assert "task" not in [name for name, _ in events]
 
 
 async def test_the_next_turn_carries_on_where_the_last_one_stopped(

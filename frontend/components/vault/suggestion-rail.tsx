@@ -24,7 +24,14 @@ const KIND_LABEL: Record<Suggestion["kind"], string> = {
   image: "Image",
 };
 
-export function SuggestionRail({ items }: { items: Suggestion[] }) {
+export function SuggestionRail({
+  items,
+  onOpenItem,
+}: {
+  items: Suggestion[];
+  /** Called when a card is opened, so the surface holding the rail can close. */
+  onOpenItem?: () => void;
+}) {
   if (items.length === 0) {
     return null;
   }
@@ -43,6 +50,7 @@ export function SuggestionRail({ items }: { items: Suggestion[] }) {
           >
             <Link
               href={hrefFor(item)}
+              onClick={onOpenItem}
               className="group focus-visible:ring-ring flex h-full flex-col gap-2 rounded-lg outline-none focus-visible:ring-2"
             >
               <div className="bg-muted relative aspect-[4/3] overflow-hidden rounded-lg border">

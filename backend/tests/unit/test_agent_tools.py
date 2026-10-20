@@ -1,7 +1,8 @@
 """The tools one conversation reaches, and the briefs they will not take.
 
-The tools are built for a caller and their names are the ones the MCP door
-publishes, so this is where the two doors are held against each other.
+The domain tools keep the names the MCP door publishes, so this is where the two
+doors are held against each other. The overview is the conversation's own read:
+it answers what the registry holds without opening a second door.
 """
 
 import uuid
@@ -33,7 +34,12 @@ def _tool(name: str, queued: list) -> object:
 def test_the_conversation_reaches_the_published_tools_by_name():
     tools = build_tools(caller=caller(), queued=[], suggested=Suggestions())
 
-    assert [tool.name for tool in tools] == ["search_components", "find_images", "create_component"]
+    assert [tool.name for tool in tools] == [
+        "registry_overview",
+        "search_components",
+        "find_images",
+        "create_component",
+    ]
     assert all(tool.description for tool in tools)
 
 
@@ -44,6 +50,12 @@ def test_the_queue_takes_the_same_briefs_as_the_other_two_doors():
     assert brief["minLength"] == BRIEF_MIN_LENGTH
     assert brief["maxLength"] == BRIEF_MAX_LENGTH
     assert schema["required"] == ["brief"]
+
+
+def test_the_overview_takes_no_arguments():
+    schema = _tool("registry_overview", []).args_schema.model_json_schema()
+
+    assert schema.get("required", []) == []
 
 
 def test_a_search_names_the_thing_it_searches_for():

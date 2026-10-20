@@ -3,9 +3,9 @@
 The loop is the library's own: ``create_agent`` builds the model → tools → model
 cycle and compiles it with a checkpointer. The checkpointer is what makes a
 conversation a conversation — the next turn is the same thread carried on rather
-than a fresh start — and it is in memory, one per process, because a conversation
-ends when the task starts (PLAN.md, Fase 6): it is a courtesy to the turn in
-progress, not a store. The endpoint namespaces the key by user.
+than a fresh start — and it is in memory, one per process: it is a courtesy to the
+session, not a store. The conversation is general and keeps going after a task is
+queued; the endpoint namespaces the key by user.
 """
 
 from langchain.agents import create_agent

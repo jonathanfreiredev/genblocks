@@ -40,12 +40,12 @@ test("the search is a field in a dialog, opened from the header", async ({
   await expect(dialog.getByRole("textbox")).toBeVisible();
 });
 
-test("the generator dialog opens and asks a visitor to sign in", async ({
+test("the assistant dialog opens and asks a visitor to sign in", async ({
   page,
 }) => {
   await page.goto("/blocks");
 
-  await page.getByRole("button", { name: "Generate with AI" }).click();
+  await page.getByRole("button", { name: "Ask AI" }).click();
 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();

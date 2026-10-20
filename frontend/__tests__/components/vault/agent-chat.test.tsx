@@ -10,12 +10,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh }),
 }));
 
-import { GenerateDialog } from "@/components/vault/generate-dialog";
+import { AgentChat } from "@/components/vault/agent-chat";
 import type { Task, TaskDetail } from "@/lib/vault/types";
 
 const MESSAGE = "A pricing page for a developer tool.";
 const TASK_ID = "0b9c1e2a-1111-2222-3333-444455556666";
 const COMPONENT_ID = "7c1d2e3f-4444-5555-6666-777788889999";
+const THREAD_KEY = "genblocks-chat-thread";
 
 /** The row the queue hands back: queued, and with no checklist yet. */
 const QUEUED: Task = {
@@ -68,9 +69,9 @@ function turn(...events: Array<[string, unknown]>) {
 
 /** Opens the dialog. */
 async function open() {
-  render(<GenerateDialog />);
-  fireEvent.click(screen.getByRole("button", { name: "Generate with AI" }));
-  await screen.findByText(/What should I build/);
+  render(<AgentChat userName="Marisol Vega" />);
+  fireEvent.click(screen.getByRole("button", { name: "Ask AI" }));
+  await screen.findByText(/Ask about anything in the vault/);
 }
 
 /** Opens the dialog and says one thing to the agent. */
@@ -84,9 +85,10 @@ async function send(message: string = MESSAGE) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
 });
 
-describe("GenerateDialog", () => {
+describe("AgentChat", () => {
   test("sends what was said and streams the answer back", async () => {
     let sent: unknown = null;
 
@@ -114,25 +116,27 @@ describe("GenerateDialog", () => {
     expect(screen.getByText(MESSAGE)).toBeInTheDocument();
     expect(screen.getByLabelText("Message")).toHaveValue("");
 
-    // The tool the agent reached for is named, and the conversation is named so
-    // the next turn can carry on from it.
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Searched the registry",
-    );
+    // The tool the agent reached for is named as a finished step.
+    expect(screen.getByText("Searched the blocks")).toBeInTheDocument();
     expect(sent).toEqual({
       message: MESSAGE,
       threadId: expect.any(String),
     });
+
+    // The id is the only thing kept between visits.
+    expect(window.localStorage.getItem(THREAD_KEY)).toBe(
+      (sent as { threadId: string }).threadId,
+    );
   });
 
-  test("queues the task the agent made and follows it", async () => {
+  test("queues the task the agent made and keeps the conversation open", async () => {
     server.use(
       http.post("/api/agent/chat", () =>
         turn(
           ["tool", { name: "create_component", state: "started" }],
           ["tool", { name: "create_component", state: "finished" }],
           ["task", QUEUED],
-          ["token", { text: "Queued it. Follow the checklist below." }],
+          ["token", { text: "Queued it. The task card is the record." }],
           ["done", {}],
         ),
       ),
@@ -141,18 +145,19 @@ describe("GenerateDialog", () => {
 
     await send();
 
-    // The row exists but no worker has opened it: the dialog says that rather
-    // than drawing an empty checklist.
+    // The row exists but no worker has opened it: the card says that rather than
+    // drawing an empty checklist.
     expect(
-      await screen.findByText(/No worker has opened this task yet/),
+      await screen.findByText(/Waiting for a worker to open it/),
     ).toBeInTheDocument();
 
-    // Then the poll reads the same task, finished, and the checklist and the way
-    // to the block arrive without another click.
+    // Then the poll reads the same task, finished, and the steps and the way to
+    // the block arrive without another click.
     expect(
       await screen.findByText("Succeeded", {}, { timeout: 2500 }),
     ).toBeInTheDocument();
     expect(screen.getByText("Publishing the block")).toBeInTheDocument();
+    expect(screen.getByText("Block published")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open the block" }),
     ).toHaveAttribute("href", `/blocks/${COMPONENT_ID}`);
@@ -160,12 +165,9 @@ describe("GenerateDialog", () => {
     // The page behind the dialog was told, so it does not sit on "Running".
     expect(refresh).toHaveBeenCalled();
 
-    // The conversation is over: the task is the record now, and there is nothing
-    // left to say to the agent.
-    expect(screen.queryByLabelText("Message")).toBeNull();
-    expect(
-      screen.getByText(/The conversation ends where the task starts/),
-    ).toBeInTheDocument();
+    // The chat is not over: the task has its card, and the person can keep
+    // asking questions.
+    expect(screen.getByLabelText("Message")).toBeInTheDocument();
   });
 
   test("says the registry already had the block instead of pretending it built one", async () => {
@@ -200,9 +202,11 @@ describe("GenerateDialog", () => {
 
     await send();
 
-    // The task is finished on arrival, so the copy says what happened: a lookup,
+    // The task is finished on arrival, so the card says what happened: a lookup,
     // not a build.
-    expect(await screen.findByText(/already had this one/)).toBeInTheDocument();
+    expect(
+      await screen.findByText("Already in the registry"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Found in the registry")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open the block" }),
@@ -222,14 +226,11 @@ describe("GenerateDialog", () => {
     await send();
 
     expect(
-      await screen.findByText("The turn did not finish"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("The agent did not answer. Nothing was queued."),
+      await screen.findByText("The agent did not answer. Nothing was queued."),
     ).toBeInTheDocument();
     // The answer that never came left no empty bubble, and the composer is still
     // there to try again.
-    expect(screen.queryByLabelText("The agent is answering")).toBeNull();
+    expect(screen.queryByText("Thinking…")).toBeNull();
     expect(screen.getByLabelText("Message")).toBeInTheDocument();
   });
 
@@ -281,19 +282,41 @@ describe("GenerateDialog", () => {
     expect(post).toHaveBeenCalled();
   });
 
-  test("sends a visitor to sign in rather than taking a message", async () => {
-    render(<GenerateDialog signedIn={false} />);
+  test("starts a new conversation and rotates the stored id", async () => {
+    server.use(
+      http.post("/api/agent/chat", () =>
+        turn(["token", { text: "First answer." }], ["done", {}]),
+      ),
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate with AI" }));
+    await send();
+    await screen.findByText("First answer.");
+
+    const before = window.localStorage.getItem(THREAD_KEY);
+    expect(before).toEqual(expect.any(String));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Start a new conversation" }),
+    );
+
+    // The transcript is gone, and the next send belongs to a different thread.
+    await screen.findByText(/Ask about anything in the vault/);
+    expect(window.localStorage.getItem(THREAD_KEY)).not.toBe(before);
+  });
+
+  test("sends a visitor to sign in rather than taking a message", async () => {
+    render(<AgentChat signedIn={false} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask AI" }));
 
     expect(
-      await screen.findByText(/Queueing a block needs an account/),
+      await screen.findByText(/needs an account/),
     ).toBeInTheDocument();
 
     expect(screen.queryByLabelText("Message")).toBeNull();
     expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
       "href",
-      "/auth/login?next=%2F",
+      "/auth/login?next=%2Fblocks",
     );
   });
 

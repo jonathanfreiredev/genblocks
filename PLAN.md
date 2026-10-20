@@ -62,8 +62,10 @@ Supabase Auth, Postgres, multi-tenancy por organización).
 4. **Patrón B para el agente**: el bucle del agente corre en el backend; **Modal es
    el sandbox** (filesystem + ejecución + navegador) y **no tiene secretos**. Es el
    patrón "sandbox as tool" del propio ecosistema DeepAgents.
-5. **Agente conversacional**: una sola superficie, la **conversación de creación**,
-   en un dialog de shadcn. Termina al arrancar la generación. Sin chat de colección.
+5. **Agente conversacional**: una sola superficie, el **asistente del vault**, en
+   un dialog de shadcn. Responde sobre bloques e imágenes y también convierte una
+   petición en una tarea; la conversación no termina al arrancar la generación. El
+   id del hilo vive en `localStorage`; el transcript, en memoria.
 6. **Reintentos**: máximo **2 intentos** (1 reintento). Publica el primer intento que
    pasa todos los umbrales; si ninguno, el de mayor puntuación.
    → *Sustituida en la Fase 9 por la 30: el bucle vive dentro del harness y el
@@ -136,10 +138,11 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     como la puerta de los agentes externos. El llamante se ata **al construir**
     las tools, una vez por conversación, así que ningún argumento puede cambiar
     de dueño.
-26. **La conversación se pinta con los primitivos de shadcn** (`Message`,
-    `Bubble`) y el scroll-follow se escribe aquí. `message-scroller` arrastra
-    `@shadcn/react` y un import del repo de shadcn, y lo que aporta —seguir el
-    final mientras llega el stream— son unas líneas propias.
+26. **La conversación se pinta con los primitivos AI de shadcn**
+    (`MessageScroller`, `Message`, `Bubble`, `Marker`, `Trace`) sobre
+    `@shadcn/react`. El scroll-follow, el jump-to-latest y la conservación del
+    ancla son suyos; las tools se cuentan como un `Trace` con spinner mientras
+    corren y check al terminar.
 27. **El harness es un sandbox con contrato JSON y veredicto propio**: la
     comprobación corre como **app de Modal** (`app/harness/modal_app.py`,
     `modal deploy` desde `backend/`) a la que el backend llama **por nombre**

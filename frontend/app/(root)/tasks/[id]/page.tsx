@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { StatusWord } from "@/components/vault/status-word";
 import { TaskChecklist } from "@/components/vault/task-checklist";
 import { TaskResult } from "@/components/vault/task-result";
@@ -139,17 +139,13 @@ export default async function TaskPage({
 
           {task.component_id ? (
             <p className="mt-10">
-              <Button
-                variant="link"
-                render={
-                  <Link
-                    href={`/blocks/${task.component_id}`}
-                    prefetch={false}
-                  />
-                }
+              <Link
+                href={`/blocks/${task.component_id}`}
+                prefetch={false}
+                className={buttonVariants({ variant: "link" })}
               >
                 The block this task produced
-              </Button>
+              </Link>
             </p>
           ) : null}
         </>
