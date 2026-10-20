@@ -49,8 +49,13 @@ async def enqueue_task(
     The order is the cost model. A brief the registry has answered is returned
     without spending the month's quota, a safety call or a run — that is what makes
     a repeat free. Then the quota, which is a count, before the moderator, which is
-    a call. ``create_task`` stays the row primitive: the seed files its tasks
-    without spending anybody's month, and so does a test.
+    a call. That early count is only a courtesy to an exhausted month; the count
+    that decides happens after the moderator and under the user's lock, in the same
+    transaction as the insert. Otherwise two requests can leave here with the same
+    last block.
+
+    ``create_task`` stays the row primitive: the seed files its tasks without
+    spending anybody's month, and so does a test.
 
     ``fresh`` is somebody who has seen what the registry has and wants their own
     anyway: the cache is skipped, and the run is paid for like any other.
@@ -61,10 +66,17 @@ async def enqueue_task(
 
     await limits.admitted(session, user_id=created_by)
 
+    # End the read's transaction before the network call; the reservation below
+    # opens the one that matters.
+    await session.commit()
+
     why = await moderation.refusal(brief)
     if why is not None:
         raise moderation.BriefRejected(why)
 
+    # From here to the commit inside ``create_task`` is the atomic section: no
+    # external call, no second door.
+    await limits.reserve(session, user_id=created_by)
     return await create_task(session, brief=brief, created_by=created_by)
 
 

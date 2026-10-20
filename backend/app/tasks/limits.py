@@ -9,7 +9,8 @@ There is deliberately no global breaker here. The spend that could run away is
 Modal and OpenAI, and both are capped where they are billed; a second cap in code
 would be a number nobody could keep true, sitting next to the real one and
 pretending to be it. What this module guarantees is the one thing the dashboards
-cannot: that no single person can queue a tenth of a thousand by accident.
+cannot: that no single person can queue more than their month allows, even when
+two requests arrive at the same time.
 """
 
 import uuid
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import utcnow
 from app.settings import settings
 from app.tasks.models import Task
+from app.users.models import User
 
 
 class MonthlyQuotaReached(Exception):
@@ -45,6 +47,10 @@ async def admitted(
 ) -> None:
     """Let the brief through, or say why it cannot be queued.
 
+    This is a read, not a reservation: two requests can both read the same free
+    slot. Use it for a cheap early refusal, then call :func:`reserve` for the
+    check that actually decides.
+
     ``now`` is how a test asks about December without waiting for it; production
     passes nothing and gets the clock.
     """
@@ -57,6 +63,29 @@ async def admitted(
             limit=settings.tasks_per_month,
             reopens=next_month(moment),
         )
+
+
+async def reserve(
+    session: AsyncSession, *, user_id: uuid.UUID, now: datetime | None = None
+) -> None:
+    """Admit one task atomically, or say why it cannot be queued.
+
+    The user's row is the mutex for this month. Taking it before the count is
+    what makes the count a decision instead of a guess: a second request waits
+    here, then counts the row the first one committed. The lock lasts until the
+    caller commits the task insert, so the two statements must share this
+    transaction and nothing between them may leave the process.
+
+    A refusal rolls back, because it has nothing to keep and the lock must not
+    outlive the answer.
+    """
+    await session.scalar(select(User.id).where(User.id == user_id).with_for_update())
+
+    try:
+        await admitted(session, user_id=user_id, now=now)
+    except MonthlyQuotaReached:
+        await session.rollback()
+        raise
 
 
 def month_start(moment: datetime) -> datetime:

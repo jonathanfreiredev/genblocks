@@ -5,11 +5,15 @@ the dashboards that bill, and this is what those dashboards cannot do — stop o
 person from queueing a month's worth by accident.
 """
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.moderation import service as moderation
 from app.settings import settings
 from app.tasks import limits, service
 from app.tasks.models import Task, TaskStatus
@@ -114,8 +118,6 @@ async def test_enqueue_checks_before_it_writes(db_session, monkeypatch):
         await service.enqueue_task(db_session, brief="A hero", created_by=owner.id)
 
     # The refusal is not a row: a task left behind would be a task the worker runs.
-    from sqlalchemy import func, select
-
     count = await db_session.scalar(
         select(func.count()).select_from(Task).where(Task.created_by == owner.id)
     )
@@ -129,3 +131,48 @@ async def test_enqueue_writes_a_pending_task_when_there_is_room(db_session):
 
     assert task.status == TaskStatus.PENDING
     assert task.created_by == owner.id
+
+
+async def test_two_requests_cannot_spend_the_same_last_block(db_session, monkeypatch):
+    """The count and the insert have to be one decision.
+
+    Both requests get past the cheap early count — that is the point of the
+    barrier — and then meet the lock. One inserts; the other counts that row and
+    is refused. Without the lock both would see zero and both would insert.
+    """
+    monkeypatch.setattr(settings, "tasks_per_month", 1)
+    owner = await _owner(db_session)
+    factory = async_sessionmaker(bind=db_session.bind, expire_on_commit=False)
+    both_past_the_early_check = asyncio.Barrier(2)
+
+    async def wait_at_the_door(text, *, client=None):
+        await both_past_the_early_check.wait()
+        return None
+
+    monkeypatch.setattr(moderation, "refusal", wait_at_the_door)
+
+    async def enqueue(brief: str):
+        async with factory() as session:
+            try:
+                return await service.enqueue_task(session, brief=brief, created_by=owner.id)
+            except limits.MonthlyQuotaReached as reached:
+                return reached
+
+    first, second = await asyncio.wait_for(
+        asyncio.gather(enqueue("A hero"), enqueue("A pricing page")), timeout=5
+    )
+
+    tasks = [answer for answer in (first, second) if isinstance(answer, Task)]
+    refusals = [
+        answer for answer in (first, second) if isinstance(answer, limits.MonthlyQuotaReached)
+    ]
+
+    assert len(tasks) == 1
+    assert len(refusals) == 1
+    assert refusals[0].used == 1
+    assert (
+        await db_session.scalar(
+            select(func.count()).select_from(Task).where(Task.created_by == owner.id)
+        )
+        == 1
+    )
