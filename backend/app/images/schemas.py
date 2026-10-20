@@ -41,6 +41,7 @@ class ImageRead(BaseModel):
     scores: dict | None
     rubric_version: str | None
     langfuse_trace_id: str | None
+    provenance: dict | None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

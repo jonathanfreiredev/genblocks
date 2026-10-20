@@ -45,6 +45,7 @@ class ComponentRead(ComponentSummary):
     dependencies: dict | None
     delivery_prompt: str
     spec: dict | None
+    provenance: dict | None
     winning_generation_id: uuid.UUID | None
     created_by: uuid.UUID | None
     license: str

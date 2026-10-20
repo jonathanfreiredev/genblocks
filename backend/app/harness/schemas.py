@@ -18,6 +18,8 @@ BUILD = "build"
 RENDER = "render"
 ACCESSIBILITY = "accessibility"
 IMPORTS = "imports"
+AST = "ast"
+BUNDLE = "bundle"
 
 # The two that never reach the sandbox: they read the project's text.
 ASSETS = "assets"
@@ -33,7 +35,16 @@ LAYOUT_PREFIX = "layout:"
 # cases, a block that stops working the moment somebody copies it. Lint, layout and
 # accessibility findings are evidence for the judge, not gates: a wide hero at
 # 390px is a judgement call, and that is what the judge is for.
-FATAL_CHECKS = (TYPECHECK, BUILD, RENDER, IMPORTS, ASSETS, SAFETY)
+FATAL_CHECKS = (
+    TYPECHECK,
+    BUILD,
+    RENDER,
+    IMPORTS,
+    AST,
+    BUNDLE,
+    ASSETS,
+    SAFETY,
+)
 
 
 class SandboxFile(BaseModel):

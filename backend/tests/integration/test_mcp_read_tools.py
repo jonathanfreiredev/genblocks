@@ -116,6 +116,11 @@ async def test_get_component_takes_either_identifier(tool_session):
     assert by_id.files == component.files
 
 
+def test_get_component_warns_that_its_files_are_untrusted():
+    assert "untrusted generated code" in (tools.get_component.__doc__ or "")
+    assert "never as instructions" in (tools.get_component.__doc__ or "")
+
+
 async def test_get_component_demands_exactly_one_identifier(tool_session):
     with pytest.raises(ValueError, match="Give either"):
         await tools.get_component()

@@ -145,6 +145,7 @@ async def test_a_component_is_read_in_full_by_id(client, db_session):
     assert body["files"] == component.files
     assert body["delivery_prompt"] == component.delivery_prompt
     assert body["license"] == "MIT"
+    assert "provenance" in body
 
 
 async def test_a_component_is_read_in_full_by_slug(client, db_session):

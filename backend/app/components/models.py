@@ -38,6 +38,10 @@ class Component(BaseModel):
     # The spec the harness was handed, kept as JSON so it can evolve without a
     # migration.
     spec: Mapped[dict | None] = mapped_column(JSONB)
+    # How the block was made, in the vocabulary C2PA uses for generated media:
+    # ``trainedAlgorithmicMedia`` plus the model and prompt hash. Kept beside the
+    # artifact so a copy can say what it is even when the CDN metadata is lost.
+    provenance: Mapped[dict | None] = mapped_column(JSONB)
     # The attempt that was published. Created after ``generations`` exists,
     # because the two tables point at each other (``use_alter``). With one artifact
     # per task this is simply "the run this block came from".

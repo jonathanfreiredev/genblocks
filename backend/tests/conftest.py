@@ -45,6 +45,19 @@ def no_moderation(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_notifications(monkeypatch):
+    """Keep the suite from sending real report emails.
+
+    A developer who has RESEND_API_KEY in their local .env should not discover
+    it by finding test reports in their inbox. The notification tests turn the
+    key back on and answer with a mock transport.
+    """
+    from app.settings import settings
+
+    monkeypatch.setattr(settings, "resend_api_key", None)
+
+
+@pytest.fixture(autouse=True)
 def no_vectors(monkeypatch, tmp_path):
     """Keep the suite off the network and out of the real vector store.
 

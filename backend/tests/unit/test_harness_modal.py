@@ -80,3 +80,7 @@ def test_the_sandbox_repeats_the_scaffold_ownership_rule(tmp_path):
             tmp_path / "project",
             [{"path": "src/main.tsx", "content": "alert(1)"}],
         )
+
+
+def test_the_source_and_bundle_scans_are_gates():
+    assert {"ast", "bundle"} <= set(modal_app.GATES)

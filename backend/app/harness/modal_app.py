@@ -125,7 +125,7 @@ SETTLE_TIMEOUT_MILLISECONDS = 1000
 # nothing to photograph: the render is the most expensive thing this function
 # does. The names are the checks above the render, in the order they run; what a
 # failure *means* is decided on the other side (``app/harness/schemas.py``).
-GATES = ("imports", "typecheck", "build")
+GATES = ("imports", "ast", "typecheck", "build", "bundle")
 
 # What an import looks like: ``from "x"``, ``import "x"``, and the dynamic form.
 # Read rather than run: the point is to see what the project asks for, not to
@@ -210,20 +210,29 @@ def check(request: dict) -> dict[str, Any]:
         imports, dependencies = _imports(request["files"])
         checks = [
             imports,
-            _npm(project, script="typecheck", name="typecheck"),
-            _npm(project, script="lint", name="lint"),
-            _npm(project, script="build", name="build"),
+            _npm(project, script="security:source", name="ast"),
         ]
 
+        # The source scan is cheap and reads the project the model actually
+        # wrote. A project that fails it never pays for a typecheck or a build.
         if any(check["name"] in GATES and not check["ok"] for check in checks):
-            return {
-                "checks": checks,
-                "violations": [],
-                "dependencies": dependencies,
-                "screenshot": None,
-                "screenshot_dark": None,
-                "screenshot_media_type": SCREENSHOT_MEDIA_TYPE,
-            }
+            return _unrendered(checks, dependencies)
+
+        checks.extend(
+            [
+                _npm(project, script="typecheck", name="typecheck"),
+                _npm(project, script="lint", name="lint"),
+                _npm(project, script="build", name="build"),
+            ]
+        )
+        if any(check["name"] in GATES and not check["ok"] for check in checks):
+            return _unrendered(checks, dependencies)
+
+        # The bundle is the bytes a browser executes, not the source a reader
+        # reviews. It is scanned after Vite has finished rewriting them.
+        checks.append(_npm(project, script="security:bundle", name="bundle"))
+        if any(check["name"] in GATES and not check["ok"] for check in checks):
+            return _unrendered(checks, dependencies)
 
         rendered = _render(project, asset_prefixes=asset_prefixes)
 
@@ -235,6 +244,18 @@ def check(request: dict) -> dict[str, Any]:
             "screenshot_dark": rendered["screenshot_dark"],
             "screenshot_media_type": rendered["screenshot_media_type"],
         }
+
+
+def _unrendered(checks: list[dict[str, Any]], dependencies: dict[str, str]) -> dict[str, Any]:
+    """A run that stopped before the render: the checks, and no page."""
+    return {
+        "checks": checks,
+        "violations": [],
+        "dependencies": dependencies,
+        "screenshot": None,
+        "screenshot_dark": None,
+        "screenshot_media_type": SCREENSHOT_MEDIA_TYPE,
+    }
 
 
 def _imports(files: list[dict[str, str]]) -> tuple[dict[str, Any], dict[str, str]]:

@@ -300,8 +300,8 @@ async def _csam_refusal(data: bytes, *, media_type: str) -> None:
         return
 
     headers = {"Content-Type": "application/json"}
-    if settings.csam_scan_api_key:
-        headers["Authorization"] = f"Bearer {settings.csam_scan_api_key}"
+    if settings.csam_scan_credential:
+        headers["Authorization"] = f"Bearer {settings.csam_scan_credential}"
 
     body = {
         "media_type": media_type,

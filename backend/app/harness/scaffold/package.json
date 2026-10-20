@@ -7,7 +7,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "build": "vite build"
+    "build": "vite build",
+    "security:source": "node scripts/scan.mjs source",
+    "security:bundle": "node scripts/scan.mjs bundle"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

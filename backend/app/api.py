@@ -5,6 +5,7 @@ from app.categories.router import categories_router
 from app.components.router import components_router
 from app.images.router import images_router
 from app.organizations.router import organizations_router
+from app.reports.router import admin_reports_router, reports_router
 from app.tasks.router import tasks_router
 from app.users.router import users_router
 
@@ -19,3 +20,5 @@ api_v1_router.include_router(components_router)
 api_v1_router.include_router(images_router)
 api_v1_router.include_router(tasks_router)
 api_v1_router.include_router(agent_router)
+api_v1_router.include_router(reports_router)
+api_v1_router.include_router(admin_reports_router)

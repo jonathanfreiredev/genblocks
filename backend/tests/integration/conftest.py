@@ -13,6 +13,7 @@ from app.db.session import get_async_db_session
 from app.generations import models as generations_models  # noqa: F401  (register tables)
 from app.images import models as images_models  # noqa: F401  (register tables)
 from app.main import app
+from app.reports import models as reports_models  # noqa: F401  (register tables)
 from app.settings import settings
 from app.tasks import models as tasks_models  # noqa: F401  (register tables)
 from tests.auth_stub import install_fake_jwks

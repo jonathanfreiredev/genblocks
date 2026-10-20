@@ -27,6 +27,7 @@ two different rows, told apart without any heartbeats.
 """
 
 import asyncio
+import hashlib
 import re
 import uuid
 from collections.abc import Awaitable, Callable
@@ -47,11 +48,13 @@ from app.harness import agent as harness
 from app.harness import checks, cloudinary
 from app.harness.schemas import SandboxFile, SandboxResult
 from app.images.models import Image
+from app.images.sanitize import ImageRefused, sanitize_image
 from app.images.slug import image_slug
 from app.judge import scoring as judge
 from app.judge.schemas import Judged
 from app.moderation import service as moderation
 from app.observability import service as observability
+from app.privacy.redact import redact_pii
 from app.settings import settings
 from app.tasks import service
 from app.tasks import spec as block_spec
@@ -319,6 +322,7 @@ async def _build(
                 for path, content in sorted(built.files.items())
             ]
         )
+        found = _sanitized_renders(found)
 
         # A render is content too. Text moderation sees the copy; it cannot see a
         # hate symbol, a person, or an image inside the render. Both grounds are
@@ -477,9 +481,10 @@ async def _keep(
             if placed.image is None:  # pragma: no cover - guarded in the first pass
                 raise PictureUnfiled("A picture was placed with neither bytes nor a library id.")
 
+            public_prompt = redact_pii(placed.image.prompt)
             picture = Image(
-                slug=image_slug(prompt=placed.image.prompt, path=path),
-                prompt=placed.image.prompt,
+                slug=image_slug(prompt=public_prompt, path=path),
+                prompt=public_prompt,
                 path=path,
                 width=placed.image.width,
                 height=placed.image.height,
@@ -489,6 +494,11 @@ async def _keep(
                 scores=judged.scores,
                 rubric_version=judged.version,
                 langfuse_trace_id=trace.id,
+                provenance=_provenance(
+                    kind="image",
+                    model=settings.image_model,
+                    source=placed.image.prompt,
+                ),
             )
             session.add(picture)
             pictures[index] = picture
@@ -549,6 +559,34 @@ async def _picture_categories(session: AsyncSession) -> dict[str, uuid.UUID]:
     return {category.slug: category.id for category in categories}
 
 
+def _sanitized_renders(result: SandboxResult) -> SandboxResult:
+    """Re-encode both renders before moderation, storage or the judge sees them.
+
+    The sandbox already produces JPEG, but a browser screenshot can still carry
+    the page's text in metadata or an unexpected container. The same bound and
+    metadata removal that applies to provider images applies here; a refused
+    render is a failed run, not an unchecked picture.
+    """
+    updates: dict[str, object] = {}
+
+    for name in ("screenshot", "screenshot_dark"):
+        picture = getattr(result, name)
+        if picture is None:
+            continue
+
+        try:
+            clean = sanitize_image(picture, media_type=result.screenshot_media_type)
+        except ImageRefused as refused:
+            raise ModerationRefused(
+                f"The render could not be stored safely — {refused}"
+            ) from refused
+
+        updates[name] = clean.data
+        updates["screenshot_media_type"] = clean.media_type
+
+    return result.model_copy(update=updates) if updates else result
+
+
 async def _store(result: SandboxResult, *, task: Task) -> str | None:
     """Put the render in Cloudinary and return its public id, if there is one.
 
@@ -564,6 +602,24 @@ async def _store(result: SandboxResult, *, task: Task) -> str | None:
         name=cloudinary.screenshot_id(task.id, 1),
         media_type=result.screenshot_media_type,
     )
+
+
+def _provenance(*, kind: str, model: str, source: str) -> dict:
+    """The record that says this artifact was made by a model, and which one.
+
+    The value ``trainedAlgorithmicMedia`` is the IPTC/C2PA term for generated
+    media. The hash is of the private source, so the record can tie an artifact
+    to the run that made it without publishing the source itself.
+    """
+    return {
+        "digital_source_type": "trainedAlgorithmicMedia",
+        "kind": kind,
+        "model": model,
+        # The fingerprint is of the redacted source. Hashing the private text
+        # itself would publish a short string's distinctive signature even
+        # though the text never left the task.
+        "source_sha256": hashlib.sha256(redact_pii(source).encode()).hexdigest(),
+    }
 
 
 def _tally(result: SandboxResult) -> str:
@@ -669,19 +725,31 @@ async def _publish(
         if made.found.screenshot is not None:
             made.attempt.screenshot_path = await _store(made.found, task=task)
 
-        slug = slug_for(title=spec.title, task_id=task.id)
+        # The brief stays private on the task. What the block publishes is a
+        # short description with structured personal data removed, and a
+        # delivery prompt derived from it rather than the raw text somebody
+        # typed into the conversation.
+        title = redact_pii(spec.title)
+        description = redact_pii(spec.description)
+        delivery_prompt = f"Build a {spec.category_slug.replace('-', ' ')}: {description}"
+        slug = slug_for(title=title, task_id=task.id)
         component = Component(
             slug=slug,
-            title=spec.title,
-            description=spec.description,
+            title=title,
+            description=description,
             category_id=spec.category_id,
             files=made.attempt.files,
             entry=made.attempt.entry,
             # What the sandbox read from the project itself: the install line a visitor
             # needs, and the only version of it that cannot be a model's guess.
             dependencies=made.found.dependencies,
-            delivery_prompt=task.brief,
+            delivery_prompt=delivery_prompt,
             spec=spec.spec,
+            provenance=_provenance(
+                kind="component",
+                model=settings.llm_model,
+                source=task.brief,
+            ),
             created_by=task.created_by,
             license=DEFAULT_LICENSE,
         )

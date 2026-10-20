@@ -199,6 +199,7 @@ async def test_an_image_that_clears_the_classifier_is_allowed(monkeypatch):
 async def test_an_image_the_classifier_flags_as_sexual_minors_is_a_csam_event(monkeypatch):
     monkeypatch.setattr(settings, "openai_api_key", "test-openai")
     monkeypatch.setattr(settings, "env", "development")
+    monkeypatch.setattr(settings, "csam_scan_url", None)
 
     with pytest.raises(moderation.CSAMDetected, match="sexual content involving minors"):
         await moderation.image_refusal(b"jpeg-bytes", client=Images(flagged=True))
@@ -292,3 +293,11 @@ async def test_a_huge_copy_is_capped_before_it_is_sent():
 
     sent = groq.asked["body"]["messages"][-1]["content"]
     assert len(sent) == moderation.MAX_CHARS
+
+
+def test_the_image_rule_names_real_people_and_brands():
+    from app.moderation.service import IMAGE_FRAME
+
+    assert "identifiable people" in IMAGE_FRAME
+    assert "company logos and trademarks" in IMAGE_FRAME
+    assert "named living artist" in IMAGE_FRAME

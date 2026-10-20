@@ -18,6 +18,8 @@ from dataclasses import dataclass
 import httpx
 
 from app.harness import cloudinary
+from app.harness.network import UnsafeProviderUrl, checked_provider_url
+from app.images.sanitize import ImageRefused, sanitize_image
 from app.moderation import service as moderation
 from app.settings import settings
 
@@ -121,7 +123,24 @@ async def _generate(
         raise ImagesUnavailable(_refused(asked))
 
     queued = asked.json()
-    sample = await _poll(client, key=key, polling_url=queued["polling_url"])
+    try:
+        polling_url = checked_provider_url(
+            queued.get("polling_url"),
+            hosts=settings.bfl_polling_hosts,
+            what="polling",
+        )
+    except UnsafeProviderUrl as refused:
+        raise ImagesUnavailable(str(refused)) from refused
+
+    sample = await _poll(client, key=key, polling_url=polling_url)
+    try:
+        sample = checked_provider_url(
+            sample,
+            hosts=settings.bfl_asset_host_list,
+            what="sample",
+        )
+    except UnsafeProviderUrl as refused:
+        raise ImagesUnavailable(str(refused)) from refused
 
     picture = await client.get(sample)
     if picture.status_code >= 400:
@@ -131,6 +150,19 @@ async def _generate(
 
     data = picture.content
     media_type = picture.headers.get("content-type", DEFAULT_MEDIA_TYPE).split(";")[0]
+
+    # Decode and re-encode before moderation. The classifier should see the
+    # picture the registry would serve, and the CDN should only ever receive
+    # bytes with no camera metadata, location or provider container quirks.
+    try:
+        clean = sanitize_image(data, media_type=media_type)
+    except ImageRefused as refused:
+        raise ImagesRefused(f"The picture could not be stored safely — {refused}") from refused
+
+    data = clean.data
+    media_type = clean.media_type
+    width = clean.width
+    height = clean.height
 
     # Safety before storage. A picture that should not exist never gets a public
     # address, and a picture that passes can be used in the next render because it

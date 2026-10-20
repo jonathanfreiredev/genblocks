@@ -7,6 +7,9 @@ class UserRead(BaseModel):
     id: uuid.UUID
     email: str | None
     full_name: str | None
+    # Configured operator, not a database role. Computed at the edge so a
+    # client can hide the report queue without a second request.
+    is_admin: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -1063,6 +1063,11 @@ async def _seed_components(
         component.entry = ENTRY
         component.delivery_prompt = spec.delivery_prompt
         component.spec = None
+        component.provenance = {
+            "digital_source_type": "trainedAlgorithmicMedia",
+            "kind": "component",
+            "model": "seed",
+        }
         component.license = DEFAULT_LICENSE
         component.created_by = None
         components[spec.slug] = component
@@ -1215,6 +1220,11 @@ async def _seed_images(session: AsyncSession, *, categories: dict[str, Category]
         image.scores = spec.scores
         image.rubric_version = IMAGE_RUBRIC_VERSION
         image.langfuse_trace_id = None
+        image.provenance = {
+            "digital_source_type": "trainedAlgorithmicMedia",
+            "kind": "image",
+            "model": IMAGE_MODEL,
+        }
         planted.append(image)
 
     await session.flush()

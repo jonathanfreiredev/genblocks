@@ -5,8 +5,11 @@ arrives at a signed URL that expires, so what is tested here is the shape of the
 two calls and the promise that no BFL address is ever what we keep.
 """
 
+from io import BytesIO
+
 import httpx
 import pytest
+from PIL import Image
 
 from app.harness import cloudinary, images
 from app.moderation import service as moderation
@@ -16,7 +19,15 @@ pytestmark = pytest.mark.anyio
 
 PROMPT = "A wide photograph of an empty road at dawn"
 SAMPLE = "https://delivery.bfl.ai/region/sample.jpg?signature=abc"
-PICTURE = b"\xff\xd8\xff\xe0jpeg-bytes"
+
+
+def _jpeg() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", (32, 24), "white").save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+PICTURE = _jpeg()
 
 
 @pytest.fixture
@@ -94,7 +105,8 @@ async def test_a_picture_is_queued_with_the_prompt_and_the_size(key, stored):
     assert sent["downloaded"] == SAMPLE
     assert made.url.startswith("https://cdn.test/genblocks/images/")
     assert SAMPLE not in made.url
-    assert made.data == PICTURE
+    assert made.data.startswith(b"\xff\xd8")
+    assert (made.width, made.height) == (32, 24)
     assert made.media_type == "image/jpeg"
 
 
@@ -103,9 +115,9 @@ async def test_the_picture_is_stored_only_after_the_safety_gate(key, stored):
 
     assert made.path.startswith("genblocks/images/")
     assert made.url.startswith("https://cdn.test/genblocks/images/")
-    assert made.data == PICTURE
+    assert made.data.startswith(b"\xff\xd8")
     assert made.screened is True
-    assert stored[0]["data"] == PICTURE
+    assert stored[0]["data"] == made.data
     assert stored[0]["media_type"] == "image/jpeg"
     assert stored[0]["name"].startswith("genblocks/images/")
 
@@ -186,3 +198,78 @@ async def test_a_deployment_with_no_key_says_what_to_configure(monkeypatch, stor
         await images.generate(prompt=PROMPT, width=512, height=512)
 
     assert "BFL_API_KEY" in str(refused.value)
+
+
+async def test_a_polling_url_from_another_host_is_not_fetched(key, stored):
+    sent: dict = {}
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={
+                    "id": "req-1",
+                    "polling_url": "https://169.254.169.254/latest/meta-data",
+                },
+            )
+        sent["polled"] = True
+        return httpx.Response(200, json={"status": "Ready", "result": {"sample": SAMPLE}})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+
+    with pytest.raises(images.ImagesUnavailable, match="not allowed"):
+        await images.generate(prompt=PROMPT, width=512, height=512, client=client)
+
+    assert "polled" not in sent
+
+
+async def test_a_sample_url_from_another_host_is_not_fetched(key, stored):
+    sent: dict = {}
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={
+                    "id": "req-1",
+                    "polling_url": "https://api.bfl.ai/v1/get_result?id=req-1",
+                },
+            )
+        if "get_result" in str(request.url):
+            return httpx.Response(
+                200,
+                json={"status": "Ready", "result": {"sample": "https://evil.test/sample.jpg"}},
+            )
+        sent["downloaded"] = True
+        return httpx.Response(200, content=PICTURE, headers={"content-type": "image/jpeg"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+
+    with pytest.raises(images.ImagesUnavailable, match="not allowed"):
+        await images.generate(prompt=PROMPT, width=512, height=512, client=client)
+
+    assert "downloaded" not in sent
+
+
+async def test_a_sample_url_with_credentials_is_refused(key, stored):
+    async def handle(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={
+                    "id": "req-1",
+                    "polling_url": "https://api.bfl.ai/v1/get_result?id=req-1",
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "status": "Ready",
+                "result": {"sample": "https://user:pass@delivery.bfl.ai/sample.jpg"},
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+
+    with pytest.raises(images.ImagesUnavailable, match="credentials"):
+        await images.generate(prompt=PROMPT, width=512, height=512, client=client)

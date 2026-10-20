@@ -16,8 +16,10 @@ import contextlib
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from io import BytesIO
 
 import pytest
+from PIL import Image as PilImage
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -75,8 +77,18 @@ FINDINGS = (
 # What the sandbox read out of the project: the install line the block declares.
 DEPENDENCIES = {"motion": "^13.0.0", "react": "^19.2.4"}
 
-PNG = b"\x89PNG\r\n\x1a\n"
-PICTURE = b"\xff\xd8\xff\xe0jpeg-bytes"
+
+def _jpeg() -> bytes:
+    buffer = BytesIO()
+    PilImage.new("RGB", (32, 24), "white").save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+# The runner now decodes and re-encodes renders and provider pictures. A test
+# fixture that is only a magic byte would be refused before it reached the
+# behaviour under test, so both are small real JPEGs.
+PNG = _jpeg()
+PICTURE = _jpeg()
 
 # What the fake judge says, and what the thresholds it is read against are. The
 # bars are pinned in the fixture rather than read from settings: recalibrating the
@@ -446,7 +458,10 @@ async def test_a_queued_task_runs_towards_a_published_block(runner_session, harn
     # The install line, read from the project by the sandbox rather than declared
     # by the model that wrote it.
     assert component.dependencies == DEPENDENCIES
-    assert component.delivery_prompt == BRIEF
+    # The public prompt is derived from the spec, not the private brief.
+    assert component.delivery_prompt.startswith("Build a ")
+    assert component.delivery_prompt != BRIEF
+    assert component.provenance["digital_source_type"] == "trainedAlgorithmicMedia"
     assert component.license == "MIT"
     assert component.created_by == owner_id
     assert component.winning_generation_id == attempt.id
@@ -656,6 +671,7 @@ async def test_the_pictures_a_block_asks_for_are_filed_and_linked(runner_session
     assert image.width == 1024
     assert image.height == 768
     assert image.model == settings.image_model
+    assert image.provenance["digital_source_type"] == "trainedAlgorithmicMedia"
     assert image.created_by == owner_id
     # Scored on entry, by the shorter rubric, and the judge was given the bytes.
     assert image.scores == PICTURE_SCORES
@@ -1149,3 +1165,31 @@ async def test_a_render_the_moderator_refuses_is_not_judged_or_stored(
     assert judge.shown == []
     assert harness.uploaded == []
     assert await _attempts(runner_session, task_id) == []
+
+
+async def test_a_brief_with_personal_data_is_not_published_verbatim(runner_session, harness, judge):
+    """The task keeps the private brief; the public block keeps a redacted line."""
+    await create_category(runner_session, slug="hero")
+    owner = await _owner(runner_session)
+    task = await _queued(
+        runner_session,
+        owner,
+        brief="A pricing page for jane@example.com at 42 Market Street",
+    )
+    task_id = task.id
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    done = await get_task(runner_session, task_id=task_id)
+    assert done is not None and done.status == TaskStatus.SUCCEEDED
+    component = await runner_session.get(Component, done.component_id)
+    assert component is not None
+
+    published = " ".join([component.title, component.description, component.delivery_prompt])
+    assert "jane@example.com" not in published
+    assert "42 Market Street" not in published
+    assert "[redacted]" in published
+    # The task is where the private source stays.
+    assert done.brief == "A pricing page for jane@example.com at 42 Market Street"

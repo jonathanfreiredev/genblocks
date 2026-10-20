@@ -17,6 +17,7 @@ dependencies = [
     "langfuse>=5.0.2",
     "langgraph>=1.2.15",
     "modal>=1.6.2",
+    "pillow>=13.0.0",
     "pyjwt>=2.13.0",
     "sqlalchemy[asyncio]>=2.0.51",
     "structlog>=26.1.0",

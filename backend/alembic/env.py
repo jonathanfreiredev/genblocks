@@ -13,6 +13,7 @@ from app.db.models import Base
 from app.generations import models as generations_models  # noqa: F401  (register tables)
 from app.images import models as images_models  # noqa: F401  (register tables)
 from app.organizations import models as organizations_models  # noqa: F401  (register tables)
+from app.reports import models as reports_models  # noqa: F401  (register tables)
 from app.settings import settings
 from app.tasks import models as tasks_models  # noqa: F401  (register tables)
 from app.users import models as users_models  # noqa: F401  (register tables)

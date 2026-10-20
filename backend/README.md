@@ -124,6 +124,14 @@ CORS_ORIGINS=http://localhost:3000
 | `MCP_BASE_URL`          | No       | `http://localhost:8001` | Public URL of the MCP server. Published in the OAuth discovery document, so it must be the URL clients use. |
 | `MCP_INTERNAL_URL`      | No       | `http://localhost:8001` | Where the playground reaches the MCP server as a client.             |
 | `CORS_ORIGINS`          | No       | `http://localhost:3000` | Comma-separated browser origins allowed to call the API.             |
+| `BFL_ASSET_HOSTS`       | No       | `delivery.bfl.ai,api.bfl.ai` | Hosts a BFL polling or sample URL may name. Anything else is refused before it is fetched. |
+| `IMAGE_MAX_BYTES`       | No       | `20971520`              | Input and output byte bound for a picture before moderation/storage. |
+| `IMAGE_MAX_PIXELS`      | No       | `24000000`              | Decoded pixel bound for a picture.                                  |
+| `IMAGE_REENCODE_QUALITY`| No       | `85`                    | JPEG quality used when a picture is re-encoded.                     |
+| `ADMIN_EMAILS`          | No       | –                       | Comma-separated global operators for the report queue and takedown. |
+| `RESEND_API_KEY`        | No       | –                       | Resend key for new-report notifications. Empty keeps the queue silent. |
+| `RESEND_FROM_EMAIL`     | No       | `GenBlocks <onboarding@resend.dev>` | Verified sender for report notifications. |
+| `REPORT_NOTIFICATION_EMAILS` | No  | `ADMIN_EMAILS`          | Comma-separated recipients; falls back to the operators.             |
 
 Settings are defined in `app/settings.py` and loaded from `backend/.env`.
 

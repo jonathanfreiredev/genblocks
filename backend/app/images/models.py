@@ -51,3 +51,7 @@ class Image(BaseModel):
     scores: Mapped[dict | None] = mapped_column(JSONB)
     rubric_version: Mapped[str | None]
     langfuse_trace_id: Mapped[str | None]
+    # The generated-media provenance record: model, prompt hash and the IPTC
+    # digital source type. It travels with the row because the re-encoded bytes
+    # deliberately carry no metadata at all.
+    provenance: Mapped[dict | None] = mapped_column(JSONB)

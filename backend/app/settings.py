@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -64,6 +65,36 @@ class Settings(BaseSettings):
     # work rather than publishing unchecked pictures.
     csam_scan_url: str | None = None
     csam_scan_api_key: str | None = None
+    # Older deployments named this CSAM_SCAN_KEY. Accept both so a working
+    # scanner is not turned off by a spelling difference in the environment.
+    csam_scan_key: str | None = None
+
+    # Every picture is decoded, bounded and re-encoded before it is moderated or
+    # stored. The bounds are both a safety limit and a bill: a provider that
+    # answers with a decompression bomb, a huge pixel canvas or an endless byte
+    # stream is refused here rather than handed to a classifier or a CDN.
+    image_max_bytes: int = 20 * 1024 * 1024
+    image_max_pixels: int = 24_000_000
+    image_reencode_quality: int = 85
+
+    # The hosts a provider may name in a polling URL or a finished asset URL.
+    # BFL answers with URLs; treating any URL it returns as trusted would turn a
+    # compromised provider response into an SSRF primitive.
+    bfl_asset_hosts: str = "delivery.bfl.ai,api.bfl.ai"
+
+    # Who may see the report queue and take content down. A global operator role,
+    # deliberately separate from an organization role: an owner of one tenant
+    # must not be able to remove another tenant's public work.
+    admin_emails: str = ""
+
+    # Resend sends one email when a report enters the queue. It is a
+    # notification, never a gate: a report is saved whether or not the email
+    # provider answers. Leave the key blank to keep the queue silent.
+    resend_api_key: str | None = None
+    resend_from_email: str = "GenBlocks <onboarding@resend.dev>"
+    # Where the notification goes. Empty falls back to ADMIN_EMAILS, so one
+    # setting already names the people who can act on it.
+    report_notification_emails: str = ""
 
     # Voyage embeds screenshots and images for retrieval.
     voyage_api_key: str | None = None
@@ -176,6 +207,46 @@ class Settings(BaseSettings):
     def mcp_internal_endpoint(self) -> str:
         """The full URL of the MCP endpoint this service calls as a client."""
         return f"{self.mcp_internal_url.rstrip('/')}/mcp"
+
+    @property
+    def csam_scan_credential(self) -> str | None:
+        """The child-safety scanner credential, under either supported name."""
+        return self.csam_scan_api_key or self.csam_scan_key
+
+    @property
+    def bfl_polling_hosts(self) -> tuple[str, ...]:
+        """Hosts a BFL polling URL may name.
+
+        The configured API host is the one BFL is called at; ``api.bfl.ai`` is
+        kept as the documented host so a deployment that fronts the API through
+        its own proxy does not lose the ability to poll the real service.
+        """
+        configured = urlsplit(self.bfl_base_url).hostname
+        return tuple(one for one in {configured, "api.bfl.ai"} if one)
+
+    @property
+    def bfl_asset_host_list(self) -> tuple[str, ...]:
+        """Hosts a finished BFL asset URL may name."""
+        return tuple(
+            one.strip().lower().rstrip(".")
+            for one in self.bfl_asset_hosts.split(",")
+            if one.strip()
+        )
+
+    @property
+    def admin_email_list(self) -> tuple[str, ...]:
+        """The operators allowed to review reports and take content down."""
+        return tuple(one.strip().lower() for one in self.admin_emails.split(",") if one.strip())
+
+    @property
+    def report_notification_recipients(self) -> tuple[str, ...]:
+        """Who receives a new-report email.
+
+        An explicit list wins; otherwise the operators are the recipients,
+        because they are already the people who can review and act on it.
+        """
+        configured = self.report_notification_emails or self.admin_emails
+        return tuple(one.strip() for one in configured.split(",") if one.strip())
 
     @property
     def supabase_issuer(self) -> str:
