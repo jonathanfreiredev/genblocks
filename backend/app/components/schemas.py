@@ -33,6 +33,9 @@ class ComponentSummary(BaseModel):
     # The picture the block was published from. The card is a thumbnail, so the
     # list needs the render without loading the attempt it lives on.
     screenshot_path: str | None = None
+    # The catalogue's own crop of the same attempt, at card width. Null for blocks
+    # published before it existed; the card falls back to the render.
+    thumbnail_path: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

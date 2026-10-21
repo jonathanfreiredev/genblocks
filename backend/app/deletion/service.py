@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.components.models import Component
@@ -55,15 +55,17 @@ async def delete_component(
     if component is None:
         return None
 
-    paths = tuple(
-        path
-        for path in await session.scalars(
-            select(Generation.screenshot_path).where(
-                Generation.component_id == component.id,
+    renders = await session.execute(
+        select(Generation.screenshot_path, Generation.thumbnail_path).where(
+            Generation.component_id == component.id,
+            or_(
                 Generation.screenshot_path.is_not(None),
-            )
+                Generation.thumbnail_path.is_not(None),
+            ),
         )
-        if path
+    )
+    paths = tuple(
+        path for screenshot, thumbnail in renders.all() for path in (screenshot, thumbnail) if path
     )
     item = DeletedItem(
         kind="component",

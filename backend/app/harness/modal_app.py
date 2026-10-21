@@ -79,6 +79,17 @@ SCREENSHOT_TYPE = "jpeg"
 SCREENSHOT_QUALITY = 85
 SCREENSHOT_MEDIA_TYPE = "image/jpeg"
 
+# The catalogue's thumbnail is not the judge's render. At 1440px a block is a wide
+# band on a 900px page, and a square tile cannot be filled with that without
+# cutting the composition or leaving the page's white below it. At 390px — the
+# phone the harness already renders — a block is compact and nearly square, so the
+# wall shows the block and nothing else (PLAN.md, decision 49). The top of a
+# taller one is what a thumbnail shows anyway.
+THUMBNAIL_WIDTH = 390
+THUMBNAIL_VIEWPORT_HEIGHT = 844
+THUMBNAIL_MAX_HEIGHT = 390
+THUMBNAIL_QUALITY = 82
+
 # axe findings that fail the accessibility check. A minor finding is recorded and
 # left to the judge; contrast failures and unlabelled controls are not minor, and
 # the backend treats this check as a gate.
@@ -375,6 +386,9 @@ app = modal.App(APP_NAME)
 def check(request: dict) -> dict[str, Any]:
     """Build, check and render one project, and say what happened.
 
+    The answer carries both pictures: the desktop render the judge reads and the
+    card crop the wall reads.
+
     The commands run in the order a reader would run them: types first, then
     style, then whether it bundles at all. A project already refused by one of the
     gates is not rendered: there would be nothing published from it either way,
@@ -432,6 +446,7 @@ def check(request: dict) -> dict[str, Any]:
             "dependencies": dependencies,
             "screenshot": rendered["screenshot"],
             "screenshot_dark": rendered["screenshot_dark"],
+            "thumbnail": rendered["thumbnail"],
             "screenshot_media_type": rendered["screenshot_media_type"],
             "preview": preview,
             "preview_error": preview_error,
@@ -623,6 +638,7 @@ def _render(project: Path, *, asset_prefixes: tuple[str, ...] = ()) -> dict[str,
     violations: list[dict[str, Any]] = []
     screenshot: bytes | None = None
     screenshot_dark: bytes | None = None
+    thumbnail: bytes | None = None
 
     try:
         with sync_playwright() as playwright:
@@ -698,6 +714,20 @@ def _render(project: Path, *, asset_prefixes: tuple[str, ...] = ()) -> dict[str,
                 violations.extend(dark_violations)
                 screenshot_dark = _shot(page)
 
+                # One more page, at the width of a card. The wall crops to a
+                # square, and this is the render it crops: at 520px a block stacks
+                # enough to fill it, while the 1440px page is a wide band with the
+                # rest of the viewport below. Light, because a thumbnail is a
+                # catalogue picture and the catalogue has one ground.
+                page.emulate_media(color_scheme="light", reduced_motion="no-preference")
+                page.set_viewport_size(
+                    {"width": THUMBNAIL_WIDTH, "height": THUMBNAIL_VIEWPORT_HEIGHT}
+                )
+                page.goto(f"http://127.0.0.1:{port}/", wait_until="load")
+                _painted(page)
+                _settled(page)
+                thumbnail = _thumbnail(page)
+
             context.close()
             browser.close()
     finally:
@@ -708,6 +738,7 @@ def _render(project: Path, *, asset_prefixes: tuple[str, ...] = ()) -> dict[str,
         "violations": violations,
         "screenshot": screenshot,
         "screenshot_dark": screenshot_dark,
+        "thumbnail": thumbnail,
         "screenshot_media_type": SCREENSHOT_MEDIA_TYPE,
     }
 
@@ -715,6 +746,43 @@ def _render(project: Path, *, asset_prefixes: tuple[str, ...] = ()) -> dict[str,
 def _shot(page: Page) -> bytes:
     """One screenshot, in the format the registry actually stores."""
     return page.screenshot(type=SCREENSHOT_TYPE, quality=SCREENSHOT_QUALITY)
+
+
+def _thumbnail(page: Page) -> bytes | None:
+    """The block at card width, clipped to the square the wall shows."""
+    box = page.locator("main").bounding_box()
+    clip = _thumbnail_clip(box) if box is not None else None
+
+    if clip is None:
+        return None
+
+    return page.screenshot(
+        clip=clip,
+        type=SCREENSHOT_TYPE,
+        quality=THUMBNAIL_QUALITY,
+    )
+
+
+def _thumbnail_clip(box: dict[str, float]) -> dict[str, float] | None:
+    """The part of the page a card shows: the block, cut at card height.
+
+    A short block is captured whole, with no page below it; a tall one is cut at
+    the height of a card, which is the part ``object-cover`` would keep from the
+    top anyway. The width is the viewport the caller set, unless the element is
+    narrower.
+    """
+    width = min(THUMBNAIL_WIDTH, round(box["width"]))
+    height = min(round(box["height"]), THUMBNAIL_MAX_HEIGHT)
+
+    if width <= 0 or height <= 0:
+        return None
+
+    return {
+        "x": round(box["x"]),
+        "y": round(box["y"]),
+        "width": width,
+        "height": height,
+    }
 
 
 def _browser_args() -> list[str]:

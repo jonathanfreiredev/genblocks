@@ -15,6 +15,7 @@ function run(overrides: Partial<Generation>): Generation {
     },
     entry: "src/Block.tsx",
     screenshot_path: null,
+    thumbnail_path: null,
     checks: null,
     scores: null,
     verdict: "candidate",

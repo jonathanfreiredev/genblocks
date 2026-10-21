@@ -51,6 +51,8 @@ export interface ComponentSummary {
   author: string | null;
   /** The render the block was published from, when the run left one. */
   screenshot_path: string | null;
+  /** The card-width crop of the same attempt; null on older blocks. */
+  thumbnail_path: string | null;
 }
 
 export interface Component extends ComponentSummary {
@@ -136,6 +138,7 @@ export interface Generation {
   /** Which of those files the block is. A path, not a copy of the file. */
   entry: string;
   screenshot_path: string | null;
+  thumbnail_path: string | null;
   checks: HarnessChecks | null;
   scores: Record<string, number> | null;
   verdict: Verdict;

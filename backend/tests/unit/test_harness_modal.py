@@ -120,3 +120,25 @@ def test_only_motion_still_running_after_the_bound_is_flagged():
     flagged = modal_app._long_motion(animations)
 
     assert [one["duration"] for one in flagged] == [600, 120]
+
+
+def test_a_short_block_is_captured_whole_for_the_card():
+    clip = modal_app._thumbnail_clip({"x": 0, "y": 0, "width": 390, "height": 340})
+
+    assert clip == {"x": 0, "y": 0, "width": 390, "height": 340}
+
+
+def test_a_tall_block_is_cut_at_card_height():
+    clip = modal_app._thumbnail_clip({"x": 0, "y": 0, "width": 390, "height": 844})
+
+    assert clip == {"x": 0, "y": 0, "width": 390, "height": 390}
+
+
+def test_a_narrower_block_keeps_its_own_width():
+    clip = modal_app._thumbnail_clip({"x": 12, "y": 4, "width": 320, "height": 600})
+
+    assert clip == {"x": 12, "y": 4, "width": 320, "height": 390}
+
+
+def test_a_box_with_nothing_to_photograph_has_no_clip():
+    assert modal_app._thumbnail_clip({"x": 0, "y": 0, "width": 0, "height": 0}) is None

@@ -68,6 +68,15 @@ def test_a_render_is_named_under_the_root_the_code_owns():
     assert name.startswith(f"{cloudinary.ROOT}/")
 
 
+def test_the_card_crop_sits_beside_the_render_it_came_from():
+    task_id = uuid.UUID("0123456789abcdef0123456789abcdef")
+
+    name = cloudinary.thumbnail_id(task_id, 1)
+
+    assert name == f"{cloudinary.screenshot_id(task_id, 1)}-thumb"
+    assert name.startswith(f"{cloudinary.ROOT}/")
+
+
 def test_an_image_is_named_after_its_own_bytes():
     # Content-addressed: the same picture asked for twice is one object in the
     # CDN, and the unique path on the library row is what keeps it one row.

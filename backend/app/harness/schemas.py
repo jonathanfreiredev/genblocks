@@ -126,8 +126,10 @@ class SandboxResult(BaseModel):
     ``screenshot`` is the desktop render on a light page, as JPEG bytes, or ``None``
     when the run never got as far as a page. ``screenshot_dark`` is the same page
     with the theme the registry switches on: a block is expected to hold on both
-    grounds, and the only way to know is to look. Only the light one is stored —
-    it is the thumbnail — while both go to the judge.
+    grounds, and the only way to know is to look. Both go to the judge, which is
+    why neither is cropped. ``thumbnail`` is the catalogue's own picture: the same
+    block at card width, clipped to the square the wall shows, and stored beside
+    the render so a tile never has to crop a wide desktop page.
 
     ``dependencies`` is what the project imports from packages, with the version it
     was built against — read by the sandbox from the project itself rather than
@@ -144,6 +146,10 @@ class SandboxResult(BaseModel):
     dependencies: dict[str, str] = Field(default_factory=dict)
     screenshot: bytes | None = None
     screenshot_dark: bytes | None = None
+    # The catalogue's crop, rendered at card width rather than at the judge's
+    # desktop viewport. It is a JPEG like the two above, and None when the page
+    # never came up: the wall falls back to the screenshot.
+    thumbnail: bytes | None = None
     # The bytes above are JPEG from the sandbox, not the PNG a naive reader might
     # assume; the judge and the model both need the right data-URL media type.
     screenshot_media_type: str = "image/png"

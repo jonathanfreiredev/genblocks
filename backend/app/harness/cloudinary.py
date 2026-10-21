@@ -47,6 +47,11 @@ def screenshot_id(task_id: uuid.UUID, attempt_no: int) -> str:
     return f"{SCREENSHOTS}/{task_id.hex[:12]}-{attempt_no}"
 
 
+def thumbnail_id(task_id: uuid.UUID, attempt_no: int) -> str:
+    """Where the catalogue crop of the same attempt lives."""
+    return f"{screenshot_id(task_id, attempt_no)}-thumb"
+
+
 def image_id(data: bytes) -> str:
     """Where one generated image lives: named after its own bytes."""
     return f"{IMAGES}/{hashlib.sha256(data).hexdigest()[:IMAGE_ID_LENGTH]}"

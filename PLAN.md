@@ -407,6 +407,18 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     la tiene, la página lo dice en vez de enseñar `localhost` y romper la primera
     llamada. La detección es por `Host`/`X-Forwarded-Host`, así que el mismo
     artefacto sirve en los dos modos.
+49. **La miniatura es del bloque, no de la página.** El render del juez sigue
+    siendo el escritorio a 1440 (claro y oscuro), pero la pared no puede usar ese
+    recorte: un bloque de 408–698 px de alto sobre un viewport de 900 deja una
+    franja blanca que `object-cover` no quita, porque recorta los lados. Cada
+    intento guarda además una **miniatura a 390 px** (el ancho de móvil que ya se
+    comprueba), recortada al alto de una tarjeta: a ese ancho el bloque se apila,
+    queda casi cuadrado y no hay que cortar texto. Es otro JPEG pequeño en
+    Cloudinary (`thumbnail_path` en `generations`), no otra imagen para el juez;
+    la pared prefiere la miniatura y cae al render en los bloques viejos. El
+    backfill la genera para los ya publicados; si un bloque viejo no pasa las
+    puertas nuevas, se guarda igual porque es cosmética y el bloque ya está
+    publicado.
 
 ---
 

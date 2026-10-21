@@ -65,6 +65,10 @@ class Generation(BaseModel):
     entry: Mapped[str]
     # Cloudinary public id of the render. Nullable until the upload succeeds.
     screenshot_path: Mapped[str | None]
+    # Cloudinary public id of the catalogue thumbnail: the same block at card
+    # width, so the wall can fill a square tile without the page below it. Null
+    # on attempts from before it existed; the gallery falls back to the render.
+    thumbnail_path: Mapped[str | None]
     # What the sandbox found: one entry per check, with its short detail. Null on
     # attempts that never reached the sandbox (Fase 7 writes it; the seed plants
     # rows from before there was one).

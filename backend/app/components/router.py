@@ -40,7 +40,12 @@ async def _summaries(
         ComponentSummary.model_validate(component).model_copy(
             update={
                 "author": names.get(component.created_by) if component.created_by else None,
-                "screenshot_path": shots.get(component.id),
+                "screenshot_path": (
+                    shots[component.id].screenshot if component.id in shots else None
+                ),
+                "thumbnail_path": (
+                    shots[component.id].thumbnail if component.id in shots else None
+                ),
             }
         )
         for component in components
@@ -54,6 +59,7 @@ async def _read(session: AsyncSession, component: Component) -> ComponentRead:
         update={
             "author": summary.author,
             "screenshot_path": summary.screenshot_path,
+            "thumbnail_path": summary.thumbnail_path,
             "has_preview": await has_preview(session, component_id=component.id),
         }
     )

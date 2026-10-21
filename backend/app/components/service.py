@@ -2,6 +2,7 @@
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -110,24 +111,39 @@ async def by_ids(session: AsyncSession, *, ids: Sequence[uuid.UUID]) -> list[Com
     return [by_id[one] for one in ids if one in by_id]
 
 
-async def renders(
-    session: AsyncSession, *, ids: Sequence[uuid.UUID]
-) -> dict[uuid.UUID, str | None]:
-    """The render each block was published from, by block id.
+@dataclass(frozen=True)
+class Render:
+    """The two pictures of one attempt: the judge's page and the card's crop."""
+
+    screenshot: str | None
+    thumbnail: str | None
+
+
+async def renders(session: AsyncSession, *, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, Render]:
+    """The pictures each block was published with, by block id.
 
     A card in a conversation shows the block the way the vault does: its picture,
-    not its title. The render lives on the attempt, so this is the one join.
+    not its title. The render lives on the attempt, so this is the one join. The
+    thumbnail is the same attempt at card width; it is null for blocks published
+    before it existed, and the card falls back to the render.
     """
     if not ids:
         return {}
 
     found = await session.execute(
-        select(Component.id, Generation.screenshot_path)
+        select(
+            Component.id,
+            Generation.screenshot_path,
+            Generation.thumbnail_path,
+        )
         .join(Generation, Generation.id == Component.winning_generation_id)
         .where(Component.id.in_(ids))
     )
 
-    return {component_id: path for component_id, path in found.all()}
+    return {
+        component_id: Render(screenshot=screenshot, thumbnail=thumbnail)
+        for component_id, screenshot, thumbnail in found.all()
+    }
 
 
 async def already_built(session: AsyncSession, *, brief: str) -> tuple[Component, float] | None:

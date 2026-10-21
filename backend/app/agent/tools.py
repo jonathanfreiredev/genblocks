@@ -129,7 +129,8 @@ def build_tools(
             )
 
         for block, _distance in relevant:
-            suggested.add(_suggested(block, renders.get(block.id)))
+            render = renders.get(block.id)
+            suggested.add(_suggested(block, render.screenshot if render else None))
 
         if not relevant:
             return {

@@ -13,6 +13,7 @@ const COMPONENT: ComponentSummary = {
   created_at: "2026-10-14T09:12:00Z",
   author: "Marisol Vega",
   screenshot_path: "genblocks/screenshots/proof-sheet-hero",
+  thumbnail_path: "genblocks/screenshots/proof-sheet-hero-thumb",
 };
 
 describe("ComponentCell", () => {
@@ -44,10 +45,37 @@ describe("ComponentCell", () => {
     expect(screen.getByText("GenBlocks")).toBeInTheDocument();
   });
 
+  test("prefers the card crop to the full render", () => {
+    render(<ComponentCell component={COMPONENT} href="/blocks/0199f1ab" />);
+
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("proof-sheet-hero-thumb"),
+    );
+  });
+
+  test("uses the render when the block predates the crop", () => {
+    render(
+      <ComponentCell
+        component={{ ...COMPONENT, thumbnail_path: null }}
+        href="/blocks/0199f1ab"
+      />,
+    );
+
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("proof-sheet-hero"),
+    );
+  });
+
   test("falls back to the title when there is no render", () => {
     render(
       <ComponentCell
-        component={{ ...COMPONENT, screenshot_path: null }}
+        component={{
+          ...COMPONENT,
+          screenshot_path: null,
+          thumbnail_path: null,
+        }}
         href="/blocks/0199f1ab"
       />,
     );

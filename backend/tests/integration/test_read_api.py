@@ -108,6 +108,7 @@ async def test_a_card_carries_the_maker_and_the_render(client, db_session):
         entry=ENTRY,
         verdict="published",
         screenshot_path="genblocks/screenshots/alpha",
+        thumbnail_path="genblocks/screenshots/alpha-thumb",
     )
     db_session.add(generation)
     await db_session.commit()
@@ -122,8 +123,10 @@ async def test_a_card_carries_the_maker_and_the_render(client, db_session):
     # The wall needs a picture and a name, and neither lives on the block's row.
     assert card["author"] == "Marisol Vega"
     assert card["screenshot_path"] == "genblocks/screenshots/alpha"
+    assert card["thumbnail_path"] == "genblocks/screenshots/alpha-thumb"
     assert full["author"] == "Marisol Vega"
     assert full["screenshot_path"] == "genblocks/screenshots/alpha"
+    assert full["thumbnail_path"] == "genblocks/screenshots/alpha-thumb"
 
 
 async def test_an_unclaimed_card_has_no_author(client, db_session):
@@ -134,6 +137,7 @@ async def test_an_unclaimed_card_has_no_author(client, db_session):
 
     assert card["author"] is None
     assert card["screenshot_path"] is None
+    assert card["thumbnail_path"] is None
 
 
 async def test_components_can_be_filtered_by_category_and_searched(client, db_session):

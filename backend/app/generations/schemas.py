@@ -14,6 +14,7 @@ class GenerationRead(BaseModel):
     files: dict
     entry: str
     screenshot_path: str | None
+    thumbnail_path: str | None
     checks: dict | None
     scores: dict | None
     verdict: str

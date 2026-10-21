@@ -509,7 +509,11 @@ async def _build(
         # A render is content too. Text moderation sees the copy; it cannot see a
         # hate symbol, a person, or an image inside the render. Both grounds are
         # checked before the screenshot can become a public asset.
-        for screenshot in (found.screenshot, found.screenshot_dark):
+        for screenshot in (
+            found.screenshot,
+            found.screenshot_dark,
+            found.thumbnail,
+        ):
             if screenshot is None:
                 continue
 
@@ -533,6 +537,7 @@ async def _build(
             # Stored only after the judge publishes it: a rejected attempt must not
             # leave a render in the public CDN.
             screenshot_path=None,
+            thumbnail_path=None,
             checks=found.record(),
             verdict=Verdict.REJECTED if found.blocked else Verdict.CANDIDATE,
             langfuse_trace_id=trace.id,
@@ -767,7 +772,7 @@ def _sanitized_renders(result: SandboxResult) -> SandboxResult:
     """
     updates: dict[str, object] = {}
 
-    for name in ("screenshot", "screenshot_dark"):
+    for name in ("screenshot", "screenshot_dark", "thumbnail"):
         picture = getattr(result, name)
         if picture is None:
             continue
@@ -798,6 +803,18 @@ async def _store(result: SandboxResult, *, task: Task) -> str | None:
     return await cloudinary.store(
         result.screenshot,
         name=cloudinary.screenshot_id(task.id, 1),
+        media_type=result.screenshot_media_type,
+    )
+
+
+async def _store_thumbnail(result: SandboxResult, *, task: Task) -> str | None:
+    """Put the catalogue crop beside the render, when the sandbox made one."""
+    if result.thumbnail is None:
+        return None
+
+    return await cloudinary.store(
+        result.thumbnail,
+        name=cloudinary.thumbnail_id(task.id, 1),
         media_type=result.screenshot_media_type,
     )
 
@@ -922,6 +939,9 @@ async def _publish(
         # judge have both cleared it. A rejected attempt keeps no picture.
         if made.found.screenshot is not None:
             made.attempt.screenshot_path = await _store(made.found, task=task)
+
+        if made.found.thumbnail is not None:
+            made.attempt.thumbnail_path = await _store_thumbnail(made.found, task=task)
 
         # The brief stays private on the task. What the block publishes is a
         # short description with structured personal data removed, and a

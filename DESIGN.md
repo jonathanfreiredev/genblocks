@@ -434,7 +434,7 @@ The gallery is a wall of pictures, not a list of records.
 
 - **Full width** minus 12–16px of padding. No max-width, no centred column.
 - **Grid**: 2 columns on a phone, 3 on a small tablet, 4 on a laptop, 5 on a wide screen; 12px gap.
-- **Cell**: a square (`aspect-square`) `rounded-xl` frame with a 1px border and 8px of padding. The thumbnail fills its box and is cropped to it (`object-cover`), so the wall reads as one surface; the item page shows the uncropped artifact.
+- **Cell**: a square (`aspect-square`) `rounded-xl` frame with a 1px border and 8px of padding. The thumbnail fills its box and is cropped to it (`object-cover`), so the wall reads as one surface. It is a separate render at phone width (390px), not the judge's desktop screenshot: at card width a block is compact and nearly square, so the crop does not cut the composition. The item page shows the uncropped desktop artifact.
 - **Nothing on the tile** except the picture. On hover the picture lifts 2px, the frame takes a faint muted wash, and the maker's name (`author`, or `GenBlocks` when nobody claimed it) fades in centred at the bottom.
 - **No title, slug, date or category** on the wall. The accessible name is the item's title; the visual text is only the author on hover.
 - **Above the grid**: one small line with the count (`7 blocks`) and, when searching, `for “query”` plus a `Clear search` link. No section title and no description.

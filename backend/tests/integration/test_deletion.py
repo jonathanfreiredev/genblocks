@@ -79,6 +79,7 @@ async def test_deleting_a_component_removes_its_render_and_keeps_the_image(db_se
         files={ENTRY: BLOCK},
         entry=ENTRY,
         screenshot_path="genblocks/screenshots/render",
+        thumbnail_path="genblocks/screenshots/render-thumb",
         verdict="published",
     )
     db_session.add(generation)
@@ -89,7 +90,10 @@ async def test_deleting_a_component_removes_its_render_and_keeps_the_image(db_se
 
     removed = await deletion.delete_component(db_session, component_id=component.id)
     assert removed is not None
-    assert deleted == [("genblocks/screenshots/render", True)]
+    assert deleted == [
+        ("genblocks/screenshots/render", True),
+        ("genblocks/screenshots/render-thumb", True),
+    ]
     assert (
         await db_session.scalar(
             select(type(component))

@@ -137,6 +137,9 @@ def findings(*failing: str) -> SandboxResult:
         ],
         dependencies=dict(DEPENDENCIES),
         screenshot=None if fatal else PNG,
+        # The card crop comes from the same look, and only a run that reached a
+        # page has one.
+        thumbnail=None if fatal else PNG,
         # The built page the sandbox folds out of the same bundle. A run that
         # failed a gate never gets one, and the fake mirrors that.
         preview=None if fatal else "<!doctype html><html><body>Pricing</body></html>",
@@ -460,7 +463,11 @@ async def test_a_queued_task_runs_towards_a_published_block(
     # What the sandbox found is kept on the attempt, and the render is uploaded
     # under the tree the cloudinary module owns.
     assert attempt.screenshot_path == cloudinary.screenshot_id(task_id, 1)
-    assert harness.uploaded == [cloudinary.screenshot_id(task_id, 1)]
+    assert attempt.thumbnail_path == cloudinary.thumbnail_id(task_id, 1)
+    assert harness.uploaded == [
+        cloudinary.screenshot_id(task_id, 1),
+        cloudinary.thumbnail_id(task_id, 1),
+    ]
     assert attempt.checks is not None
     assert attempt.checks["blocked"] is False
     assert (attempt.checks["passed"], attempt.checks["total"]) == (12, 12)

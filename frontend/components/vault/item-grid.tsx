@@ -63,15 +63,18 @@ export function ComponentCell({
   component: ComponentSummary;
   href: string;
 }) {
+  // The card crop is the tighter picture; the render is what older blocks have.
+  const picture = component.thumbnail_path ?? component.screenshot_path;
+
   return (
     <Cell
       href={href}
       author={component.author ?? "GenBlocks"}
       label={component.title}
     >
-      {component.screenshot_path ? (
+      {picture ? (
         <AssetPlate
-          path={component.screenshot_path}
+          path={picture}
           alt={`The rendered block: ${component.title}`}
           sizes="(min-width: 1280px) 320px, (min-width: 1024px) 30vw, (min-width: 640px) 40vw, 45vw"
           caption={component.title}
