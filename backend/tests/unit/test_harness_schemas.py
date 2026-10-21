@@ -1,9 +1,10 @@
 """What the sandbox's answer means, read without a sandbox.
 
-The two things that matter here are which findings stop a run and which are kept
-as evidence: a check that fails for a wide hero at 390px is worth knowing and not
-worth refusing, and getting that backwards would either publish broken blocks or
-throw away good ones.
+The thing that matters here is which findings stop a run and which are kept as
+evidence. The interface checks are gates: a block that overflows a phone, fails
+contrast or ignores reduced motion is not published, because the judge never sees
+the phone and the registry promised it works. Lint stays evidence — it is a
+nitpick, not a broken interface.
 """
 
 from app.harness.schemas import SandboxCheck, SandboxResult, SandboxViolation
@@ -21,13 +22,26 @@ def test_a_fatal_check_that_failed_stops_the_run():
     assert [check.name for check in found.failures] == ["build"]
 
 
-def test_findings_that_are_not_fatal_do_not_stop_the_run():
-    # A block that is 40px too wide on a phone is a judgement call, and the judge
-    # is the one who makes it.
-    found = result(("typecheck", True), ("build", True), ("layout:phone", False))
+def test_a_lint_finding_does_not_stop_the_run():
+    # A lint nitpick is worth knowing and not worth refusing a whole block over.
+    found = result(("typecheck", True), ("build", True), ("lint", False))
 
     assert found.blocked is False
-    assert [check.name for check in found.failures] == ["layout:phone"]
+    assert [check.name for check in found.failures] == ["lint"]
+
+
+def test_a_layout_that_overflows_a_phone_stops_the_run():
+    # The judge is not sent the phone render, so this cannot be left to taste.
+    found = result(("typecheck", True), ("build", True), ("layout:phone", False))
+
+    assert found.blocked is True
+
+
+def test_interface_findings_stop_the_run():
+    for name in ("accessibility", "accessibility:dark", "targets", "focus", "motion:reduce"):
+        found = result((name, False))
+
+        assert found.blocked is True, name
 
 
 def test_an_import_outside_the_shelf_stops_the_run():
@@ -62,9 +76,9 @@ def test_the_record_carries_the_checks_and_the_findings():
 
     record = found.record()
 
-    # The failing check is not fatal, so the run was not blocked: the record says
-    # both things, and nothing reading it later has to know which checks are.
-    assert record["blocked"] is False
+    # A serious contrast finding is fatal, so the run was blocked: the record
+    # says both things, and nothing reading it later has to know which checks are.
+    assert record["blocked"] is True
     assert (record["passed"], record["total"]) == (2, 3)
     assert record["checks"][2]["detail"] == "color-contrast (serious, 2 nodes)"
     assert record["violations"][0]["id"] == "color-contrast"

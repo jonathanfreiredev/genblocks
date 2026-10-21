@@ -16,14 +16,20 @@ target.
 - **Controls**: `button` for actions, `a` for destinations, a `label` for every
   input (visible, or `sr-only` when the placeholder is doing the talking). Never a
   `div` with an `onClick`: that is a control nobody can reach from a keyboard.
+- **Targets**: on a phone, every control is at least 24×24px — WCAG 2.2's minimum.
+  Icon buttons get padding, not a 16px square. An inline link inside a sentence is
+  the one exception, because it is text before it is a target.
 - **Names**: an icon-only control needs `aria-label`; a picture that carries
   meaning needs `alt` that says it; a picture that is decoration takes `alt=""`.
   A link's text has to make sense read on its own.
 - **Focus**: visible, and never removed without a replacement. Tailwind's
   `focus-visible:outline-*` is the default answer, and the focus ring has to be
-  visible against the element's own background.
+  visible against the element's own background. The sandbox tabs through every
+  control: an `outline-none` with nothing behind it is a failed block.
 - **Motion**: everything that moves has to be optional — the rule is in `motion`.
-  A block whose content only appears once an animation has run is invisible to
-  somebody with reduced motion on, and that is a defect, not a preference.
+  The sandbox loads the block with `prefers-reduced-motion: reduce` and refuses it
+  if long or repeating movement survives with reduced motion on, or if the content
+  never arrives. A block
+  whose content only exists mid-animation is a defect, not a preference.
 - **Updates**: if the block changes its own text (a counter, a confirmation, a
   filter result), say so with a live region, or the change is silent.

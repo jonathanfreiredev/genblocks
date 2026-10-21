@@ -59,10 +59,14 @@ REMOTE_SCAFFOLD = Path("/root/scaffold")
 # Where the block goes: the path the scaffold's entry point imports.
 BLOCK_PATH = "src/Block.tsx"
 
-# The viewports a block is rendered at. The desktop one is kept as the
-# screenshot, because that is the one the registry shows.
+# The viewports a block is rendered at, widest first so the last pass before the
+# phone-specific checks is already at 390px. The desktop one is kept as the
+# screenshot, because that is the one the registry shows; the others exist so the
+# gate sees a laptop, a tablet and a phone rather than trusting the block to have
+# thought about them.
 VIEWPORTS = (
     {"name": "desktop", "width": 1440, "height": 900},
+    {"name": "laptop", "width": 1024, "height": 768},
     {"name": "tablet", "width": 834, "height": 1112},
     {"name": "phone", "width": 390, "height": 844},
 )
@@ -75,12 +79,36 @@ SCREENSHOT_TYPE = "jpeg"
 SCREENSHOT_QUALITY = 85
 SCREENSHOT_MEDIA_TYPE = "image/jpeg"
 
-# axe findings that fail the accessibility check. A minor finding is recorded
-# and left to the judge: this phase reports, it does not rule.
+# axe findings that fail the accessibility check. A minor finding is recorded and
+# left to the judge; contrast failures and unlabelled controls are not minor, and
+# the backend treats this check as a gate.
 SERIOUS_IMPACTS = ("serious", "critical")
 
-# The check axe's verdict is reported under, once per ground.
+# The checks this module adds for the parts of the interface a screenshot cannot
+# prove. The names are repeated in ``app/harness/schemas.py``, which is where the
+# pipeline decides they are gates.
 ACCESSIBILITY = "accessibility"
+TARGETS = "targets"
+FOCUS = "focus"
+MOTION_REDUCED = "motion:reduce"
+
+# WCAG 2.2's minimum target size (AA), in CSS pixels. Apple's 44px is advice, not
+# the bar: a 44px gate would fail half the legitimate inline controls on the web.
+MIN_TARGET_PX = 24
+
+# What counts as motion someone asked not to see. A state change of 150–200ms is
+# a transition; anything still running after that, or repeating for ever, is the
+# kind of movement `prefers-reduced-motion` exists for.
+REDUCED_MOTION_MAX_MS = 200
+REDUCED_MOTION_SETTLE_MS = 320
+
+# Every control a visitor can operate. Inline links inside a sentence are exempt
+# from the target-size rule, which the script applies by display.
+INTERACTIVE = (
+    'a[href], button, input:not([type="hidden"]), select, textarea, summary, '
+    '[role="button"], [role="link"], [role="checkbox"], [role="radio"], '
+    '[role="switch"], [role="tab"]'
+)
 
 # The class the registry puts on the page to switch the library to dark. It is the
 # one the scaffold's `dark:` variant answers to (see the scaffold's `index.css`).
@@ -112,6 +140,154 @@ SETTLE_SCRIPT = """() => {
 # the bound is only for a page that mounts and never draws anything.
 RENDER_TIMEOUT_SECONDS = 15
 POLL_MILLISECONDS = 100
+
+# The animations the page started, as the browser reports them: state, duration
+# and whether they repeat. Read twice — once at load for evidence, once with
+# reduced motion on to see whether the block honoured it.
+ANIMATIONS = """() => document.getAnimations().map((animation) => {
+    const timing = animation.effect && animation.effect.getComputedTiming
+        ? animation.effect.getComputedTiming()
+        : {};
+
+    return {
+        state: animation.playState,
+        duration: typeof timing.duration === "number" ? timing.duration : 0,
+        iterations: timing.iterations === Infinity ? "infinite" : (timing.iterations || 1),
+    };
+})"""
+
+# Controls smaller than the WCAG 2.2 minimum, by their own box or by the label
+# that is the thing a finger actually hits. Inline links in a sentence are part of
+# the text, not a target, and are exempt.
+TARGETS_SCRIPT = """() => {
+    const selector = 'SELECTOR';
+    const small = [];
+
+    const visible = (element) => {
+        const style = getComputedStyle(element);
+
+        return style.display !== "none"
+            && style.visibility !== "hidden"
+            && style.opacity !== "0"
+            && element.getClientRects().length > 0;
+    };
+
+    const named = (element) =>
+        (element.getAttribute("aria-label") || element.textContent || "")
+            .trim()
+            .replace(/\\s+/g, " ")
+            .slice(0, 40);
+
+    for (const element of document.querySelectorAll(selector)) {
+        if (!visible(element)) {
+            continue;
+        }
+
+        if (element.tagName === "A" && getComputedStyle(element).display === "inline") {
+            continue;
+        }
+
+        const box = element.getBoundingClientRect();
+        const label = element.labels && element.labels[0]
+            ? element.labels[0].getBoundingClientRect()
+            : null;
+        const width = Math.max(box.width, label ? label.width : 0);
+        const height = Math.max(box.height, label ? label.height : 0);
+
+        if (width >= MIN_TARGET && height >= MIN_TARGET) {
+            continue;
+        }
+
+        small.push({
+            tag: element.tagName.toLowerCase(),
+            name: named(element),
+            width: Math.round(width),
+            height: Math.round(height),
+        });
+    }
+
+    return small.slice(0, 5);
+}""".replace("MIN_TARGET", str(MIN_TARGET_PX)).replace("SELECTOR", INTERACTIVE)
+
+# Whether a control shows that it has focus. The page is put in keyboard modality
+# first (the caller presses Tab), so a `focus-visible:` ring counts, and the style
+# of the element and of its parent are compared before and after: a wrapper is a
+# legitimate place for the ring.
+FOCUS_SCRIPT = r"""() => {
+    const selector = 'SELECTOR';
+    const missing = [];
+
+    const visible = (element) => {
+        const style = getComputedStyle(element);
+
+        return style.display !== "none"
+            && style.visibility !== "hidden"
+            && style.opacity !== "0"
+            && element.getClientRects().length > 0;
+    };
+
+    const named = (element) =>
+        (element.getAttribute("aria-label") || element.textContent || "")
+            .trim()
+            .replace(/\s+/g, " ")
+            .slice(0, 40);
+
+    // A painted ring, not a computed one. Chrome reports an outline colour and a
+    // width on a focused control even when `outline-style` is `none`; comparing
+    // raw values would call that visible. Transparent counts as invisible.
+    const clear = (color) =>
+        /^transparent$/i.test(color)
+        || (/^rgba\(/i.test(color) && /,\s*0(?:\.0+)?\)$/.test(color));
+
+    const painted = (style) =>
+        style.outlineStyle !== "none"
+        && parseFloat(style.outlineWidth) > 0
+        && !clear(style.outlineColor);
+
+    const shape = (element) => {
+        const own = getComputedStyle(element);
+        const parent = element.parentElement ? getComputedStyle(element.parentElement) : null;
+
+        return {
+            outline: painted(own),
+            outlineColor: own.outlineColor,
+            shadow: own.boxShadow !== "none",
+            shadowValue: own.boxShadow,
+            border: own.borderColor,
+            background: own.backgroundColor,
+            decoration: own.textDecorationLine,
+            parentOutline: parent ? painted(parent) : false,
+            parentOutlineColor: parent ? parent.outlineColor : "",
+            parentShadow: parent ? parent.boxShadow : "none",
+        };
+    };
+
+    const shows = (before, after) =>
+        (after.outline && (!before.outline || after.outlineColor !== before.outlineColor))
+        || (after.shadow && (!before.shadow || after.shadowValue !== before.shadowValue))
+        || after.border !== before.border
+        || after.background !== before.background
+        || after.decoration !== before.decoration
+        || (after.parentOutline
+            && (!before.parentOutline || after.parentOutlineColor !== before.parentOutlineColor))
+        || (after.parentShadow !== "none" && after.parentShadow !== before.parentShadow);
+
+    for (const element of [...document.querySelectorAll(selector)].filter(visible).slice(0, 24)) {
+        element.blur();
+        const before = shape(element);
+
+        element.focus();
+        const after = shape(element);
+
+        element.blur();
+
+        if (!shows(before, after)) {
+            missing.push({ tag: element.tagName.toLowerCase(), name: named(element) });
+        }
+    }
+
+    return missing.slice(0, 5);
+}""".replace("SELECTOR", INTERACTIVE)
 
 # How long a page is given to let its animations land before it is measured or
 # photographed. A block that animates its content in has an empty first frame, and
@@ -479,6 +655,10 @@ def _render(project: Path, *, asset_prefixes: tuple[str, ...] = ()) -> dict[str,
             page.on("console", lambda message: _kept(trouble, message))
 
             page.goto(f"http://127.0.0.1:{port}/", wait_until="load")
+            # Read before the page is allowed to settle: an entrance that has
+            # already finished cannot be described. This is evidence for the
+            # judge, not a gate — motion is scored, not mandated.
+            motion = _motion_summary(page.evaluate(ANIMATIONS))
             rendered = _rendered(page, trouble)
             rest: list[dict[str, Any]] = []
 
@@ -488,6 +668,19 @@ def _render(project: Path, *, asset_prefixes: tuple[str, ...] = ()) -> dict[str,
             if rendered["ok"]:
                 _settled(page)
                 rest.extend(_layouts(page, port))
+                # The layout pass ends at the phone, so the target sizes are
+                # measured there without loading the page again.
+                rest.append(_targets(page))
+                rest.append(_focus(page, port))
+                rest.append(_reduced_motion(page, port=port, motion=motion))
+
+                # The photograph is the desktop page on a light ground; the
+                # browser is put back where the picture expects it.
+                page.emulate_media(color_scheme="light", reduced_motion="no-preference")
+                page.set_viewport_size(_size(KEPT_VIEWPORT))
+                page.goto(f"http://127.0.0.1:{port}/", wait_until="load")
+                _painted(page)
+                _settled(page)
                 accessibility, violations = _accessible(page, port=port)
                 rest.append(accessibility)
                 screenshot = _shot(page)
@@ -608,7 +801,11 @@ def _did_not_render(trouble: list[str], *, or_else: str | None = None) -> dict[s
 
 
 def _layouts(page: Page, port: int) -> list[dict[str, Any]]:
-    """Whether the block fits each viewport, one check each."""
+    """Whether the block fits each viewport, one check each.
+
+    Four widths, and each one is a gate: a block that scrolls sideways on a phone
+    is not a responsive block, and the judge is not shown the phone to notice it.
+    """
     found = []
 
     for viewport in VIEWPORTS:
@@ -633,6 +830,144 @@ def _layouts(page: Page, port: int) -> list[dict[str, Any]]:
         )
 
     return found
+
+
+def _targets(page: Page) -> dict[str, Any]:
+    """Whether every control is big enough for a finger at a phone's width.
+
+    The caller leaves the page at 390px and settled, which is where this is
+    measured: a control that is comfortable on a laptop can be a 16px hit area on
+    a phone. The label is measured too, because a visually hidden input inside a
+    large label is a large target in practice.
+
+    Inline links are exempt — they are part of a sentence, not a button — and the
+    page's own hidden controls are skipped rather than counted as failures.
+    """
+    small = page.evaluate(TARGETS_SCRIPT)
+
+    if not small:
+        return {"name": TARGETS, "ok": True, "detail": None}
+
+    said = "; ".join(
+        "<{tag}> {name} is {width}×{height}px".format(
+            tag=one["tag"],
+            name=f"“{one['name']}”" if one["name"] else "(unnamed)",
+            width=one["width"],
+            height=one["height"],
+        )
+        for one in small
+    )
+
+    return {"name": TARGETS, "ok": False, "detail": _trimmed(said)}
+
+
+def _focus(page: Page, port: int) -> dict[str, Any]:
+    """Whether a keyboard user can see which control they are on.
+
+    The page is put in keyboard modality before the controls are focused, so a
+    block that styles `:focus-visible:` rather than `:focus` is judged by what a
+    keyboard user would actually see. A ring on the control's parent counts: some
+    designs put it there and it is still a visible focus.
+    """
+    page.emulate_media(color_scheme="light", reduced_motion="no-preference")
+    page.set_viewport_size(_size(KEPT_VIEWPORT))
+    page.goto(f"http://127.0.0.1:{port}/", wait_until="load")
+    _painted(page)
+    _settled(page)
+    page.keyboard.press("Tab")
+
+    missing = page.evaluate(FOCUS_SCRIPT)
+
+    if not missing:
+        return {"name": FOCUS, "ok": True, "detail": None}
+
+    said = "; ".join(
+        "<{tag}> {name}".format(
+            tag=one["tag"],
+            name=f"“{one['name']}”" if one["name"] else "(unnamed)",
+        )
+        for one in missing
+    )
+
+    return {
+        "name": FOCUS,
+        "ok": False,
+        "detail": _trimmed(f"No visible focus on: {said}"),
+    }
+
+
+def _reduced_motion(page: Page, *, port: int, motion: str) -> dict[str, Any]:
+    """Whether the block still arrives for somebody who asked for less motion.
+
+    The page is loaded with the preference on and read twice: while an entrance
+    would still be running, and again after a short bound. What is allowed is a
+    state change that has already finished, not an entrance that ignores the
+    preference or one that repeats for ever. A block that hides its content behind
+    an animation is the failure this check exists for, and its normal-settings
+    motion is carried in the detail as evidence for the judge.
+    """
+    page.emulate_media(color_scheme="light", reduced_motion="reduce")
+    page.set_viewport_size(_size(KEPT_VIEWPORT))
+    page.goto(f"http://127.0.0.1:{port}/", wait_until="load")
+    drawn = _painted(page)
+
+    # Read while an entrance would still be running, then again after the bound so
+    # an animation started by a timer is caught too. A short state change is fine;
+    # an entrance that ignores the preference is not.
+    running = _long_motion(page.evaluate(ANIMATIONS))
+    page.wait_for_timeout(REDUCED_MOTION_SETTLE_MS)
+
+    if not drawn:
+        return {
+            "name": MOTION_REDUCED,
+            "ok": False,
+            "detail": "The block drew nothing with reduced motion on.",
+        }
+
+    if not running:
+        running = _long_motion(page.evaluate(ANIMATIONS))
+
+    if running:
+        return {
+            "name": MOTION_REDUCED,
+            "ok": False,
+            "detail": (
+                f"{len(running)} animation(s) still running with reduced motion on "
+                f"({_motion_summary(running)}). Make the movement optional and keep "
+                "the content."
+            ),
+        }
+
+    return {
+        "name": MOTION_REDUCED,
+        "ok": True,
+        "detail": f"Reduced motion honoured. At normal settings: {motion}.",
+    }
+
+
+def _motion_summary(animations: list[dict[str, Any]]) -> str:
+    """What moved, in one line, for the judge to read without another image."""
+    if not animations:
+        return "no animation"
+
+    longest = round(max(float(one.get("duration") or 0) for one in animations))
+    repeating = sum(1 for one in animations if one.get("iterations") == "infinite")
+    said = f"{len(animations)} animation(s), longest {longest}ms"
+
+    return said + (f", {repeating} repeating" if repeating else "")
+
+
+def _long_motion(animations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The animations that are still asking for attention after the bound."""
+    return [
+        one
+        for one in animations
+        if one.get("state") == "running"
+        and (
+            one.get("iterations") == "infinite"
+            or float(one.get("duration") or 0) > REDUCED_MOTION_MAX_MS
+        )
+    ]
 
 
 def _painted(page: Page) -> bool:

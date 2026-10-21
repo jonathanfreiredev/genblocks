@@ -31,7 +31,7 @@ from app.generations.models import Generation, Verdict
 from app.harness import agent, cloudinary, sandbox
 from app.harness.agent import Built, Placed
 from app.harness.images import Generated
-from app.harness.schemas import FATAL_CHECKS, SandboxCheck, SandboxFile, SandboxResult
+from app.harness.schemas import SandboxCheck, SandboxFile, SandboxResult, is_fatal
 from app.images.models import Image
 from app.judge import scoring as judging
 from app.judge.rubrics import COMPONENTS, IMAGES
@@ -124,6 +124,7 @@ def findings(*failing: str) -> SandboxResult:
     handing back a picture the real sandbox would not have taken.
     """
     refused = set(failing)
+    fatal = any(is_fatal(name) for name in refused)
 
     return SandboxResult(
         checks=[
@@ -135,12 +136,10 @@ def findings(*failing: str) -> SandboxResult:
             for check in FINDINGS
         ],
         dependencies=dict(DEPENDENCIES),
-        screenshot=None if refused & set(FATAL_CHECKS) else PNG,
+        screenshot=None if fatal else PNG,
         # The built page the sandbox folds out of the same bundle. A run that
         # failed a gate never gets one, and the fake mirrors that.
-        preview=None
-        if refused & set(FATAL_CHECKS)
-        else "<!doctype html><html><body>Pricing</body></html>",
+        preview=None if fatal else "<!doctype html><html><body>Pricing</body></html>",
     )
 
 
@@ -763,13 +762,13 @@ async def test_a_picture_asked_for_by_a_block_that_is_not_published_stays_in_the
     assert await runner_session.scalar(select(ComponentAsset)) is None
 
 
-async def test_findings_that_are_not_fatal_are_evidence_not_a_gate(runner_session, harness, judge):
-    """A layout that breaks at 390px is worth knowing, and not worth refusing."""
+async def test_a_lint_finding_is_evidence_and_not_a_gate(runner_session, harness, judge):
+    """A lint finding is worth knowing, and not worth refusing a block over."""
     await create_category(runner_session, slug="hero")
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
     task_id = task.id
-    harness.fails("layout:phone", "accessibility")
+    harness.fails("lint")
 
     await runner.claim_next_task()
     await runner.run_task(task_id)
@@ -778,15 +777,35 @@ async def test_findings_that_are_not_fatal_are_evidence_not_a_gate(runner_sessio
     done = await get_task(runner_session, task_id=task_id)
     assert done is not None
     assert done.status == TaskStatus.SUCCEEDED
-    assert done.steps[1].detail["checks"] == "10/12"
+    assert done.steps[1].detail["checks"] == "11/12"
 
     attempt = (await _attempts(runner_session, task_id))[0]
     assert attempt.checks is not None
     assert attempt.checks["blocked"] is False
-    assert [check["name"] for check in attempt.checks["checks"] if not check["ok"]] == [
-        "layout:phone",
-        "accessibility",
-    ]
+    assert [check["name"] for check in attempt.checks["checks"] if not check["ok"]] == ["lint"]
+
+
+async def test_an_interface_check_that_fails_refuses_the_block(runner_session, harness, judge):
+    """The phone, the contrast and the motion are gates now, not advice."""
+    await create_category(runner_session, slug="hero")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+    harness.fails("layout:phone", "targets")
+
+    await runner.claim_next_task()
+    await runner.run_task(task_id)
+    runner_session.expire_all()
+
+    failed = await get_task(runner_session, task_id=task_id)
+    assert failed is not None
+    assert failed.status == TaskStatus.FAILED
+    assert "layout:phone" in (failed.error or "")
+    assert judge.shown == []
+
+    attempt = (await _attempts(runner_session, task_id))[0]
+    assert attempt.verdict == Verdict.REJECTED
+    assert await runner_session.scalar(select(Component)) is None
 
 
 async def test_a_run_with_no_page_is_refused_before_it_is_judged(runner_session, harness, judge):

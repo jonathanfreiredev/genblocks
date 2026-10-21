@@ -45,8 +45,10 @@ How you work
   not fix rather than hiding it.
 
 What it has to be
-- It renders, at 390px and at 1440px, with nothing overflowing and nothing clipped.
-- It is accessible, and it keeps making sense with animations off.
+- It renders at 390, 834, 1024 and 1440, with nothing overflowing and nothing
+  clipped.
+- It is accessible: real controls, labels, contrast, 24px targets on a phone, a
+  visible focus ring, and the same meaning with animations off.
 - It looks decided: hierarchy, spacing, restraint — not decoration.
 - It reads like a product, and it does what the brief asked for.
 

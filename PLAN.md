@@ -385,6 +385,19 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     que el escáner no vea congela la pestaña (mismo proceso), y un `location`
     construido en ejecución podría navegar el marco; ambos quedan cubiertos por
     el escaneo y la intercepción de clics, no por el aislamiento.
+47. **La interfaz medible es puerta; la que no se mide es promesa.** El juez no
+    recibe más imágenes —cada render extra se paga en tokens—, así que el
+    sandbox decide lo que se puede decidir sin él: **cuatro anchos** (390, 834,
+    1024, 1440) sin scroll horizontal, **axe serio y crítico** en claro y oscuro,
+    **objetivos táctiles de 24×24** a 390, **foco visible** en cada control y
+    **reduced motion** (con la preferencia activa no queda nada corriendo más de
+    ~200 ms ni en bucle, y el contenido sigue ahí). Todos son fatales: un bloque
+    que suspende uno no se publica, y el agente lo ve en su bucle y lo corrige.
+    El movimiento no se exige —obligar a animar produce decoración—, pero sí se
+    comprueba que funcione, que termine y que sea opcional; el informe lleva una
+    línea con lo que se movió para que el juez lo puntúe sin otra foto. La
+    composición del móvil, la jerarquía y el gusto siguen siendo promesa y
+    rúbrica. No hay backfill: los bloques viejos se quedan como están.
 
 ---
 
@@ -1123,8 +1136,10 @@ Los **mandos del bucle** no hacen falta en `.env`: tienen valores por defecto en
   historia de cualquier stock, pero se dice en el panel — y queda decidir si algún
   día se descargan con el bloque.
 - **El listón puede dejar la biblioteca vacía**: si el juez es más duro que el
-  agente, casi todo falla. Mitigado porque el escritor lee los mismos principios
-  (decisión 37), y vigilado con la tasa de publicación.
+  agente, casi todo falla; con las puertas de interfaz (decisión 47) hay además
+  fallos deterministas que no dependen del juez. Mitigado porque el escritor lee
+  los mismos principios (decisión 37) y recibe los hallazgos en su bucle, y
+  vigilado con la tasa de publicación.
 - **Latencia de Modal**: arranque en frío + navegador = minutos, y ahora además unas
   vueltas. Por eso la tarea en background no es un lujo, es la UX.
 - **Instancia única**: la fuente de verdad de las tareas es Postgres, no la memoria.

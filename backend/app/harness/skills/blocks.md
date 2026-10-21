@@ -42,8 +42,12 @@ style suggestion.
   the final proportions — and ask for the picture once the layout holds. The box is
   what keeps the swap from moving anything, and a picture asked for early is asked
   for twice.
-- **Responsive by default**, from a 390px phone up. Nothing may overflow its width
-  at any size the registry renders.
+- **Responsive by default**, at 390, 834, 1024 and 1440. Nothing may overflow its
+  width at any of them — the four layout checks are a gate, not advice — and the
+  phone layout is the one to design first.
+- **Usable with a thumb and a keyboard**: every control at least 24×24px on a
+  phone, a visible focus ring on every interactive element, and no control that
+  is a `div` with an `onClick`.
 - **One block, not a page.** No `html`, `head` or `body`; no navbar plus footer; no
   component that only makes sense inside a layout it does not own.
 - **Verbatim copy.** The block is published as the files you leave behind, so what

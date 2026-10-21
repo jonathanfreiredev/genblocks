@@ -17,6 +17,12 @@ LINT = "lint"
 BUILD = "build"
 RENDER = "render"
 ACCESSIBILITY = "accessibility"
+# The controls and the movement a visitor depends on, measured rather than looked
+# at: the judge is not sent a phone render, so what can be checked is checked
+# here (PLAN.md, decision 47).
+TARGETS = "targets"
+FOCUS = "focus"
+MOTION_REDUCED = "motion:reduce"
 IMPORTS = "imports"
 AST = "ast"
 BUNDLE = "bundle"
@@ -26,21 +32,23 @@ PREVIEW = "preview"
 ASSETS = "assets"
 SAFETY = "safety"
 
-# A layout check per viewport, named ``layout:desktop`` and so on.
-LAYOUT_PREFIX = "layout:"
-
 # What a run cannot carry on from. Code that does not typecheck, does not bundle,
 # renders nothing, imports a package that is not on the shelf, loads from a host
 # that is not ours, or reaches the network is not an attempt: publishing it would
 # put a broken block in the registry and call it a result — and in the last two
-# cases, a block that stops working the moment somebody copies it. Lint, layout and
-# accessibility findings are evidence for the judge, not gates: a wide hero at
-# 390px is a judgement call, and that is what the judge is for.
+# cases, a block that stops working the moment somebody copies it.
 #
-# ``preview`` is a gate because a block is shown to a visitor as a live page: a
-# project that cannot be handed over as one document is a block whose item page
-# would be a picture with an apology under it. The bar is the registry's, not the
-# sandbox's — the sandbox only carries the document.
+# The interface checks are gates too, and that is a change of policy rather than a
+# detail: a block that overflows a phone, fails contrast, hides its content from
+# somebody who asked for less motion, or gives a control a 16px target is not a
+# block this registry publishes, whatever the judge thinks of it. The judge still
+# scores accessibility and visual quality, but the measurable half is decided
+# before it is asked, and the phone render is never sent to the model.
+#
+# ``preview`` is a gate for the same reason: a block is shown to a visitor as a
+# live page, and a project that cannot be handed over as one document is a block
+# whose item page would be a picture with an apology under it. The bar is the
+# registry's, not the sandbox's — the sandbox only carries the document.
 FATAL_CHECKS = (
     TYPECHECK,
     BUILD,
@@ -51,7 +59,21 @@ FATAL_CHECKS = (
     ASSETS,
     SAFETY,
     PREVIEW,
+    ACCESSIBILITY,
+    f"{ACCESSIBILITY}:dark",
+    TARGETS,
+    FOCUS,
+    MOTION_REDUCED,
 )
+
+# A layout check is one per viewport, so its name is not in the tuple above.
+LAYOUT_PREFIX = "layout:"
+
+
+def is_fatal(name: str) -> bool:
+    """Whether a finding with this name stops a block from being published."""
+    return name in FATAL_CHECKS or name.startswith(LAYOUT_PREFIX)
+
 
 # How large a block's interactive build may be, before it stops being published.
 # A block is React and the scaffold's shelf, which measured 226 KB for the sample;
@@ -132,7 +154,7 @@ class SandboxResult(BaseModel):
     def blocked(self) -> bool:
         """Whether a check failed that the pipeline will not publish past."""
 
-        return any(check.name in FATAL_CHECKS and not check.ok for check in self.checks)
+        return any(is_fatal(check.name) and not check.ok for check in self.checks)
 
     @property
     def failures(self) -> list[SandboxCheck]:

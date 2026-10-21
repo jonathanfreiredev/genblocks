@@ -84,3 +84,39 @@ def test_the_sandbox_repeats_the_scaffold_ownership_rule(tmp_path):
 
 def test_the_source_and_bundle_scans_are_gates():
     assert {"ast", "bundle"} <= set(modal_app.GATES)
+
+
+def test_every_width_a_block_is_measured_at_is_declared():
+    names = {viewport["name"] for viewport in modal_app.VIEWPORTS}
+
+    # The judge is not sent the phone, so the gate is what sees it.
+    assert names == {"phone", "tablet", "laptop", "desktop"}
+    assert modal_app.KEPT_VIEWPORT in names
+
+
+def test_motion_evidence_says_what_moved():
+    assert modal_app._motion_summary([]) == "no animation"
+
+    said = modal_app._motion_summary(
+        [
+            {"state": "finished", "duration": 420, "iterations": 1},
+            {"state": "running", "duration": 900, "iterations": "infinite"},
+        ]
+    )
+
+    assert "2 animation(s)" in said
+    assert "longest 900ms" in said
+    assert "1 repeating" in said
+
+
+def test_only_motion_still_running_after_the_bound_is_flagged():
+    animations = [
+        {"state": "finished", "duration": 800, "iterations": 1},
+        {"state": "paused", "duration": 100, "iterations": "infinite"},
+        {"state": "running", "duration": 600, "iterations": 1},
+        {"state": "running", "duration": 120, "iterations": "infinite"},
+    ]
+
+    flagged = modal_app._long_motion(animations)
+
+    assert [one["duration"] for one in flagged] == [600, 120]

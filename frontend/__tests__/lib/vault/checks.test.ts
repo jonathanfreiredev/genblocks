@@ -30,6 +30,8 @@ describe("checkRows", () => {
 describe("labelFor", () => {
   test("names a layout check after its viewport", () => {
     expect(labelFor("layout:phone")).toBe("Phone");
+    expect(labelFor("layout:tablet")).toBe("Tablet");
+    expect(labelFor("layout:laptop")).toBe("Laptop");
     expect(labelFor("layout:desktop")).toBe("Desktop");
   });
 
@@ -38,6 +40,12 @@ describe("labelFor", () => {
     expect(labelFor("lint")).toBe("Lint");
     expect(labelFor("render")).toBe("Render");
     expect(labelFor("accessibility")).toBe("Accessibility");
+  });
+
+  test("names the interface checks the judge never sees", () => {
+    expect(labelFor("targets")).toBe("Touch targets");
+    expect(labelFor("focus")).toBe("Keyboard focus");
+    expect(labelFor("motion:reduce")).toBe("Reduced motion");
   });
 
   test("says which ground a second accessibility run was on", () => {

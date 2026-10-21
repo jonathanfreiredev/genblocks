@@ -16,9 +16,9 @@ decoration.
 - **Restraint**: two type sizes and one accent colour carry most blocks. Every
   extra colour, border, radius and shadow spends attention the content needed.
   Remove until it hurts, then stop.
-- **Responsive**: decide the phone layout first, then say what changes above `sm`
-  and `lg`. Columns that never collapse are the most common way a block overflows
-  its width.
+- **Responsive**: decide the phone layout first, then say what changes at `sm`,
+  `md`, `lg` and above. Columns that never collapse are the most common way a block
+  overflows its width. A block is measured at 390, 834, 1024 and 1440.
 - **The page is not yours**: the block sits inside somebody else's layout. It owns
   its own section and nothing above it, so it should not assume the page's
   background, fonts or spacing beyond Tailwind's own.

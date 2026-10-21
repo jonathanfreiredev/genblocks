@@ -20,7 +20,9 @@ where a thing came from. It is never worth having as a greeting.
   moves because the layout did.
 - **Respect the setting**: `const reduce = useReducedMotion()` from `motion/react`,
   or Tailwind's `motion-reduce:` variant, and make the outcome the same without
-  movement — the content still arrives, it just arrives.
+  movement — the content still arrives, it just arrives. This is measured: the
+  sandbox reloads with `prefers-reduced-motion: reduce` and no entrance longer than
+  ~200ms, and nothing repeating, may still be running.
 - **Never block**: no animation may hide content, delay reading, hijack scroll, or
   move a control somebody is aiming at. Entrances are short and they end.
 - **The render waits for animations to settle before it is photographed**, and a

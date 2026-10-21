@@ -16,6 +16,9 @@ const LABELS: Record<string, string> = {
   // The same check, run again on the dark page: one ground per row, so a block
   // that loses its contrast in one of them says which.
   "accessibility:dark": "Accessibility, dark",
+  targets: "Touch targets",
+  focus: "Keyboard focus",
+  "motion:reduce": "Reduced motion",
 };
 
 // A layout check is one per viewport: ``layout:desktop`` and so on.
