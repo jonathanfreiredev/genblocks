@@ -12,6 +12,7 @@ from app.authz.permissions import PermissionDenied
 from app.db.session import async_session_maker
 from app.health.router import health_router
 from app.logging_config import configure_logging
+from app.middleware.body_limit import BodyLimitMiddleware
 from app.middleware.request_id import RequestIdMiddleware
 from app.observability import service as observability
 from app.organizations.service import OrganizationSlugConflict
@@ -61,7 +62,14 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         observability.shutdown()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    # The schema is useful while developing and a free map of the surface in
+    # production. It stays off unless ENV explicitly says development.
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+    openapi_url="/openapi.json" if settings.debug else None,
+)
 
 # Domain errors carry no HTTP knowledge — the MCP tools call the same code — so
 # they are translated here, at the edge.
@@ -89,10 +97,14 @@ app.include_router(api_v1_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
+    # The API authenticates with a bearer token, never a cookie, so it has no
+    # credentials to allow and no reason to let a browser attach any.
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+app.add_middleware(BodyLimitMiddleware)
 
 # Added last so it is the outermost middleware: the request id is bound (and the
 # access log emitted) around everything, including CORS.

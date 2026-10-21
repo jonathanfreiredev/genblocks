@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/server/auth/auth.lib";
+import { siteUrl } from "@/server/auth/site-url";
 
 /**
  * Approve or deny a pending OAuth authorization.
@@ -24,9 +25,10 @@ export async function POST(request: Request) {
 
   // The session cookie is SameSite=Lax, so a cross-site POST cannot arrive here
   // carrying a session: only the user themselves can answer the prompt.
+  const base = await siteUrl();
   const session = await getSession();
   if (!session) {
-    return NextResponse.redirect(new URL("/auth/login", request.url), {
+    return NextResponse.redirect(new URL("/auth/login", base), {
       status: 303,
     });
   }
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
         });
 
   if (error || !data) {
-    const retry = new URL("/oauth/consent", request.url);
+    const retry = new URL("/oauth/consent", base);
     retry.searchParams.set("authorization_id", authorizationId);
     retry.searchParams.set("error", "1");
     return NextResponse.redirect(retry, { status: 303 });

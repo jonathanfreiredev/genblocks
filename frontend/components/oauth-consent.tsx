@@ -16,6 +16,18 @@ import { describeScopes } from "@/lib/oauth-scopes";
  */
 const DECISION_ENDPOINT = "/api/oauth/decision";
 
+/** A client may register any URI; only a web address belongs in an anchor. */
+function safeClientUri(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 type OAuthConsentProps = {
   authorizationId: string;
   clientName: string;
@@ -35,6 +47,7 @@ export function OAuthConsent({
   failed = false,
 }: OAuthConsentProps) {
   const name = clientName || "An application";
+  const href = safeClientUri(clientUri);
   const scopes = describeScopes(scope);
 
   return (
@@ -42,14 +55,18 @@ export function OAuthConsent({
       <CardHeader>
         <CardTitle className="text-xl">Authorize {name}</CardTitle>
         <CardDescription>
-          <a
-            href={clientUri}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="underline underline-offset-4"
-          >
-            {name}
-          </a>{" "}
+          {href ? (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="underline underline-offset-4"
+            >
+              {name}
+            </a>
+          ) : (
+            <span>{name}</span>
+          )}{" "}
           wants to connect to your account.
         </CardDescription>
       </CardHeader>

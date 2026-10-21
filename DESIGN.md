@@ -235,7 +235,7 @@ GenBlocks is a public wall of UI blocks and stock images, each one generated fro
 
 The system is **shadcn/ui on the neutral base theme**. It is deliberately quiet: white and near-black, one thin header, a full-height sidebar, square previews, and a single accent that belongs to the artifacts rather than to the chrome. There is no editorial display face, no coral taxonomy, no green or navy bands, no monospaced uppercase labels everywhere, and no pill buttons. Those belonged to the previous system and are retired.
 
-**This document describes the implementation.** `app/globals.css` and `components/ui/` are the source of truth. When a token or a component changes, change the code first, then bring this file back in line.
+**This document is the source of truth for visual decisions.** `app/globals.css` implements its tokens and `components/ui/` implements its primitives. When a token or a component changes, change this document first, then update the code. If they disagree, fix the drift in the same change rather than treating either side as the winner by default.
 
 ## Foundations
 
@@ -316,10 +316,12 @@ A real shadcn `Sidebar` (`collapsible="icon"`), full viewport height, its conten
 - **Width** 16rem expanded, 3rem collapsed.
 - **Header** 56px tall, matching the app header: the mark and `GenBlocks` on the left, the collapse button on the right.
 - Collapsed, the header stacks the mark over the button and the width falls to 48px.
-- **Generate with AI** is the first item under the header: a full-width primary button. Collapsed, it is a single sparkle icon with an accessible name.
+- **Ask AI** is the first item under the header: a full-width primary button that opens the one assistant. Collapsed, it is a single sparkle icon with an accessible name.
 - **Browse** holds Blocks and Images, each with an icon and an active state.
 - **Agents** holds `Connect`, the page that tells a client how to reach the MCP
   server. It is not part of the taxonomy, so it sits above `Categories`.
+- **Operate** appears only for an operator: Items, Reports and Users. It is a
+  separate group and never mixes with the public navigation.
 - **Categories** lists `All` and the level-2 types of the section on screen. The list is long by nature; it scrolls.
 - **Footer** holds the theme toggle and a quiet Source link. Collapsed, only the toggle remains.
 
@@ -458,7 +460,7 @@ Top to bottom:
 
 ### Code tab
 
-- A real tarball of the project: the file rail on the left (a strip above the code on a phone), always visible, always collapsible. It starts open.
+- The project as it was stored: the file rail on the left (a strip above the code on a phone), always visible, always collapsible. It starts open.
 - The rail lists every path, highlights the current one and truncates long paths. On a phone it scrolls horizontally.
 - Collapsing it leaves a 40px rail with the reopen button; the code takes the width.
 - The code itself is shadcn's `CodeBlock`: a bordered, `rounded-lg`, monospaced surface with line numbers, horizontal scroll and a copy action that appears on hover, focus or touch. Inside the tab card it is flush (`rounded-none border-0`) with a faint muted background.
@@ -479,7 +481,7 @@ A bordered `rounded-xl` card, 16px padding, 24px between groups. The order is fi
    render is first and the prompt tab already carries the brief, so repeating
    either above the picture would be a second copy. An image keeps its category
    above the render and has no title here.
-2. **Category, date, model and trace** as a definition list. Labels 14px muted; values 14px medium and truncated. The trace is a link when a Langfuse host is configured and `Not recorded` otherwise.
+2. **Category, date, model, source and trace** as a definition list. Labels 14px muted; values 14px medium and truncated. The source reads `AI-generated` when the artifact carries C2PA provenance and `Not recorded` otherwise. The trace is a link when a Langfuse host is configured and `Not recorded` otherwise.
 3. **Judge** — the score rows. Label 14px muted on the left, score on the right: 18px semibold tabular numerals over a 56px, 4px-high muted track. One row per rubric dimension.
 4. **Harness** — one row per check, label 14px, state 12px (`ok` muted, `failed` destructive). A failed check may carry the sandbox's own sentence underneath. Accessibility violations follow as 14px lines with id, impact and node count.
 
@@ -552,7 +554,7 @@ Don't:
 - Tokens live in `frontend/app/globals.css`: the neutral oklch values, the derived radius scale and `--header-height: 3.5rem`.
 - Components live in `frontend/components/ui/` and are added with the shadcn CLI. `components.json` pins `base-nova`, neutral, Geist and Lucide.
 - The shell lives in `components/shell/`; the wall in `components/vault/`.
-- Routes are `/blocks`, `/blocks/<type-or-id>`, `/images`, `/images/<type-or-id>`, `/tasks`, `/tasks/<id>`, `/profile` and `/mcp`. `/` redirects to `/blocks`.
+- Routes are `/blocks`, `/blocks/<type-or-slug>`, `/images`, `/images/<type-or-slug>`, `/tasks`, `/tasks/<id>`, `/profile`, `/mcp` and `/oauth/consent`. Operators also get `/admin/items`, `/admin/reports` and `/admin/users`. `/` redirects to `/blocks`.
 - The file rail is always rendered, even for a one-file project, because the list is part of understanding the project.
 - `lib/vault/links.ts` owns the URL shape; `lib/breadcrumbs.ts` owns the trail.
-- When the code and this document disagree, the code wins. Update the document in the same change.
+- When the code and this document disagree, the visual decision in this document wins. Update the code in the same change, or change this document first if the decision itself is moving.

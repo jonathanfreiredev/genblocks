@@ -31,6 +31,11 @@ describe("safeNextPath", () => {
 
   test("rejects a backslash, which some parsers normalise into a slash", () => {
     expect(safeNextPath("/\\evil.example")).toBe("/");
+    expect(safeNextPath("/%5cevil.example")).toBe("/");
+  });
+
+  test("rejects a path that normalises into a protocol-relative one", () => {
+    expect(safeNextPath("/..//evil.example")).toBe("/");
   });
 
   test("takes a custom fallback", () => {

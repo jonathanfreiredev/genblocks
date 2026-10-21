@@ -1,6 +1,6 @@
 # Backend — FastAPI
 
-The API for the [MCPStack](../README.md). It exposes the application's domain data (the user profile) on top of an async SQLAlchemy / PostgreSQL stack.
+The API for [GenBlocks](../README.md). It serves the public catalogue and the per-user task queue on top of an async SQLAlchemy / PostgreSQL stack, and it owns the generation worker and the agent chat.
 
 Authentication is delegated to [**Supabase Auth**](https://supabase.com/docs/guides/auth), which owns credentials, email verification, social login and sessions. This service is a **resource server**: it verifies the Supabase access token (an asymmetric JWT) against the project's **JWKS** and provisions a local profile the first time it sees a user. It never issues tokens or stores passwords.
 
@@ -11,6 +11,10 @@ Authentication is delegated to [**Supabase Auth**](https://supabase.com/docs/gui
 - **Alembic** — database migrations
 - **Pydantic v2 / pydantic-settings** — schemas and configuration
 - **PyJWT** with **cryptography** — verifying Supabase access tokens (RS256/ES256)
+- **LangGraph** and **LangChain** — the assistant, the harness agent and the judge
+- **OpenAI**, **Groq**, **Black Forest Labs**, **Voyage** and **Modal** — models, moderation, images, embeddings and the sandbox
+- **Chroma** and **Cloudinary** — retrieval and asset storage
+- **Langfuse** — optional traces and scores
 - **uv** — dependency management
 - **ruff** — linting and formatting
 
@@ -43,15 +47,23 @@ backend/
 │   │   ├── auth.py            # Verifies MCP tokens with app.auth.verifier
 │   │   ├── tools.py           # The tools, and their registration
 │   │   └── main.py            # ASGI entrypoint (uvicorn app.mcp.main:app)
-│   ├── demo/
-│   │   ├── graph.py           # The agent loop, and the scripted decisions
-│   │   ├── tools.py           # The tools the agent carries itself
-│   │   ├── runner.py          # One run: a refusal at the door vs a fault
-│   │   ├── schemas.py         # The shapes the page reads
-│   │   └── router.py          # POST /demo/run, public on purpose
+│   ├── agent/                 # Chat graph, SSE stream and conversational tools
+│   ├── harness/               # Builder agent, static checks, Modal sandbox and skills
+│   ├── judge/                 # Independent scoring, rubrics and thresholds
+│   ├── tasks/                 # Queue, worker, pipeline steps, spec and quota
+│   ├── components/            # Published blocks and image direction
+│   ├── images/                # Stock images, planning and sanitization
+│   ├── categories/            # Two-level taxonomy
+│   ├── vectors/               # Voyage embeddings and Chroma retrieval
+│   ├── briefs/                # Exact brief cache
+│   ├── moderation/            # Text, image and no-people gates
+│   ├── observability/         # Optional Langfuse wrapper
+│   ├── reports/               # Public reports and the operator queue
+│   ├── admin/                 # Content and user takedowns
 │   ├── health/
 │   │   └── router.py          # Liveness, readiness and the MCP warm-up
 │   ├── middleware/
+│   │   ├── body_limit.py      # 1 MB request-body ceiling
 │   │   └── request_id.py      # Request id + structured access log
 │   ├── db/
 │   │   ├── session.py         # Async engine + session factory
@@ -60,7 +72,7 @@ backend/
 │   ├── settings.py            # Settings loaded from .env
 │   ├── logging_config.py      # structlog setup (dev text / prod JSON)
 │   ├── pagination.py          # Offset pagination + sorting for list endpoints
-│   └── main.py                # FastAPI app, routers, CORS
+│   └── main.py                # FastAPI app, routers, CORS and the worker
 ├── alembic/                   # Migrations (async env.py)
 ├── alembic.ini
 ├── pyproject.toml
@@ -87,9 +99,13 @@ cp .env.example .env
 
 # Apply migrations
 uv run alembic upgrade head
+
+# Seed the taxonomy and the development vault
+uv run python -m app.categories.seed
+uv run python -m app.seed.vault
 ```
 
-PostgreSQL comes from the repository's `docker-compose.yml` (see [Run with Docker](../README.md#run-with-docker)), so `DATABASE_URL` must point at the host-mapped port (`localhost:5432`).
+PostgreSQL comes from the repository's `docker-compose.yml`, so `DATABASE_URL` must point at the host-mapped port (`localhost:5432`).
 
 ## Environment variables
 
@@ -122,7 +138,7 @@ CORS_ORIGINS=http://localhost:3000
 | `LOG_LEVEL`             | No       | `INFO`                  | Minimum level for the application logs.                              |
 | `FRONTEND_URL`          | No       | `http://localhost:3000` | Base URL of the frontend, used for redirects and documentation.      |
 | `MCP_BASE_URL`          | No       | `http://localhost:8001` | Public URL of the MCP server. Published in the OAuth discovery document, so it must be the URL clients use. |
-| `MCP_INTERNAL_URL`      | No       | `http://localhost:8001` | Where the playground reaches the MCP server as a client.             |
+| `MCP_INTERNAL_URL`      | No       | `http://localhost:8001` | Internal address the API probes for `/warmup`; not the public MCP URL. |
 | `CORS_ORIGINS`          | No       | `http://localhost:3000` | Comma-separated browser origins allowed to call the API.             |
 | `BFL_ASSET_HOSTS`       | No       | `delivery.bfl.ai,api.bfl.ai` | Hosts a BFL polling or sample URL may name. Anything else is refused before it is fetched. |
 | `IMAGE_MAX_BYTES`       | No       | `20971520`              | Input and output byte bound for a picture before moderation/storage. |
@@ -136,7 +152,7 @@ CORS_ORIGINS=http://localhost:3000
 | `RESEND_FROM_EMAIL`     | No       | `GenBlocks <onboarding@resend.dev>` | Verified sender for operator notifications. |
 | `REPORT_NOTIFICATION_EMAILS` | No  | `ADMIN_EMAILS`          | Comma-separated recipients; falls back to the operators.             |
 
-Settings are defined in `app/settings.py` and loaded from `backend/.env`.
+Settings are defined in `app/settings.py` and loaded from `backend/.env`. The generation providers, storage, retrieval, sandbox and tracing settings are listed in `backend/.env.example`; the MCP's smaller production set is in `backend/mcp.env.example`.
 
 ## Running the server
 
@@ -148,7 +164,7 @@ uv run fastapi dev
 uv run fastapi run
 ```
 
-The OpenAPI docs are at `/docs`, and the raw schema at `/openapi.json`.
+The OpenAPI docs are at `/docs` and the raw schema at `/openapi.json` when `ENV=development`. Production disables all three routes.
 
 ## Logging
 
@@ -168,9 +184,9 @@ Two unauthenticated probes, for orchestrators, load balancers and uptime monitor
 - `GET /health/ready` — **readiness**: runs `SELECT 1` against the database and returns `503` when it is unreachable, so traffic is routed away without restarting the process.
 - `GET /warmup` — **wake-up**: probes the MCP server's liveness, which is also what starts it when the platform has stopped it. Answers `200` with `{"api": "ok", "mcp": "ok" | "waking"}`: the caller polls it, so "not yet" is a field rather than a status code, and a cached answer would be worse than none.
 
-On **Render** or **Railway**, set the health check path to `/health`. An external monitor can point at the same path for alerts. In local development, `docker-compose.yml` probes `/health` and the frontend waits for the backend to be healthy.
+Set the health check path to `/health`. An external monitor can point at the same path for alerts. In local development, `docker-compose.yml` probes `/health` and the frontend waits for the backend to be healthy.
 
-The page calls `/warmup` through the frontend's own `/api/warmup` route, on every visit, so a deployment that stops idle services wakes them while the visitor is still reading. See [Sleeping platforms](../README.md#sleeping-platforms) for what that costs.
+`/warmup` is kept for orchestrators and schedulers that need to wake the MCP service. The current frontend does not call it.
 
 ## Linting and formatting
 
@@ -247,6 +263,23 @@ Protected endpoints require an `Authorization: Bearer <supabase_access_token>` h
 | GET    | `/v1/users/me`                   |  ✓   | Return the current profile (provisions it on first use) |
 | PATCH  | `/v1/users/me`                   |  ✓   | Update the profile name                                 |
 | DELETE | `/v1/users/me`                   |  ✓   | Delete the profile (hard delete)                        |
+| GET    | `/v1/categories`                 |      | The two-level taxonomy                                  |
+| GET    | `/v1/components`                 |      | Published blocks, with search and pagination            |
+| GET    | `/v1/components/by-slug/{slug}`  |      | One block, its files and its evidence                   |
+| GET    | `/v1/components/{id}`            |      | One block by id                                         |
+| GET    | `/v1/components/{id}/preview`    |      | The sandboxed HTML document for the live page           |
+| GET    | `/v1/components/{id}/generations` |      | The attempts behind a block                             |
+| GET    | `/v1/images`                     |      | The public stock library                                |
+| GET    | `/v1/images/by-slug/{slug}`      |      | One image and its judge panel                           |
+| POST   | `/v1/images/plan`                |  ✓   | Check an image prompt without queueing                  |
+| POST   | `/v1/images/generate`            |  ✓   | Queue a standalone image                                |
+| GET    | `/v1/tasks`                      |  ✓   | The caller's tasks                                      |
+| POST   | `/v1/tasks`                      |  ✓   | Queue a component                                       |
+| GET    | `/v1/tasks/{id}`                 |  ✓   | One task, its checklist and its attempts                |
+| POST   | `/v1/agent/chat`                 |  ✓   | Stream one assistant turn                               |
+| POST   | `/v1/agent/confirm`              |  ✓   | Queue a brief the person confirmed                      |
+| POST   | `/v1/reports`                    |  ✓   | Report a public artifact                                |
+| GET    | `/v1/admin/reports`              |  ✓   | The operator report queue                               |
 | POST   | `/v1/organizations`              |  ✓   | Create an organization; the caller becomes its owner    |
 | GET    | `/v1/organizations`              |  ✓   | List the organizations the caller belongs to            |
 | GET    | `/v1/organizations/{id}`         |  ✓   | Read one organization the caller belongs to             |
@@ -329,33 +362,16 @@ stable and fast at any depth. Pick **one mode per endpoint**, never both.
 
 ## Organizations and tenancy
 
-An **organization** is the tenant: every domain row you add belongs to exactly
-one, and a **membership** grants a user a role (`owner` or `member`) inside it.
-Authorization resolves permissions through memberships, never through the user,
-so adding a resource means adding an `organization_id` and filtering by the
-caller's membership.
+Organizations and memberships are inherited from the `mcp-stack` template. They
+exist in the schema and have endpoints, but GenBlocks does not use them in any
+public flow: the catalogue is public and a task belongs to the user who queued
+it. Do not add `organization_id` to blocks, images or tasks, and do not resolve
+the operator queue through an organization role.
 
-Rules these endpoints follow:
-
-- **The tenant comes from the token, never from the request.** A caller's
-  organizations are resolved from their memberships, so no request can ask for a
-  tenant the caller does not belong to.
-- **A non-member gets a 404, not a 403.** A 403 would confirm that the
-  organization exists, which leaks the tenant map to anyone who can guess an id.
-  `app/organizations/dependencies.py` is the single place that rule lives.
-- **Roles are validated in the database too** (`ck_memberships_role_valid`), so a
-  manual query cannot introduce a role the authorization layer does not know.
-
-Creating an organization writes the organization and its owner membership in one
-transaction: an organization nobody belongs to would be unreachable, because
-every read is gated on a membership.
-
-Two things to decide when you adapt this:
-
-- Deleting a profile cascades to its memberships, but an organization whose last
-  owner is deleted is left with no members. Decide what your product does: block
-  deletion for sole owners, transfer ownership, or delete the tenant.
-- Organizations have no UI yet; they are managed through the API.
+If you build on the template, the tenant rules are still there: the organization
+comes from the caller's membership, a non-member gets a 404 rather than a 403,
+and roles are validated in the database. See `app/organizations/dependencies.py`
+and `app/organizations/models.py`.
 
 ## Authentication notes
 
@@ -371,10 +387,12 @@ Authentication answers *who is this*; authorization answers *what may they do*. 
 are separate modules on purpose: `app/auth/` verifies the token, `app/authz/`
 decides what the caller may do with it.
 
-**Permissions are scoped to an organization**, because every domain row hangs off
-one: what a caller may do comes from their role in the owning organization, never
-from the caller's identity. `app/authz/permissions.py` keeps the whole policy in
-one table:
+For GenBlocks, authorization lives in the domain services: the public catalogue
+is read-only, a task is scoped to `created_by`, and the operator queue is gated by
+`ADMIN_EMAILS`. The organization permission table remains from the template and
+applies only to the organization endpoints:
+
+`app/authz/permissions.py` keeps that template policy in one table:
 
 ```python
 ROLE_PERMISSIONS = {
@@ -424,10 +442,11 @@ it is easy to build the wrong one and consider the job done:
   tokens (`app/authz/dependencies.py`); the MCP server takes the ones Supabase
   issued to an agent (`app/mcp/auth.py`), and does not turn a first-party one away.
   Neither door re-verifies the token, and neither is a permission check.
-- **The role answers *what that caller may do, to this row*.** It is the only
-  fine-grained layer. It lives in `app/authz/permissions.py` and in the domain
-  services, and both doors reach it by calling the same service — which is why an
-  operation with no service behind it has no authorization at all.
+- **The role answers *what that caller may do, to this row*.** For the template
+  organization endpoints it lives in `app/authz/permissions.py`; for GenBlocks it
+  lives in the domain services, where a task is scoped to its owner and the
+  operator queue is gated by `ADMIN_EMAILS`. Both doors reach the same service,
+  which is why an operation with no service behind it has no authorization at all.
 - **The tool answers *what a machine caller may ask for*.** Caller from the token,
   arguments validated by the schema, result typed. Nothing else.
 
@@ -447,6 +466,17 @@ It is a **separate service**, not a route on the API: `docker-compose.yml` has a
 `mcp` service whose entrypoint is `app/mcp/main.py`. It shares the domain layer
 with the API — so a tool cannot do anything the API would not allow — and it
 verifies tokens with the same `app/auth/verifier.py`.
+
+### Its own environment
+
+In production the MCP process gets its own environment, not a copy of
+`backend/.env`: `backend/mcp.env.example` lists what it actually uses. It needs
+the database, Supabase, the moderation keys and the shared task quota, and it can
+use Resend for policy notices. It does **not** need Cloudinary, Modal, BFL,
+Voyage, Chroma or Langfuse credentials, and a database role that can read the
+vault and write tasks is enough. The local compose file still shares
+`backend/.env` for convenience; that is a development shortcut, not the
+production shape.
 
 | Endpoint                                        | Description                           |
 | ----------------------------------------------- | ------------------------------------- |
@@ -530,53 +560,17 @@ registration flow belongs to Supabase's OAuth server, not to this code: keeping 
 means watching Supabase, not changing anything here. It is written down because it
 is the kind of thing that looks like a bug when it starts happening.
 
-## Playground
+## Generation worker
 
-The playground is the fourth way into this domain, and the only client you can watch
-from a browser. It sits on the landing, before the client instructions, and it exists so a visitor
-can see
-an agent reach their own data with their own account, without installing a client
-first.
+The API process owns the task worker. It claims a queued row with
+`FOR UPDATE SKIP LOCKED`, marks it `running`, and writes each checklist step as
+the pipeline reaches it. The four steps are retrieving references, generating the
+block, judging the attempt and publishing the block. Images use their own four:
+checking the prompt, generating, judging and filing.
 
-It runs a real agent, built the way the LangGraph quickstart builds one
-(`app/demo/graph.py`): a state that carries messages, a node that decides which tool
-runs next, and a node that runs it. The loop is the library's own pieces — `ToolNode`
-runs the tools and `tools_condition` decides whether there is another round — so
-there is no hand-rolled dispatcher to keep in step with them. The decisions are a list
-and nothing calls a model, which the page says out loud, so nobody mistakes the trace
-for a model thinking.
-
-LangGraph and the MCP adapter are core dependencies, because the playground runs
-inside the API and goes out to the server on every run. No model provider is, because
-nothing here calls a model: the decisions are a list. Whoever adds one brings their
-own, and the loop it drives is the same.
-
-The agent carries three tools. Two live in the agent's own code and need nobody's
-permission: one reads the clock, and one stops the run to ask the visitor before anything
-goes out. The third is the server's, and where the run gets it depends on the caller: with
-a token it lists the catalogue with `MCPAdapter` and hands the graph whatever the server
-publishes, and without one there is no catalogue to ask for, so it calls the tool the plan
-names and the door answers. The name appears in the plan either way; only the description
-comes from the server.
-
-Asking is where the graph keeps its place. The tool calls `interrupt`, which stops the run
-and hands the question to whoever is looking at the page; the graph saves where it got to,
-the answer comes back on the next request with the id of the same run, and the run carries
-on from there. That checkpointer is in memory (`app/demo/runner.py`), which is what one
-process can offer: a deployment serving many runs at once would keep those somewhere it
-can expire them.
-
-- `POST /v1/demo/run` is **public**, which is unusual for this API and deliberate.
-  Anonymous is the interesting case: the run asks the visitor to approve the call that
-  goes out, and then the server shows its catalogue to nobody without a token, so the
-  tool is called by name and the door refuses it. The page shows that refusal next to a
-  way to sign in. A route that demanded a token would hide the half of the story worth
-  telling.
-- The browser never sees the token. The Next.js server holds the session and forwards
-  it here, and this service forwards it to the MCP server. The only thing the endpoint
-  does with a token is pass it on; no domain rule runs behind it.
-- The usual rules still hold: a token that does not verify is a 401, and a token
-  issued to an OAuth client is rejected, because this API never acts on one.
+A restart reconciles any task left `running` to `interrupted` before the worker
+starts claiming again. Postgres is both the queue and the source of truth, so
+there is no broker to drift from the task row the UI reads.
 
 ## Conventions
 
@@ -594,5 +588,5 @@ your real frontend domain(s) before deploying.
 
 - `app/db/models.py` defines a shared `BaseModel` with a UUID primary key plus `created_at`, `updated_at`, and `deleted_at` columns for every table.
 - The `User` model is a **profile**: `supabase_user_id` (unique, links to Supabase), `email`, `full_name`. Add your own fields and relations on top of `id`.
-- `Organization` and `Membership` (`app/organizations/models.py`) are the tenant model: resources belong to an organization and roles are resolved through memberships. See "Organizations and tenancy".
+- `Organization` and `Membership` (`app/organizations/models.py`) remain from the template. The GenBlocks catalogue and tasks do not use them; see "Organizations and tenancy".
 - `email` is **indexed but not unique**: it mirrors a Supabase-owned value, so Supabase is the source of truth. The identity key is `supabase_user_id`.

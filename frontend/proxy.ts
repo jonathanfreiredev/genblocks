@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { securityHeaders } from "@/lib/security-headers";
 import { cookieOptions } from "@/lib/supabase/cookie-options";
 
 /**
@@ -42,6 +43,12 @@ export async function proxy(request: NextRequest) {
   // every request. This still refreshes the token when it is close to expiry
   // and writes the updated cookies back through `setAll` above.
   await supabase.auth.getClaims();
+
+  // Applied after the session refresh: `setAll` may replace `response`, and the
+  // preview route is excluded by this matcher because it sets its own policy.
+  for (const [name, value] of Object.entries(securityHeaders())) {
+    response.headers.set(name, value);
+  }
 
   return response;
 }

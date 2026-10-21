@@ -9,6 +9,10 @@ from app.auth.claims import TokenClaims
 from app.db.models import utcnow
 from app.users.models import User
 
+# Public author names are short labels, not free-form text. The same bound is on
+# the profile update; this one covers the name Supabase hands us at signup.
+MAX_FULL_NAME_LENGTH = 120
+
 
 async def get_user(session: AsyncSession, *, user_id: uuid.UUID) -> User | None:
     return await session.get(User, user_id)
@@ -55,6 +59,15 @@ async def set_ban(
     await session.commit()
     await session.refresh(user)
     return user
+
+
+def _clean_full_name(value: object) -> str | None:
+    """The short public name Supabase sent, or ``None`` when it is not one."""
+    if not isinstance(value, str):
+        return None
+
+    cleaned = value.strip()[:MAX_FULL_NAME_LENGTH]
+    return cleaned or None
 
 
 async def display_names(
@@ -114,7 +127,7 @@ async def _create_user(session: AsyncSession, claims: TokenClaims) -> User:
         .values(
             supabase_user_id=claims.subject,
             email=claims.email,
-            full_name=claims.metadata.get("full_name"),
+            full_name=_clean_full_name(claims.metadata.get("full_name")),
         )
         .on_conflict_do_nothing(index_elements=["supabase_user_id"])
     )

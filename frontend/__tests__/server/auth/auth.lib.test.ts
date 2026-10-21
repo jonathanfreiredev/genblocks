@@ -93,7 +93,10 @@ describe("getSession", () => {
     });
     server.use(
       http.get(`${BACKEND_URL}/v1/users/me`, () =>
-        HttpResponse.json({ detail: "This account is suspended." }, { status: 403 }),
+        HttpResponse.json(
+          { detail: "This account is suspended." },
+          { status: 403 },
+        ),
       ),
     );
 
@@ -126,6 +129,26 @@ describe("getSession", () => {
         sub: "user-id",
         email: "user@example.com",
         user_metadata: { email_verified: false },
+      },
+      session: { access_token: "token", expires_at: 1_700_000_000 },
+    });
+    server.use(
+      http.get(`${BACKEND_URL}/v1/users/me`, () =>
+        HttpResponse.json({ full_name: "Name" }),
+      ),
+    );
+
+    const session = await getSession();
+
+    expect(session?.user.isVerified).toBe(false);
+  });
+
+  test("does not treat a missing email_verified flag as verified", async () => {
+    mockSupabase({
+      claims: {
+        sub: "user-id",
+        email: "user@example.com",
+        user_metadata: {},
       },
       session: { access_token: "token", expires_at: 1_700_000_000 },
     });

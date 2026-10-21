@@ -1,353 +1,173 @@
-# MCPStack
+# GenBlocks
 
-**The production-ready foundation for agent-native SaaS.**
+GenBlocks is a public registry of UI blocks and stock images generated from a brief. A generated block enters the library only after an independent judge reads its render, code and harness checks and clears it against a rubric. The item page keeps the evidence: the prompt, the files, the judge's scores, the checks and the trace.
 
-[![Backend](https://github.com/jonathanfreiredev/mcp-stack/actions/workflows/backend.yml/badge.svg)](https://github.com/jonathanfreiredev/mcp-stack/actions/workflows/backend.yml)
-[![Frontend](https://github.com/jonathanfreiredev/mcp-stack/actions/workflows/frontend.yml/badge.svg)](https://github.com/jonathanfreiredev/mcp-stack/actions/workflows/frontend.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+The builder never controls that check. A generator that stops when the model says it is done asks you to trust the model. Here a second agent, which never saw the conversation and cannot edit the artifact, decides whether the work is good enough. When it says no, the task fails with its reason and the attempt stays visible.
 
-A full-stack template where **AI agents are first-class users of your product**. It ships the part that is tedious to get right: identity, an authorization layer, and an **MCP server** any MCP client can walk through, behind a consent screen the user approves.
+## How a block gets made
 
-Under the hood it pairs a **Next.js 16** frontend with a **FastAPI** backend on **PostgreSQL**, and delegates authentication to [**Supabase Auth**](https://supabase.com/docs/guides/auth) (OAuth 2.1 / OIDC). Supabase owns credentials, email verification, social login and sessions, while the backend is a **resource server** that verifies the access token against the project's JWKS. Signup, login, email verification, password reset, profile editing and password change all ship as working examples, so you start from a real end-to-end setup instead of a blank page.
+```
+brief
+  -> exact cache, quota, moderation, image policy
+  -> spec: taxonomy and nearest blocks
+  -> harness agent: write, build, look, fix
+  -> judge: score the artifact
+  -> publish, or fail with the reason
+```
 
-## What you can build
+The assistant, the HTTP API and an MCP client all enter through the same services. Each entry point adds its own transport and identity, then calls the same enqueue function, the same moderation and the same quota check.
 
-![Identity issuing one access token two ways, a frontend and external agents such as Claude Code, Cursor, opencode or n8n, an MCP server, a FastAPI backend and PostgreSQL, with the token carried along each path](https://res.cloudinary.com/ddjovluur/image/upload/v1791981836/mcp-stack/diagram-architecture_yo10gf.png)
+Before a task exists, the brief is checked for an exact cache hit, the month's allowance, unsafe text and the image policy. A cached brief returns a finished task marked `Found in the registry` and spends no quota. Ten generations per calendar month are allowed per person, blocks and images together. The product does not generate pictures with people, so a brief that asks for them either gets a no-person rewrite or is refused before anything is queued.
 
-One access token, and two ways to get it: signing in, or approving an agent over OAuth. That one token opens two doors. The API serves your product; the MCP server serves agents, and it runs the same domain services the API runs, so an agent can never reach something your own code would not.
+### The spec
 
-The difference between the two tokens is a single claim. Without `client_id` the token came from your own sign-in, and it can call the API and the MCP. With `client_id` it was issued to an agent: the API turns it away and only the tools answer. That is the whole separation between human and agent traffic, and it lives in one place.
+The spec is the first model call in the generation pipeline, and it answers one question: which type of block is this? The model sees the level-2 taxonomy and the five published blocks nearest to the brief. It returns a slug from that list, or the run fails. Titles and descriptions stay deterministic, built from the brief.
 
-The repository ships one tool, `whoami`, as a working example of that path. What you publish on top is yours.
+The same retrieval powers the duplicate guard. A brief close enough to an existing block is answered with that block instead of a new run. The distance is measured, not guessed. A person who has seen the match can still ask for their own version.
 
-## Quickstart
+### The harness
+
+The builder is a LangGraph agent with a small set of tools: write and read files, list the project, read a skill, look at the render, and ask the image library for a picture. `src/Block.tsx` is the entry point. Only `src/**/*.{tsx,ts,css}` can be written, and `src/main.tsx` plus `src/index.css` belong to the scaffold.
+
+`look` is the part that changes the loop. It builds the project in a Modal sandbox and returns the checker's report with two images: the block on a light page and on the dark one the registry switches to. The agent reads both, fixes what it sees and looks again. The budget counts looks, not model turns, and stops at six by default.
+
+Two static checks run before the sandbox: one refuses external assets outside the allowed hosts, the other refuses network calls, script injection and browser escapes. Both are fatal, and both run inside the loop so the agent can fix the problem while it still can.
+
+A block is a project, not a file. A form can be split into fields and error components. Dependencies are read from the imports and compared with the packages preinstalled in the sandbox. The item page shows the install line the reader needs.
+
+Pictures arrive late, after the layout is settled. The harness asks the library first and reuses a picture it already holds. Only a miss reaches the image provider. A block may use up to four pictures.
+
+### The sandbox
+
+Modal runs the build and the browser. It holds no secret and cannot reach the database. Inside, the project goes through TypeScript, the build and Playwright at four widths: 390, 834, 1024 and 1440. Axe runs in light and dark. Touch targets, focus and reduced motion are checked as well.
+
+The sandbox folds the built page into one HTML document, capped at 2 MB. The block's item page serves that document inside an opaque-origin iframe with `connect-src 'none'` and `form-action 'none'`. A visitor can type, submit and watch an animation. None of it reaches this site or the network.
+
+### The judge
+
+The judge is a separate model call with no tools and no memory of the conversation. It receives the brief, every file, the sandbox report and both renders. It scores five dimensions for a block: render, accessibility, visual, copy and compliance. Images use a shorter rubric: visual, prompt fit and compliance.
+
+Each dimension has its own threshold. A high average does not carry a weak dimension past the gate. The judge is not told the thresholds, so its reading stays independent of the bar the product applies.
+
+The numbers live in Postgres. The judge's notes and summary travel with a failed task and, when configured, the Langfuse trace. An attempt that fails stays on the task page with its render and its reason. It never enters the library.
+
+A real run makes one attempt. Retrying is a decision a person makes with the brief in front of them; the API can queue it, but the interface does not offer a retry button yet.
+
+### Images
+
+Stock images come from Black Forest Labs `flux-2-pro` through its asynchronous API. The backend queues the request, polls it, downloads the finished sample and discards the provider URL. The bytes are decoded, bounded and re-encoded before anything else sees them.
+
+Two gates follow. A vision model refuses any picture with a person or human-like figure. OpenAI moderation then looks for sexual content, violence, hate and the other categories the product does not publish. Groq's safety model can replace OpenAI for text when only a Groq key is configured. A picture that passes the gates is judged, uploaded to Cloudinary, embedded with Voyage and filed in the same library the gallery reads.
+
+Pictures made for a block join the public stock library. That is why a later block can reuse one instead of paying for the same scene again.
+
+### Retrieval and the record
+
+Voyage `voyage-multimodal-3` embeds the screenshot of a block and the bytes of an image. Chroma stores the vectors and their metadata. Development uses a persistent local directory; production points at Chroma Cloud.
+
+Search still works when the index or the embedder is down: it falls back to text. The duplicate guard has its own distance and a way to override it.
+
+Postgres is the source of truth for tasks, steps, scores and published artifacts. The API worker claims a task with `FOR UPDATE SKIP LOCKED` and writes each step as it happens. A restart turns an orphaned `running` task into `interrupted` instead of waiting forever. Langfuse is an optional copy of the run, never the source of truth.
+
+## The assistant and external agents
+
+The chat is a LangGraph agent streamed over server-sent events. It can search the registry, read an item, check a brief, prepare a block and prepare an image. It never queues a task by itself. It prepares a proposal, the dialog shows the brief, and a button sends the confirmation. The chat requires an account; there is no anonymous AI path.
+
+An MCP server exposes the same services to agents outside the app. The tools cover reading (`whoami`, `list_categories`, `search_components`, `get_component`, `search_images`, `get_image`, `list_tasks`, `get_task`), planning (`plan_component`, `plan_image`) and writing (`create_component`, `generate_image`). A write queues a task and returns immediately; `get_task` follows it to the result.
+
+The MCP client registers itself, the user approves the grant on this site, and the token can reach the MCP tools. Connected clients can be revoked from the profile page. The local endpoint is `http://localhost:8001/mcp`.
+
+## Run it locally
+
+You need Node.js 20+, pnpm, Python 3.14+, uv, Docker and a Supabase project.
 
 ```bash
-# One file per app, plus the stack's own: all three have to exist.
 cp .env.example .env
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
-
 docker compose up
 ```
 
-That brings up PostgreSQL, the API, the MCP server and the web app. The two apps
-start on the example values, so fill in your Supabase project below to sign in. To watch the loop close, point an MCP client at the server:
+Compose starts PostgreSQL, runs the migrations, then brings up the API, the MCP server and the Next.js app. The first boot waits for the migration service to finish.
 
-1. Add the server to your client. The four clients this project documents are in [Connect your agent](#connect-your-agent) below.
-2. Call the `whoami` tool. Your client opens a consent screen in the browser.
-3. Approve it, and the tool answers with the profile behind the token.
-
-Prerequisites, the manual path without Docker and every environment variable are below.
-
-## Connect your agent
-
-The MCP server listens on `http://localhost:8001/mcp`, and each client is told about it a different way. These are the four this project documents. Whichever you pick, the first call opens a consent screen in the browser, and the token that comes back can only reach the tools.
-
-### opencode
+Seed the taxonomy and the development vault:
 
 ```bash
-opencode mcp add mcp-stack --global --url http://localhost:8001/mcp
+docker compose exec backend python -m app.categories.seed
+docker compose exec backend python -m app.seed.vault
 ```
 
-Run it in your terminal. Drop `--global` to register the server for this project only, then run `/mcps`, pick `mcp-stack` and sign in. See [opencode MCP servers](https://opencode.ai/v2/docs/mcp-servers).
+Open `http://localhost:3000`. The API is on `http://localhost:8000` and the MCP server on `http://localhost:8001/mcp`. API docs are available at `/docs` only when `ENV=development`, which the Compose stack sets.
 
-### Claude Code
+To attach the seeded tasks to your account, sign in once and run the vault seed with your email:
 
 ```bash
-claude mcp add --transport http mcp-stack http://localhost:8001/mcp
+docker compose exec backend python -m app.seed.vault --owner you@example.com
 ```
 
-Run it in your terminal before you start Claude Code, then run `/mcp` inside it to sign in. See [Claude Code MCP](https://code.claude.com/docs/en/mcp).
+The seed is idempotent. Re-running it rewrites the same rows.
 
-### Cursor
+### Supabase
 
-Save this as `.cursor/mcp.json` in the project, or `~/.cursor/mcp.json` to have it in every project:
+Create a project and enable Email under Authentication > Providers. Google is optional. Set the Site URL to `http://localhost:3000` and add `http://localhost:3000/auth/confirm` as a redirect URL. Put the project URL, publishable key and secret key in `frontend/.env`.
 
-```json
-{
-  "mcpServers": {
-    "mcp-stack": {
-      "url": "http://localhost:8001/mcp"
-    }
-  }
-}
+`SITE_URL` is optional locally because the app can fall back to the request origin. In production it is required: auth links and redirects must not be built from an attacker-controlled Host header. Set `MCP_URL` to the public MCP base or `/mcp` address so the Connect page does not depend on the request host.
+
+### Provider keys
+
+The seeded gallery works without any provider key. Chat, generation and image tasks need the services that produce them.
+
+For a block generation, set `OPENAI_API_KEY`, the Cloudinary credentials and the Modal tokens, then deploy the sandbox from `backend/`:
+
+```bash
+uv run modal deploy app/harness/modal_app.py
 ```
 
-Then turn `mcp-stack` on in Cursor's MCP settings; it opens the browser to sign in. See [Cursor MCP](https://cursor.com/en-US/docs/mcp).
+`OPENAI_API_KEY` covers the chat, the spec, the harness and the judge. `VOYAGE_API_KEY` adds retrieval and the duplicate guard. `BFL_API_KEY` generates stock images. `GROQ_API_KEY` is the text moderation fallback. Cloudinary stores screenshots and pictures; the frontend needs `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` to display them.
 
-### n8n
+To generate the seeded screenshots and stock images, run the optional seed tools:
 
-Add an MCP Client Tool node under an AI Agent and paste `http://localhost:8001/mcp` as its endpoint, with the transport set to HTTP Streamable, which is the one this server serves. For authentication, pick OAuth2 and leave Dynamic Client Registration on, so n8n registers itself and opens the same consent screen. See [n8n MCP Client Tool](https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.toolmcp/).
-
-The landing runs this same agent in the browser, so you can watch the door refuse an
-anonymous call before you install anything.
-
-## Tech stack
-
-| Layer             | The value                                                                    | Stack                                                                                                                    |
-| ----------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **Product UI**    | Server-rendered pages, with one schema validating each input on both sides.  | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui, Motion, React Hook Form, Zod, next-safe-action |
-| **Identity**      | Credentials, sessions and agent authorization, all delegated.                | Supabase Auth (OIDC), `@supabase/ssr`, asymmetric JWTs verified against JWKS                                             |
-| **API**           | One validated HTTP door into the domain, async end to end.                   | FastAPI, Pydantic v2, SQLAlchemy 2 (async), asyncpg, PyJWT                                                               |
-| **Agent access**  | A second door into the same domain, user approval included.                  | FastMCP, MCP over streamable HTTP, OAuth 2.1 consent                                                                     |
-| **Data**          | The tenant model, versioned and reversible.                                  | PostgreSQL 17, Alembic                                                                                                   |
-| **Observability** | Logs you can read in dev and ship as JSON in production.                     | structlog, request id and access log middleware                                                                          |
-| **Engineering**   | Nothing merges unlinted or untested, and the whole loop runs in one command. | pytest, Vitest, Playwright, MSW, ruff, ESLint, Prettier, Docker Compose, GitHub Actions                                  |
-| **Playground**    | See the agent work in the browser, with no client to install.                | LangGraph, MCPAdapter as the client                                                                                      |
-
-Domain data is **multi-tenant**: every row belongs to an organization, and access is resolved through the caller's membership in it. That is what makes the authorization layer meaningful. See "Organizations and tenancy" in the [backend README](backend/README.md).
-
-## Repository structure
-
-```
-.
-├── backend/                 # FastAPI application (resource server)
-│   ├── app/
-│   │   ├── auth/            # JWT verification + bearer dependency
-│   │   ├── authz/           # Roles, permissions and the policy table
-│   │   ├── users/           # Profile model, schemas, JIT provisioning, /users router
-│   │   ├── organizations/   # Tenant model (organization + membership), /organizations router
-│   │   ├── mcp/             # MCP server for AI agents (runs as its own service)
-│   │   ├── demo/            # The playground agent (LangGraph, MCPAdapter)
-│   │   ├── health/          # Liveness + readiness probes
-│   │   ├── middleware/      # Request id + structured access log
-│   │   ├── db/              # Async engine, session, base model
-│   │   ├── api.py           # Versioned API entrypoint (mounts /v1)
-│   │   ├── settings.py      # Pydantic settings (reads .env)
-│   │   ├── logging_config.py # structlog setup (text in dev, JSON in prod)
-│   │   └── main.py          # App entrypoint, CORS, routers
-│   ├── alembic/             # Database migrations
-│   ├── tests/               # Unit + integration tests
-│   ├── Dockerfile           # Dev image (+ production stage)
-│   └── pyproject.toml       # Dependencies (managed with uv)
-│
-├── frontend/                # Next.js application
-│   ├── app/                 # App Router pages, layouts, confirm + OAuth consent routes
-│   ├── components/          # UI, auth and playground components (shadcn/ui based)
-│   ├── server/              # Server actions, schemas, session helper
-│   ├── lib/                 # Env validation, Supabase client, safe-action, providers
-│   ├── e2e/                 # Playwright end-to-end tests
-│   ├── public/              # Static assets
-│   ├── proxy.ts             # Refreshes the Supabase session per request
-│   ├── Dockerfile           # Dev image
-│   └── package.json         # Dependencies (managed with pnpm)
-│
-├── .github/workflows/       # CI (backend + frontend)
-├── docker-compose.yml       # Local development stack
-└── LICENSE                  # MIT
+```bash
+docker compose exec backend python -m app.seed.screenshots
+docker compose exec backend python -m app.seed.stock
 ```
 
-## Prerequisites
+`backend/.env.example` lists every setting. `backend/mcp.env.example` lists the smaller set an MCP deployment needs.
 
-- **Node.js** 20+ and **pnpm**
-- **Python** 3.14+ and [**uv**](https://docs.astral.sh/uv/)
-- **Docker** or **Podman** for the containerized stack (the database, API and web app)
-- A **Supabase project** (free tier is enough)
-
-## Getting started
-
-### 1. Supabase
-
-Create a project and configure auth (enable Email and, optionally, Google; set the Site URL and redirect URLs to `/auth/confirm`). Copy the project URL and anon key — you will paste them into the frontend env. The full walkthrough is in [`frontend/README.md`](./frontend/README.md#supabase-setup).
-
-### 2. Backend
+## Tests
 
 ```bash
 cd backend
+uv run pytest
+uv run pytest tests/unit
+uv run ruff check .
 
-# Install dependencies
-uv sync
-
-# Create your environment file and set SUPABASE_URL
-cp .env.example .env
-
-# Apply database migrations
-uv run alembic upgrade head
-
-# Run the dev server on http://localhost:8000
-uv run fastapi dev
+cd ../frontend
+pnpm test:run
+pnpm lint
+pnpm build
 ```
 
-The database comes up with the rest of the stack through `docker compose up` — see [Run with Docker](#run-with-docker).
+The backend suite runs unit tests without a database and integration tests against PostgreSQL with forged Supabase tokens. The frontend uses Vitest and MSW. Playwright is available with `pnpm test:e2e`; the end-to-end suite needs the stack up and the seed applied.
 
-Interactive API docs are available at http://localhost:8000/docs.
+## Production notes
 
-### 3. Frontend
+`docker-compose.yml` is a development stack. The frontend is built for Vercel and the backend for its own service. The backend image has a production stage if you deploy it as a container.
 
-```bash
-cd frontend
+The MCP server gets its own environment in production. Use `backend/mcp.env.example`, not a copy of the API environment. It needs the database, Supabase and the moderation keys, shares `TASKS_PER_MONTH` with the API, and can use Resend for policy notices. It does not need Cloudinary, Modal, Black Forest Labs, Voyage, Chroma or Langfuse credentials.
 
-# Install dependencies
-pnpm install
+There is no application-level rate limiter. The monthly quota, provider spend caps and authenticated or verified accounts are the current boundary. An edge rule in Vercel, Cloudflare or Cloud Armor is the next lever if abuse appears. Add Turnstile and a rate limit only if an anonymous chat endpoint is introduced.
 
-# Create your environment file and set the Supabase URL / anon key
-cp .env.example .env
+The API docs are off unless `ENV=development`. The frontend sends security headers and a content security policy on every app route; the preview route carries its own narrower policy.
 
-# Run the dev server on http://localhost:3000
-pnpm dev
-```
+## Docs
 
-Open http://localhost:3000 and sign up. Supabase sends a verification email (check its logs while developing) — open the link, then log in.
+`PLAN.md` holds the decisions and the execution history. `DESIGN.md` is the visual system. `AGENTS.md` is the working guide for agents in this repository. The backend and frontend READMEs cover each app's setup.
 
-## Run with Docker
+## Origin
 
-`docker-compose.yml` is a **local development** stack: PostgreSQL plus the API and the web app, with the source mounted and the dev servers running with reload.
-
-```bash
-cp .env.example .env                          # Postgres credentials for the stack
-cp backend/.env.example backend/.env          # what the API reads
-cp frontend/.env.example frontend/.env        # what the web app reads
-docker compose up
-```
-
-A one-shot `migrate` service runs `alembic upgrade head` before the API starts, so the schema is always up to date. Like the API service it mounts the source, so a migration you just wrote is applied on the next `docker compose up` instead of waiting for a rebuild.
-
-Three files supply the environment, and each has one job:
-
-- **`.env`** (root) — the Postgres credentials. Compose reads it for variable substitution, so it is the source of truth for the database the stack runs on.
-- **`backend/.env`** and **`frontend/.env`** — what the API and the web app read (`env_file` in `docker-compose.yml`). Only the Docker-internal hostnames (`postgres`, `backend`) are overridden.
-
-Because the containers build their `DATABASE_URL` from the root `.env`, **`backend/.env` must carry the same password** if you also want to run Alembic or pytest from the host. `POSTGRES_PASSWORD` is required on purpose — the compose file gives it no default — so a missing `.env` fails loudly instead of silently picking one.
-
-The stack also runs the **MCP server** on port 8001: the door AI agents such as Claude Code, Cursor, opencode or n8n come through. It is a separate service that shares the domain and the token verification with the API — see the [MCP server](backend/README.md#mcp-server) section of the backend README.
-
-Deployment is not handled here: the frontend goes to Vercel (which builds it natively) and the backend to its own service. The `backend/Dockerfile` also has a production stage if you deploy it as a container.
-
-## Health checks
-
-The backend exposes three unauthenticated probes for orchestrators, load balancers and uptime monitors:
-
-- `GET /health` — **liveness**: the process is running. It checks nothing external, so a failure means "restart the container".
-- `GET /health/ready` — **readiness**: pings the database with `SELECT 1` and returns `503` when it is unreachable, so traffic is routed away without restarting the process.
-- `GET /warmup` — **wake-up**: asks the MCP server whether it is up, which has the side effect of starting it. It always answers `200` with `{"api": ..., "mcp": ...}` so the page can poll it and report what is still coming.
-
-On **Render** or **Railway**, set the health check path to `/health`. Locally, `docker-compose.yml` probes `/health` and the frontend waits for the backend to be healthy.
-
-### Sleeping platforms
-
-The playground is worth having awake and worth not paying for, so the deployment this project targets is a platform that stops idle services (Railway Serverless, Cloud Run, Render) with the page waking them:
-
-- The **landing pings `/warmup` when it mounts**, through the frontend's own `/api/warmup` route. Nobody visiting the site by accident pays for it: the first visitor of an idle period starts both containers back up while they are still reading, and a tab that is hidden is not asked at all.
-- **Nothing in the browser calls the API directly.** `BACKEND_URL` stays a server-side address, which is what lets it be a container name in compose and a private hostname anywhere else.
-- The **API runs a single instance on purpose**: a run that stopped to ask a question lives in the process, so a second one would answer that the run does not exist.
-- The engine uses **`NullPool`** (`app/db/session.py`): a pool holding connections open is a trickle of traffic, and a platform that decides to sleep from traffic would never see the service go idle.
-
-The honest cost is the first visitor of an idle period. They get a notice saying the demo is waking, and their first run waits for it rather than failing.
-
-## Environment variables
-
-### `.env` (root)
-
-Read by `docker-compose.yml` for variable substitution, so it is the source of truth for the database the stack runs on. Start from `.env.example`.
-
-`POSTGRES_PASSWORD` deliberately has no default in the compose file: a missing `.env` fails loudly instead of silently picking one. It is also only applied the first time the Postgres volume is created, so changing it later requires recreating the volume (`docker compose down -v`). For Alembic or pytest runs from the host, `backend/.env` must carry the same password.
-
-| Variable            | Required | Description                                                          |
-| ------------------- | -------- | -------------------------------------------------------------------- |
-| `POSTGRES_USER`     | No       | Role the container creates (default `postgres`).                     |
-| `POSTGRES_PASSWORD` | Yes      | Password for that role. The containers build `DATABASE_URL` from it. |
-| `POSTGRES_DB`       | No       | Database the container creates (default `mcpstack`).                 |
-
-### `backend/.env`
-
-| Variable                | Required | Description                                                                 |
-| ----------------------- | -------- | --------------------------------------------------------------------------- |
-| `DATABASE_URL`          | Yes      | Async PostgreSQL URL, e.g. `postgresql+asyncpg://postgres:password@localhost:5432/app`. |
-| `SUPABASE_URL`          | Yes      | Supabase project URL. Used to derive the issuer and the JWKS endpoint.       |
-| `SUPABASE_JWT_AUDIENCE` | No       | Audience claim on access tokens (default `authenticated`).                   |
-| `ENV`                   | No       | `production` (default) or `development`. Enables SQL echo when in development. |
-| `LOG_LEVEL`             | No       | Minimum level for the application logs (default `INFO`).                     |
-| `FRONTEND_URL`          | No       | Base URL of the frontend, used for redirects.                                |
-| `MCP_BASE_URL`          | No       | Public URL of the MCP server, published in the OAuth discovery document.     |
-| `MCP_INTERNAL_URL`      | No       | Where the playground reaches the MCP server as a client.                    |
-| `CORS_ORIGINS`          | No       | Comma-separated browser origins allowed to call the API (default `http://localhost:3000`). |
-
-### `frontend/.env`
-
-| Variable                        | Required | Description                                             |
-| ------------------------------- | -------- | ------------------------------------------------------- |
-| `BACKEND_URL`                   | Yes      | Base URL of the FastAPI backend, e.g. `http://localhost:8000`. |
-| `NEXT_PUBLIC_SUPABASE_URL`      | Yes      | Supabase project URL.                                   |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes      | Supabase publishable key (replaces the legacy anon key). |
-| `SUPABASE_SECRET_KEY`                  | Yes      | Supabase secret key. **Server-only**; deletes a user's account. |
-| `NEXT_PUBLIC_AUTH_PROVIDERS`    | No       | Enabled login methods (`email,google`). Default `email`. |
-| `NODE_ENV`                      | No       | Set automatically by Next.js.                           |
-
-Environment variables in the frontend are validated at startup with `@t3-oss/env-nextjs` (`lib/env.js`). The publishable and secret keys are Supabase's current keys; they replace the legacy `anon` and `service_role` keys (deprecated at the end of 2026).
-
-## API reference
-
-All endpoints live on the FastAPI backend. Protected routes expect an `Authorization: Bearer <supabase_access_token>` header. The browser never calls it directly: the Next.js server holds the session in a cookie and forwards the access token on the user's behalf.
-
-| Method | Path                             | Auth | Description                                             |
-| ------ | -------------------------------- | :--: | ------------------------------------------------------- |
-| GET    | `/health`                        |      | Liveness: the process is up (no external checks)        |
-| GET    | `/health/ready`                  |      | Readiness: the database is reachable (`503` if not)     |
-| GET    | `/warmup`                        |      | Wake the MCP server and report what is up yet           |
-| GET    | `/v1/users/me`                   |  ✓   | Return the current profile (provisions it on first use) |
-| PATCH  | `/v1/users/me`                   |  ✓   | Update the profile name                                 |
-| DELETE | `/v1/users/me`                   |  ✓   | Delete the profile (hard delete)                        |
-| POST   | `/v1/organizations`              |  ✓   | Create an organization; the caller becomes its owner    |
-| GET    | `/v1/organizations`              |  ✓   | List the organizations the caller belongs to            |
-| GET    | `/v1/organizations/{id}`         |  ✓   | Read one organization the caller belongs to             |
-| PATCH  | `/v1/organizations/{id}`         |  ✓   | Rename an organization (owner only)                     |
-| GET    | `/v1/organizations/{id}/members` |  ✓   | List the members of an organization                     |
-| POST   | `/v1/demo/run`                   |      | Run the playground agent, or continue a stopped run     |
-
-The application API is versioned under `/v1`. The health checks stay unversioned so a future `/v2` never breaks orchestrators.
-
-Agents do not use this API: they go through the **MCP server** on port 8001, a separate service that shares the same domain and authorization rules.
-
-Errors use FastAPI's default body (`{"detail": ...}`). Migrating to RFC 9457 ("Problem Details") is deliberately deferred until FastAPI supports it natively.
-
-Authentication (signup, login, verification, reset) is handled by **Supabase Auth**, not this API.
-
-## Authentication flow
-
-1. The user signs up or logs in through a **server action**, which calls **Supabase Auth** (`@supabase/ssr`). The session is stored in cookies managed by the Next.js server.
-2. `proxy.ts` refreshes the session on every request (Next.js 16 renamed `middleware` to `proxy`).
-3. `getSession()` (`frontend/server/auth/auth.lib.ts`) validates the user with Supabase and fetches the profile from the backend, returning the session and user.
-4. Protected server actions use `protectedProcedure`, which rejects the request when there is no valid session and forwards the Supabase access token to the backend.
-5. The backend **verifies** the token against Supabase's **JWKS** (`iss`, `aud`, `exp`) and **provisions a local profile** keyed by the token's `sub` the first time it sees the user.
-6. Supabase sends verification and password-reset emails; `frontend/app/auth/confirm/route.ts` handles the links and the OAuth callback.
-7. **Account deletion** is a hard delete on both sides: the backend removes the local profile and the frontend then deletes the Supabase identity through the admin API. The email is freed, so the same address can sign up again.
-8. **AI agents** authenticate through Supabase's OAuth 2.1 server: the app registers itself with dynamic client registration, the user approves it on the consent screen (`frontend/app/oauth/consent`), and the resulting token is accepted by the **MCP server**. The API refuses those tokens — an agent can only reach the tools. Connected agents are listed on the profile page, where they can be disconnected.
-
-## Common commands
-
-### Backend (`backend/`)
-
-| Command                                            | Description                        |
-| -------------------------------------------------- | ---------------------------------- |
-| `uv run fastapi dev`                               | Start the dev server with reload   |
-| `uv run fastapi run`                               | Start the production server        |
-| `uv run alembic revision --autogenerate -m "msg"`  | Create a migration from model changes |
-| `uv run alembic upgrade head`                      | Apply migrations                   |
-| `uv run alembic downgrade -1`                      | Roll back the last migration        |
-| `uv run ruff check .`                              | Lint the backend                   |
-| `uv run ruff format .`                             | Format the backend                 |
-| `uv run pytest`                                    | Run all backend tests              |
-| `uv run pytest tests/unit`                         | Run unit tests (no database needed) |
-
-### Frontend (`frontend/`)
-
-| Command        | Description                     |
-| -------------- | ------------------------------- |
-| `pnpm dev`     | Start the dev server            |
-| `pnpm build`   | Production build                |
-| `pnpm start`   | Serve the production build      |
-| `pnpm lint`    | Run ESLint                      |
-
-## Continuous integration
-
-GitHub Actions runs two path-filtered workflows, so a change in one app does not trigger the other:
-
-- `.github/workflows/backend.yml` — lints, checks formatting, applies migrations and runs the tests against a PostgreSQL service container.
-- `.github/workflows/frontend.yml` — lints, type-checks, runs the unit tests, builds the app and runs the Playwright end-to-end tests.
-
-There are 93 backend tests, 76 frontend unit tests and 8 end-to-end tests.
+GenBlocks grew out of `mcp-stack`, a public template I wrote for agent-native SaaS. The identity layer, the MCP server and the FastAPI scaffolding came from it. The registry, the generation loop, the judge and the wall are new.
 
 ## License
 
-[MIT](./LICENSE) © 2026 [Jonathan Freire](https://jonathanfreire.com)
+MIT. See [LICENSE](./LICENSE).

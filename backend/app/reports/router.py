@@ -27,14 +27,16 @@ async def report_content(
 ) -> ReportRead:
     """Report a public block or image for human review."""
     try:
-        report = await service.create_report(session, payload=payload, created_by=user.id)
+        report, created = await service.create_report(session, payload=payload, created_by=user.id)
     except service.ReportTargetMissing as missing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(missing)) from missing
 
     read = await service.as_read(session, report)
     # After the report is committed and the response is ready. Resend being down
-    # must never turn a saved report into an error.
-    background_tasks.add_task(notifications.report_created, read)
+    # must never turn a saved report into an error. A repeat press returns the
+    # open report and does not send the operator a second copy.
+    if created:
+        background_tasks.add_task(notifications.report_created, read)
     return read
 
 

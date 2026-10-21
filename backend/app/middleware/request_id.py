@@ -1,3 +1,4 @@
+import re
 import time
 import uuid
 
@@ -9,6 +10,9 @@ logger = structlog.get_logger("app.request")
 
 REQUEST_ID_HEADER = "X-Request-ID"
 _MAX_REQUEST_ID_LENGTH = 128
+# Log lines carry this value; a newline or a control character would let a
+# caller break the format of a plain-text log. UUIDs and tracing ids fit.
+_VALID_REQUEST_ID = re.compile(r"^[A-Za-z0-9._:-]+$")
 # Health probes run every few seconds; keep them out of the default log level.
 _QUIET_PATHS = frozenset({"/health", "/health/ready"})
 
@@ -17,7 +21,7 @@ def resolve_request_id(raw: str | None) -> str:
     """Return a usable request id: the inbound one if valid, else a new one."""
     if raw is not None:
         candidate = raw.strip()
-        if 0 < len(candidate) <= _MAX_REQUEST_ID_LENGTH:
+        if 0 < len(candidate) <= _MAX_REQUEST_ID_LENGTH and _VALID_REQUEST_ID.match(candidate):
             return candidate
 
     return uuid.uuid4().hex

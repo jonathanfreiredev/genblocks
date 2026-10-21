@@ -59,6 +59,18 @@ REMOTE_SCAFFOLD = Path("/root/scaffold")
 # Where the block goes: the path the scaffold's entry point imports.
 BLOCK_PATH = "src/Block.tsx"
 
+# What a project may bring, repeated from the harness on purpose. The sandbox is
+# a separate program reached over JSON, so it cannot assume its caller already
+# applied the rule: a project that writes `package.json`, a Vite config or a
+# script would run its own Node code during the build and change the scaffold
+# that every later run is measured against.
+WRITABLE_PREFIX = "src/"
+WRITABLE_SUFFIXES = (".tsx", ".ts", ".css")
+
+# The scaffold owns these two even though they live under ``src``. The harness
+# already refuses them; the sandbox repeats the rule because it is the last door.
+RESERVED_PATHS = frozenset({"src/main.tsx", "src/index.css"})
+
 # The viewports a block is rendered at, widest first so the last pass before the
 # phone-specific checks is already at 390px. The desktop one is kept as the
 # screenshot, because that is the one the registry shows; the others exist so the
@@ -334,10 +346,6 @@ MAX_FILES = 40
 MAX_FILE_BYTES = 200_000
 MAX_TOTAL_BYTES = 2_000_000
 
-# The scaffold owns these two even though they live under ``src``. The harness
-# already refuses them; the sandbox repeats the rule because it is the last door.
-RESERVED_PATHS = frozenset({"src/main.tsx", "src/index.css"})
-
 # Where the interactive build lands once the page has been inlined, and how much
 # of it this function will carry. This is the transport's bound, not the policy:
 # what the registry publishes is decided in ``app/harness/schemas.py``, and a
@@ -566,6 +574,12 @@ def _lay_out(project: Path, files: list[dict[str, str]]) -> None:
             raise ValueError(f"A file path was not normalized: {sent['path']}")
         if sent["path"] in RESERVED_PATHS:
             raise ValueError(f"The scaffold owns {sent['path']}.")
+        if not sent["path"].startswith(WRITABLE_PREFIX):
+            raise ValueError(f"The scaffold owns {sent['path']}.")
+        if not sent["path"].endswith(WRITABLE_SUFFIXES):
+            raise ValueError(
+                f"Only {', '.join(WRITABLE_SUFFIXES)} files may be written: {sent['path']}."
+            )
 
         path = (project / sent["path"]).resolve()
         if not path.is_relative_to(root):

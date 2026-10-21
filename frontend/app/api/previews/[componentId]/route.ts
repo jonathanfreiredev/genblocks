@@ -43,10 +43,19 @@ export async function GET(
     return new Response(null, { status: upstream.status === 404 ? 404 : 502 });
   }
 
+  // A block may only reach our own Cloudinary account, not every customer's:
+  // the static check makes that claim about the source, and this makes it true
+  // for a URL the page builds at runtime.
+  const cloud = env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const pictures = cloud
+    ? `https://res.cloudinary.com/${cloud}`
+    : "https://res.cloudinary.com";
+  const policy = PREVIEW_CSP.replace("https://res.cloudinary.com", pictures);
+
   return new Response(await upstream.text(), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Content-Security-Policy": PREVIEW_CSP,
+      "Content-Security-Policy": policy,
       // The policy above is the fence; these are the usual companions to it.
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",

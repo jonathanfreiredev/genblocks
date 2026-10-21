@@ -69,8 +69,9 @@ export const getSession = cache(async (): Promise<Session | null> => {
       email: claims.email ?? "",
       name,
       // Email confirmation is not a top-level JWT claim; Supabase mirrors it
-      // into user_metadata.email_verified. A missing flag means verified.
-      isVerified: claims.user_metadata?.email_verified !== false,
+      // into user_metadata.email_verified. A missing flag is not evidence of
+      // verification, so it is treated as unverified.
+      isVerified: claims.user_metadata?.email_verified === true,
       isAdmin,
     },
   };

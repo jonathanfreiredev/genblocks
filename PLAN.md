@@ -16,16 +16,17 @@ inglés (ver `AGENTS.md`). Este documento va en español por comodidad.
   entrega como una rebanada revisable en `git`.
 - **Secciones 13–15**: variables de entorno, lo aplazado y los riesgos.
 
-**Estado (oct 2026)**: fases **0–12 hechas**. La 11 se entregó en cuatro
-rebanadas (checks estáticos, cupo mensual, moderación y caché por brief) y la 12
-en una (traza opcional). La 9 se entregó en tres rebanadas y la 10 cerró con la
-capa de vectores, el guard de duplicados, el reúso de imágenes, el routing de
-taxonomía y las propuestas en el chat. La 13 es contenido, no código. El historial
-de migraciones se consolidó en dos (initial schema + consolidada) antes de
-sembrar: las vueltas de ideas no valían como historia. Las fases anteriores se
-quedan escritas como se entregaron: son el registro de lo
-construido, no una promesa pendiente. Las decisiones antiguas tampoco se
-reescriben: cuando una cambia, la nueva dice a cuál sustituye.
+**Estado (oct 2026)**: fases **0–12 hechas**, más el **cierre de producción**
+(sección 16). La 11 se entregó en cuatro rebanadas (checks estáticos, cupo
+mensual, moderación y caché por brief) y la 12 en una (traza opcional). La 9 se
+entregó en tres rebanadas y la 10 cerró con la capa de vectores, el guard de
+duplicados, el reúso de imágenes, el routing de taxonomía y las propuestas en el
+chat. La 13 es contenido, no código. El historial de migraciones se consolidó en
+dos (initial schema + consolidada) antes de sembrar: las vueltas de ideas no
+valían como historia. Las fases anteriores se quedan escritas como se
+entregaron: son el registro de lo construido, no una promesa pendiente. Las
+decisiones antiguas tampoco se reescriben: cuando una cambia, la nueva dice a
+cuál sustituye.
 
 Principio de construcción: **rebanadas verticales finas, con dobles ("fakes")
 primero**. Antes de depender de Modal, Chroma o del LLM real, el sistema se cierra
@@ -47,7 +48,8 @@ El diferenciador no es generar (eso es lo común), es que **la calidad se
 comprueba, no se promete, y esa comprobación es pública**.
 
 Archivo base: el template `mcp-stack` (backend FastAPI + MCP, frontend Next.js 16,
-Supabase Auth, Postgres, multi-tenancy por organización).
+Supabase Auth, Postgres). El template traía organizaciones y membresías; el
+producto las conserva en el esquema, pero no las usa en ningún flujo público.
 
 ---
 
@@ -97,6 +99,9 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     conversación**.
 16. **Seguridad de render en vivo**: v1 muestra el **screenshot**; el render en
     vivo seguro se decide más tarde.
+    → *Sustituida por la 46: la página del bloque ya ejecuta el artefacto en un
+    iframe de origen opaco; el catálogo, la tarea y la evidencia siguen usando el
+    screenshot.*
 17. **Licencia**: MIT para lo generado.
 18. **Taxonomía**: **dos niveles** ahora (Componentes/Imágenes → tipo). El nivel 3
     no se usa ni se documenta; si algún día hace falta, `parent_id` ya lo soporta.
@@ -331,24 +336,25 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     Es un chequeo de texto y lo dice: una URL construida en ejecución se le escapa,
     y para eso está el juez. Un comentario que menciona `fetch(` no es una llamada.
     Un proyecto bloqueado tampoco pide imágenes: primero se arregla, luego se paga.
-42. **El cupo es producto, no factura.** 10 bloques por mes natural (UTC) y
-    persona. Cuenta la tarea creada, falle o no: el fallo gastó sandbox e imágenes,
-    y devolverlo al cupo sería regalar la corrida. No hay cortacircuitos global en
-    código a propósito: el gasto se corta en los dashboards que facturan (Modal,
-    OpenAI), y un segundo número aquí sería una copia que se desvía de la real. Las
-    tres puertas —API, MCP, conversación— pasan por `enqueue_task` y dicen la misma
-    frase. Un brief cacheado no consume cupo, porque no encoló trabajo.
+42. **El cupo es producto, no factura.** 10 generaciones por mes natural (UTC) y
+    persona, contando bloques e imágenes. Cuenta la tarea creada, falle o no: el
+    fallo gastó sandbox e imágenes, y devolverlo al cupo sería regalar la corrida.
+    No hay cortacircuitos global en código a propósito: el gasto se corta en los
+    dashboards que facturan (Modal, OpenAI, BFL), y un segundo número aquí sería
+    una copia que se desvía de la real. Las tres puertas —API, MCP, conversación—
+    pasan por `enqueue_task` y dicen la misma frase. Un brief cacheado no consume
+    cupo, porque no encoló trabajo.
 43. **La moderación es una puerta, no una puntuación.** El brief se modera antes
     de que exista la tarea; la **copia que el bloque muestra** (nodos de texto y
     cadenas que leen como prosa, no el código), después del harness y antes de las
     imágenes, del render y del juez. Un rechazo de entrada no escribe nada (422);
     uno de salida deja la tarea fallida con el motivo y sin intento, porque un
     intento es un artefacto y el artefacto no se publica. Sin clave la comprobación
-    está apagada y lo dice en el log; con clave y proveedor caído **falla cerrada**:
-    "no pudimos comprobar" y "pasó" no pueden tener la misma forma. La copia se
-    recorta a 2.500 caracteres: el free tier del modelo son 2.000 tokens por
-    minuto, y un proyecto entero no cabe — un 413 no es una negativa, es una
-    puerta que nunca se abre.
+    está **apagada en desarrollo y cerrada en producción**; con clave y proveedor
+    caído **falla cerrada**: "no pudimos comprobar" y "pasó" no pueden tener la
+    misma forma. La copia se recorta a 2.500 caracteres: el free tier del modelo
+    son 2.000 tokens por minuto, y un proyecto entero no cabe — un 413 no es una
+    negativa, es una puerta que nunca se abre.
 44. **La caché es exacta y es un recibo.** El brief normalizado (minúsculas,
     espacios colapsados) apunta al bloque que lo respondió. Un acierto no es una
     decisión de producto: no pregunta, no modera, no gasta cupo y no construye;
@@ -444,9 +450,10 @@ brief → [conversación] → create_component → tarea (background)
                          sandbox ──┘   └── render + checks
 ```
 
-- **spec**: retrieval de taxonomía + vecinos (para no duplicar) + guía; escribe el
-  spec y el prompt de entrega. Primer uso del LLM. Sigue siendo canned hasta la
-  Fase 10.
+- **spec**: retrieval de taxonomía + vecinos + guía; el modelo elige un slug de la
+  lista y el título/descripción se derivan del brief. Es el primer uso del LLM.
+  Desde la Fase 10 el tipo ya no es canned: sale del RAG y se valida contra la
+  taxonomía.
 - **harness**: **un agente** con las skills y el sandbox como herramientas. Hace su
   propio bucle —escribe, construye, **mira** el render, edita—, decide las imágenes
   (una pasada, al final, con una vuelta de verificación detrás) y entrega un
@@ -519,7 +526,8 @@ por su cuenta en producción.
 |---|---|
 | Conversación, spec, harness, juez | **OpenAI `gpt-6-luna`** |
 | Juez (agente separado con su skill) | **`gpt-6-luna`** (mismo modelo, agente distinto) |
-| Moderación | **Groq Safety GPT OSS 20B** |
+| Moderación de texto e imagen | **OpenAI `omni-moderation-latest`** (principal) y **Groq Safety GPT OSS 20B** (alternativa de texto si no hay OpenAI) |
+| Política de imágenes y detección de personas | **OpenAI `gpt-4o-mini`** para dirección y personas |
 | Embeddings | **Voyage `voyage-multimodal-3`** |
 | Imágenes (stock) | **Black Forest Labs `flux-2-pro`** (FLUX.2, API asíncrona) |
 | Sandbox | **Modal CPU** |
@@ -527,10 +535,12 @@ por su cuenta en producción.
 Notas:
 
 - `gpt-6-luna` tiene visión y tool calling, así que cubre también "los ojos" del
-  harness y del juez. Groq solo se usa para moderación (gratis).
+  harness y del juez. Groq solo se usa como respaldo de moderación de texto
+  (gratis).
 - **BFL es asíncrono**: la petición devuelve `id` + `polling_url`, se sondea hasta
   `Ready` y el `sample` es temporal — se descarga y se sube a Cloudinary, nunca se
-  guarda la URL de BFL.
+  guarda la URL de BFL. Los bytes pasan por decodificación, límites, reencode y
+  las dos puertas de imagen antes de tener una URL pública.
 - **Caché de prompt**: luna cobra el input cacheado a $0.01 vs $0.10. Poner lo
   estable (system, skills, rúbrica) al principio del prompt y lo variable al final.
 - **Groq free tier** tiene límites de rate; el camino crítico no depende de él.
@@ -540,6 +550,8 @@ Notas:
 ## 6. Tools MCP (nombres finales)
 
 > Un nombre publicado **nunca se renombra**. Estos quedan congelados.
+
+**Identidad:** `whoami`.
 
 **Lectura:** `list_categories`, `search_components`, `get_component`,
 `search_images`, `get_image`, `get_task`, `list_tasks`.
@@ -601,9 +613,14 @@ vistas: a la derecha, los scores de la generación y el enlace a su trace.
   instrucción; allowlist fija de tools; validación por esquema; el llamante sale
   del token; secretos fuera del sandbox; el código generado solo corre en el
   sandbox.
-- **Moderación**: de entrada (brief) y de salida. Groq Safety GPT OSS 20B.
-- **Abuso**: rate limit por usuario y **cortacircuitos global** (tope de gasto)
-  comprobado antes de encolar.
+- **Moderación**: de entrada (brief) y de salida. OpenAI `omni-moderation-latest`
+  como puerta principal; Groq Safety GPT OSS 20B como respaldo de texto. Las
+  imágenes pasan además por el detector de personas.
+- **Abuso**: cupo de 10 generaciones por persona y mes, cuentas autenticadas o
+  verificadas y topes de gasto en los proveedores. **No hay rate limit de
+  aplicación ni de borde configurado** en el lanzamiento; si aparece abuso, la
+  primera palanca es una regla en Vercel, Cloudflare o Cloud Armor. Se revisa
+  también si algún día se abre un endpoint de chat anónimo.
 
 ---
 
@@ -614,11 +631,12 @@ vistas: a la derecha, los scores de la generación y el enlace a su trace.
   imagen de ~100 KB) y la conversación. Por tarea, del orden de $0.10–0.40. Lo bajan
   la caché de prompt (skills y rúbrica van al principio y son estables), el tope de
   vueltas, la parada por no-progreso y el guard de duplicados.
-- **Imágenes (BFL)**: la partida con más pico —una galería de ocho fotos cuesta más
-  que el resto de la tarea junta—. De ahí el tope por bloque (decisión 36) y, desde
-  la Fase 10, mirar la biblioteca **antes** de generar.
+- **Imágenes (BFL)**: la partida con más pico. Una galería de cuatro fotos puede
+  costar más que el resto de la tarea junta. De ahí el tope por bloque (decisión
+  36) y, desde la Fase 10, mirar la biblioteca **antes** de generar.
 - Mitigaciones: guard de duplicados, reúso de imágenes, tope de vueltas y de
-  imágenes, rate limit por usuario, caché por brief, cortacircuitos global.
+  imágenes, cupo mensual por persona, caché por brief y topes de gasto en los
+  proveedores.
 
 ---
 
@@ -632,7 +650,6 @@ vistas: a la derecha, los scores de la generación y el enlace a su trace.
 - Tipos de item que no sean componente o imagen.
 - Subida manual de componentes.
 - Edición del componente por prompt o edición de su código (fase posterior).
-- Render en vivo del componente (v1 muestra screenshot).
 - `vary_component` (nombre reservado, se implementa después).
 
 ---
@@ -919,7 +936,8 @@ lo leería un diseñador, no como una hoja de especificaciones) y la segunda en 
 herramienta (el mismo prompt dos veces se rechaza, y la skill dice que cada imagen
 es su propio asunto). Con eso, el mismo brief del héroe publicó: compliance 96 y una
 sola vuelta. **La biblioteca quedó limpia de las dos**, que es lo que la puerta
-promete. El spec sigue canned (la taxonomía por RAG es la Fase 10).
+promete. En ese momento el spec seguía canned; la Fase 10 lo sustituyó por el
+routing de taxonomía por RAG.
 
 **Fuera**: sin RAG (guard, reúso de imágenes y taxonomía) y sin moderación.
 
@@ -962,16 +980,21 @@ Dos correcciones que la verificación obligó:
 **Objetivo**: que se pueda exponer al público sin sustos.
 
 **Cambios**
-- Moderación de entrada/salida (Groq Safety).
-- Rate limit por usuario y **cortacircuitos global** de gasto, comprobado antes de
-  encolar.
+- Moderación de entrada/salida (OpenAI como puerta principal, Groq Safety como
+  respaldo de texto).
+- Cupo mensual por persona, comprobado antes de encolar.
 - Caché por brief.
 - **Los checks mecánicos que faltan del harness**: referencias a assets externos
   (hoy es una frase en la rúbrica y el juez lo penaliza, pero no lo impide nada) y
   el alcance definitivo de la comprobación de "seguridad" del código generado.
 
-**Verificación**: límite y tope se activan; un brief abusivo se rechaza; un bloque
-que apunta a un asset de fuera no se publica.
+**Verificación**: el cupo se activa; un brief abusivo se rechaza; un bloque que
+apunta a un asset de fuera no se publica.
+
+**No entregado aquí, por decisión posterior**: el rate limit de aplicación y el
+cortacircuitos global. El cupo mensual y los topes de los proveedores cubren el
+lanzamiento; una regla de borde o el rate limit se añadirán solo si aparece abuso
+o un endpoint anónimo.
 
 **Entregado (11a).** `app/harness/checks.py`: dos checks sobre el texto del
 proyecto, `assets` y `safety`, ambos fatales y en la misma lista que el sandbox.
@@ -984,23 +1007,26 @@ literal enterrado. Tests: las cuatro formas de cargar (atributo, `<link>`, `url(
 `@import`), `srcset` candidato a candidato, `//host`, puerto y credenciales,
 comentarios que mencionan `fetch(` sin llamarlo, y el sandbox que no se llama.
 
-**Entregado (11b).** `app/tasks/limits.py` y `enqueue_task`: **10 bloques por mes
-natural** (UTC) y persona, contados sobre `tasks`. Falle o no una tarea, cuenta: un
-fallo gastó sandbox e imágenes. La negativa es 429 en la API, un `ValueError` en
-MCP y un texto en la tool del agente — las tres puertas dicen lo mismo. No hay
-tope global en código: el gasto se corta en los dashboards de Modal y OpenAI, y un
-segundo número aquí sería una copia que se desvía del real. Tests: el borde del
-mes, diciembre que cruza de año, el mes pasado, las tareas de otra persona, una
-tarea borrada que devuelve el cupo, y que la negativa no escribe fila.
+**Entregado (11b).** `app/tasks/limits.py` y `enqueue_task`: **10 generaciones
+por mes natural** (UTC) y persona, contando bloques e imágenes sobre `tasks`.
+Falle o no una tarea, cuenta: un fallo gastó sandbox e imágenes. La negativa es
+429 en la API, un `ValueError` en MCP y un texto en la tool del agente — las tres
+puertas dicen lo mismo. No hay tope global en código: el gasto se corta en los
+dashboards de Modal, OpenAI y BFL, y un segundo número aquí sería una copia que
+se desvía del real. Tests: el borde del mes, diciembre que cruza de año, el mes
+pasado, las tareas de otra persona, una tarea borrada que devuelve el cupo, y que
+la negativa no escribe fila.
 
-**Entregado (11c).** `app/moderation/service.py`: Groq
-`openai/gpt-oss-safeguard-20b`, JSON estricto. **Entrada**: el brief antes de que
-exista la tarea (422, nada se escribe). **Salida**: la copia que el bloque muestra
-—nodos de texto y cadenas que leen como prosa, no el código—, antes de las
-imágenes, del render y del juez (tarea fallida, sin intento, sin gasto). Sin clave está **apagada** y lo dice en el log; con clave y proveedor
-caído **falla cerrada**, porque "no pudimos comprobar" no puede parecerse a "pasó".
-Verificado contra Groq real: permite una pricing page y rechaza un clon de login
-bancario con su motivo.
+**Entregado (11c).** `app/moderation/service.py`: OpenAI
+`omni-moderation-latest` como puerta principal y Groq
+`openai/gpt-oss-safeguard-20b` como respaldo de texto, JSON estricto. **Entrada**:
+el brief antes de que exista la tarea (422, nada se escribe). **Salida**: la copia
+que el bloque muestra —nodos de texto y cadenas que leen como prosa, no el
+código—, antes de las imágenes, del render y del juez (tarea fallida, sin intento,
+sin gasto). Sin clave está **apagada en desarrollo y cerrada en producción**; con
+clave y proveedor caído **falla cerrada**, porque "no pudimos comprobar" no puede
+parecerse a "pasó". Verificado contra Groq real: permite una pricing page y
+rechaza un clon de login bancario con su motivo.
 
 **Entregado (11d).** `app/briefs`: tabla `brief_cache` (clave normalizada a
 minúsculas y espacios, única) y `tasks.cached`. El acierto devuelve una tarea
@@ -1092,16 +1118,17 @@ idempotentes y se saltan lo que ya existe.
 
 ## 13. Variables de entorno
 
-Todas en **`backend/.env`** (server-only), salvo el nombre del cloud de Cloudinary:
-el navegador lo necesita para **leer** las imágenes del stock, y va en
-`frontend/.env` como `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`. El backend sube; el
-frontend solo pinta.
+Las del backend van en **`backend/.env`** (server-only); las del frontend en
+**`frontend/.env`**. El nombre del cloud de Cloudinary se parte en dos: el
+backend lo usa para subir y el navegador lo necesita para **leer** las imágenes,
+como `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`.
 
 | Variable | Para qué |
 |---|---|
-| `OPENAI_API_KEY` | `gpt-6-luna` (agente, spec, harness, juez) |
+| `OPENAI_API_KEY` | `gpt-6-luna` (agente, spec, harness, juez) y `omni-moderation-latest` |
 | `BFL_API_KEY` | imágenes del stock (`flux-2-pro`) |
-| `GROQ_API_KEY` | moderación (Safety GPT OSS 20B) |
+| `GROQ_API_KEY` | respaldo de moderación (Safety GPT OSS 20B) |
+| `OPENAI_MODERATION_MODEL` / `PEOPLE_DETECTION_MODEL` / `IMAGE_DIRECTION_MODEL` | puertas de texto, personas y dirección de imágenes |
 | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | traza opcional; sin ambas no se envía nada |
 | `LANGFUSE_HOST` | host de Langfuse (Cloud EU por defecto) |
 | `VOYAGE_API_KEY` | embeddings (`voyage-multimodal-3`) |
@@ -1111,12 +1138,20 @@ frontend solo pinta.
 | `NEXT_PUBLIC_LANGFUSE_HOST` | frontend: enlace al trace en el panel (opcional) |
 | `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` | invocar el sandbox |
 | `CHROMA_HOST` / `CHROMA_API_KEY` / `CHROMA_TENANT` / `CHROMA_DATABASE` | vectores (Chroma Cloud en prod) |
+| `SITE_URL` | frontend: origen canónico para enlaces y redirecciones de auth; obligatorio en producción |
+| `BACKEND_URL` | frontend: URL del API, solo en el servidor |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | frontend: proyecto y clave pública de Supabase |
+| `SUPABASE_SECRET_KEY` | frontend: borrado de la identidad en Supabase; solo en servidor |
 
-Los servicios `backend` y `mcp` del compose ya leen el mismo `backend/.env`.
+Los servicios `backend` y `mcp` del compose comparten `backend/.env` por comodidad
+de desarrollo. En producción el MCP lleva su propio entorno, descrito en
+`backend/mcp.env.example`: no necesita Cloudinary, Modal, BFL, Voyage, Chroma ni
+Langfuse, y su rol de base de datos solo debe leer el catálogo y escribir tareas.
 
 Los **mandos del bucle** no hacen falta en `.env`: tienen valores por defecto en
 `app/settings.py` y se cambian ahí o por entorno —`RUBRIC_THRESHOLDS`,
-`MAX_ATTEMPTS`, `HARNESS_MAX_ITERATIONS`, `IMAGES_PER_BLOCK`—.
+`HARNESS_MAX_ITERATIONS`, `IMAGES_PER_BLOCK`, `TASKS_PER_MONTH`,
+`DUPLICATE_DISTANCE`, `IMAGE_REUSE_DISTANCE`—.
 
 ---
 
@@ -1133,6 +1168,9 @@ Los **mandos del bucle** no hacen falta en `.env`: tienen valores por defecto en
 - **Reintentar desde la interfaz**: la política y el endpoint están
   (`POST /v1/tasks`); el botón en la tarea fallida —con el brief delante y el
   motivo del juez al lado, sin meterlo dentro del brief— no se ofrece por ahora.
+- **Rate limit de aplicación**: no se implementa en el lanzamiento. El cupo
+  mensual y los topes de proveedor son la frontera; una regla de borde entra si
+  aparece abuso o si se abre un chat anónimo.
 - `tw-animate-css` en el scaffold, y si el motion merece **dimensión propia** en la
   rúbrica (hoy va dentro de `visual`).
 - **Dependencias fuera de la lista blanca**, declaradas por el propio bloque:
@@ -1143,8 +1181,8 @@ Los **mandos del bucle** no hacen falta en `.env`: tienen valores por defecto en
 ## 15. Riesgos
 
 - **Coste**: vueltas del agente × visitantes, más las imágenes. Mitigado con tope de
-  vueltas y de imágenes, parada por no-progreso, guard de duplicados, reúso, rate
-  limit y cortacircuitos.
+  vueltas y de imágenes, parada por no-progreso, guard de duplicados, reúso, cupo
+  mensual y topes de gasto en los proveedores.
 - **Oscilación del agente**: puede arreglar una cosa y romper otra. Mitigado con la
   parada por no-progreso y el tope (decisión 32); el que avanza sigue, el que no, se
   corta.
@@ -1163,9 +1201,75 @@ Los **mandos del bucle** no hacen falta en `.env`: tienen valores por defecto en
   vigilado con la tasa de publicación.
 - **Latencia de Modal**: arranque en frío + navegador = minutos, y ahora además unas
   vueltas. Por eso la tarea en background no es un lujo, es la UX.
-- **Instancia única**: la fuente de verdad de las tareas es Postgres, no la memoria.
+- **Instancia única**: la fuente de verdad de las tareas es Postgres, no la
+  memoria. Una sola instancia limita concurrencia, no peticiones por usuario; no
+  sustituye a un rate limit.
 - **Rate limit de Groq** (free): solo afecta a moderación; el camino crítico no
   depende de Groq.
 - **Si el juez se autoaprueba, el producto no vale**: la independencia
   generador/juez es la que sostiene todo el argumento.
 - **Seguridad del código generado**: se ejecuta solo en el sandbox, sin secretos.
+
+---
+
+## 16. Cierre de producción (oct 2026)
+
+Esta pasada no añade producto. Cierra fugas y límites que quedaban abiertos antes
+de exponer la app.
+
+**Identidad y dependencias**
+
+- La vista de sesión que cruza al cliente ya no lleva el access token de Supabase;
+  solo el nombre visible. Hay test.
+- Next.js queda en **16.3.8** y `fast-uri` en `>=3.1.8`; PyJWT en **2.15.1** y
+  certifi en **2026.10.19**.
+- El sandbox acepta solo `src/**/*.{tsx,ts,css}`, excluyendo `src/main.tsx` y
+  `src/index.css`. Un `package.json`, un script o un fichero de configuración se
+  rechazan. El harness de Modal está desplegado con esa lista.
+
+**Borde y autenticación**
+
+- Cabeceras de seguridad y CSP en `frontend/proxy.ts`; el preview de un bloque
+  conserva su política propia y restringe las imágenes a nuestro cloud de
+  Cloudinary. `X-Powered-By` desactivado.
+- `SITE_URL` construye los enlaces de auth y las redirecciones. En producción no se
+  deriva del `Host`; si falta, la ruta falla cerrada.
+- El cliente admin de Supabase lleva `server-only`.
+- El MCP tiene un entorno de producción propio en `backend/mcp.env.example`, sin
+  los secretos que no usa.
+
+**Límites y errores**
+
+- Body máximo de 1 MB en el API, antes de que FastAPI lo parsee.
+- `full_name` limitado a 120 caracteres y `search` a 200; el nombre que llega de
+  Supabase se recorta al provisionar.
+- Un report repetido del mismo usuario, target y motivo devuelve el report abierto
+  y no manda otro email.
+- El `clientUri` del consent OAuth solo se enlaza si es `http`/`https`.
+- `isVerified` no se asume verdadero cuando falta el flag.
+- `safeNextPath` parsea con `URL` y rechaza `//`, backslashes, `%5c` y rutas que
+  normalizan a protocol-relative.
+- `X-Request-ID` acepta solo caracteres seguros para una línea de log.
+- `/docs`, `/redoc` y `/openapi.json` quedan apagados salvo `ENV=development`.
+- CORS no permite credenciales; el API usa bearer, no cookies.
+- Los errores públicos del vault ya no muestran el origin interno del backend.
+
+**Rate limit**
+
+No se implementa rate limit de aplicación. El razonamiento es el de la decisión
+42 y la sección 8: el cupo mensual, los topes de los proveedores y las cuentas
+autenticadas o verificadas cubren el lanzamiento. Una instancia única de Cloud
+Run limita concurrencia, no peticiones por usuario, así que no se usa como
+sustituto. Si aparece abuso, la primera palanca es una regla en Vercel,
+Cloudflare o Cloud Armor. Si se abre un chat anónimo, entran Turnstile y un
+límite en el borde antes que un middleware propio.
+
+**Verificación**
+
+- Backend: **606 tests**, Ruff limpio.
+- Frontend: **205 tests**, build correcto, lint con los tres warnings preexistentes.
+- Cabeceras y preview verificados en un `pnpm start` real; el iframe no produce
+  errores de CSP.
+- `pnpm audit --prod` limpio. `pip-audit` deja solo `chromadb 1.5.9`, con cinco
+  avisos de servidor sin versión corregida. No afectan al cliente embebido ni a
+  Chroma Cloud; si se autohospeda Chroma, hay que aislarlo y parchearlo.

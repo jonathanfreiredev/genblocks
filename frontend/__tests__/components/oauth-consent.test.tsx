@@ -65,6 +65,13 @@ describe("OAuthConsent", () => {
 
     expect(screen.getByText(/Authorize An application/)).toBeInTheDocument();
   });
+
+  test("does not link a client URI that is not a web address", () => {
+    render(<OAuthConsent {...PROPS} clientUri="javascript:alert(1)" />);
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByText("Claude Code")).toBeInTheDocument();
+  });
 });
 
 describe("OAuthConsentError", () => {

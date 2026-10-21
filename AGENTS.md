@@ -1,12 +1,13 @@
 # AGENTS.md — GenBlocks
 
 Guidance for AI agents working in this repository. Read this first, then the
-`README.md` files in `backend/` and `frontend/` for depth on each app.
+root `README.md` for the product and the app READMEs for setup details.
 
-GenBlocks is a full-stack template where AI agents are first-class users of the
-product. It pairs a **Next.js 16** frontend with a **FastAPI** backend on
-**PostgreSQL**, delegates identity to **Supabase Auth**, and ships an **MCP
-server** so agent traffic reaches the same domain through a consent screen.
+GenBlocks is a public registry of generated UI blocks and stock images. A block
+is built in a **Modal** sandbox by a LangGraph agent, scored by an independent
+judge, and published only when every rubric threshold clears. The app pairs a
+**Next.js 16** frontend with a **FastAPI** backend on **PostgreSQL**, delegates
+identity to **Supabase Auth**, and ships an **MCP server** for external agents.
 
 ## Working agreements
 
@@ -16,9 +17,11 @@ asked again.
 - **Never read or write `.env` or `.env.production`.** In any directory, under
   any circumstance. `.env.example` files are fine. If a change seems to require
   touching a real env file, stop and hand it back to the maintainer.
-- **Readmes are pending.** The `README.md` files still describe the
-  `mcp-stack` template and are intentionally out of date until the web
-  work starts. Do not treat them as the source of truth for naming yet.
+- **The root README describes the product.** `PLAN.md` holds the decisions and
+  execution history; `DESIGN.md` is the visual source of truth; the backend and
+  frontend READMEs cover setup for each app. For product behavior, the root
+  README and `PLAN.md` win when an app README conflicts with them. Raise the
+  conflict instead of copying the older claim.
 - **Code is written in English:** identifiers, comments, filenames, commit
   messages, test descriptions. User-facing copy follows the product's own
   language.
@@ -46,9 +49,10 @@ Before writing any frontend code:
    decisions.** Use its tokens through the Tailwind/shadcn utilities already
    wired in `frontend/app/globals.css`; never hardcode a color or radius.
    Follow its Do's and Don'ts: no gradients, glass, or shadow-for-depth; one
-   spot ink per screen; verdict colors stay functional; tabular numerals for
-   figures. `globals.css` is derived from it — if a token value changes,
-   change `DESIGN.md` first, re-run the linter, then re-export.
+   filled primary action per screen; verdict colors stay functional; tabular
+   numerals for figures. `globals.css` implements the tokens. If a token value
+   changes, change `DESIGN.md` first, then update `globals.css` and the
+   components in the same change.
 
 `frontend/AGENTS.md` carries a Next.js-version warning. Heed it: this Next.js
 release has breaking changes versus older training data, so read the bundled
@@ -60,16 +64,16 @@ code. `frontend/CLAUDE.md` just redirects there.
 ```
 .
 ├── AGENTS.md     # Agent guidance (this file)
-├── DESIGN.md     # Visual system ("Overprint") — source of truth for the UI
-├── PLAN.md       # Execution plan: phases, decisions and model roster
+├── DESIGN.md     # Visual system: source of truth for the UI
+├── PLAN.md       # Execution plan: decisions, phases and production hardening
 ├── backend/      # FastAPI application (resource server) + MCP server
 ├── frontend/     # Next.js web app (product UI + OAuth consent screen)
 ├── docker-compose.yml   # Local stack: postgres, migrate, backend, mcp, frontend
 └── .env.example         # Source of truth for the Postgres credentials
 ```
 
-Both `backend/` and `frontend/` have their own `README.md` with the full
-structure, environment variables and architecture notes.
+`README.md` at the root describes the product and the local loop. `backend/` and
+`frontend/` each have their own README for setup and internals.
 
 ## Commands
 
@@ -81,6 +85,9 @@ cp .env.example .env
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 docker compose up
+
+docker compose exec backend python -m app.categories.seed
+docker compose exec backend python -m app.seed.vault
 ```
 
 ### Backend — run from `backend/`
@@ -95,6 +102,7 @@ uv run pytest tests/unit                  # no database required
 uv run pytest tests/integration           # needs the test database
 uv run ruff check .                       # lint
 uv run ruff format .                      # format
+uv run modal deploy app/harness/modal_app.py  # publish the sandbox
 ```
 
 ### Frontend — run from `frontend/`
@@ -105,7 +113,7 @@ pnpm dev            # dev server on :3000
 pnpm build          # production build
 pnpm lint           # ESLint
 pnpm test:run       # Vitest, single run
-pnpm test:e2e       # Playwright (install browsers once: pnpm exec playwright install chromium)
+pnpm test:e2e       # Playwright; needs the stack and the seed (install browsers once)
 ```
 
 ## Conventions
@@ -123,6 +131,27 @@ pnpm test:e2e       # Playwright (install browsers once: pnpm exec playwright in
 - A published MCP **tool name is never renamed**; publish a new one beside it.
 - When you add a model, import it in `alembic/env.py` so autogenerate sees it.
 
+### The generation pipeline
+
+- **Spec, harness and judge are separate stages.** The spec files a brief, the
+  harness builds it, and the judge scores it. Do not let the harness score its
+  own work or the judge edit the artifact.
+- **The judge is a gate.** A block is published only when every dimension clears
+  its threshold. Thresholds live in `app/settings.py`; the rubric text lives in
+  `app/judge/rubrics/`. The judge is never told the thresholds.
+- **The harness loop is bounded.** `look` returns the report and both renders;
+  the budget counts looks, and an unchanged project returns the previous render
+  without rebuilding. Keep the file allowlist in `app/harness/agent.py` and the
+  static checks in `app/harness/checks.py` in step with the scaffold.
+- **Modal holds no secrets.** The sandbox receives files and returns reports,
+  renders and a preview document. It never gets database credentials or provider
+  keys.
+- **Rubrics and skills are versioned by content hash.** Editing either changes
+  the version stamped on future runs, so an old score can be read against the
+  text that produced it.
+- **The conversational tools and MCP tools call the same services.** A tool is a
+  thin adapter; authorization belongs to the service.
+
 ### Frontend
 
 - Next.js App Router under `frontend/app/`; server-only logic in
@@ -132,11 +161,12 @@ pnpm test:e2e       # Playwright (install browsers once: pnpm exec playwright in
 
 ## Domain model, in one line
 
-Domain data is **multi-tenant**: every row belongs to an organization and access
-is resolved through the caller's membership in it. One Supabase access token
-opens two doors — the API (first-party tokens only) and the MCP server (agent
-tokens) — and both reach the same services. See "What each layer protects" in
-`backend/README.md`.
+The catalogue of blocks, images and categories is public. A **task belongs to
+the user who queued it**, and the service checks that ownership. Organizations
+and memberships remain from the template but are not part of the product flow;
+do not add `organization_id` to public artifacts or use organization roles for
+the operator queue. The API and the MCP server are separate transports over the
+same services.
 
 ## Testing expectations
 
@@ -147,6 +177,22 @@ tokens) — and both reach the same services. See "What each layer protects" in
   backend) and Playwright (`e2e/`).
 - CI runs lint, format check, tests and build per app via
   `.github/workflows/backend.yml` and `frontend.yml`.
+
+## Production state
+
+- `SITE_URL` is required in the frontend's production environment. Auth links
+  fail closed when it is missing; do not fall back to the request Host header.
+- The MCP service gets its own environment. Start from
+  `backend/mcp.env.example`, not the API's `.env`; production must not grant the
+  agent-facing process the Cloudinary, Modal, BFL, Voyage, Chroma or Langfuse
+  credentials it does not need.
+- There is **no application-level rate limiter** by decision. The monthly task
+  quota, provider spend caps and authenticated or verified accounts are the
+  current boundary; an edge rule is the next lever if abuse appears. Revisit the
+  decision only if an anonymous AI endpoint is introduced.
+- `docker-compose.yml` is a development stack. Do not treat it as the production
+  deployment.
+- API docs are disabled unless `ENV=development`.
 
 ## Maintainer
 

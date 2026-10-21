@@ -1,7 +1,6 @@
 "use server";
 
 import type { AuthError } from "@supabase/supabase-js";
-import { headers } from "next/headers";
 import { returnServerError } from "next-safe-action";
 
 import { createClient } from "@/lib/supabase/server";
@@ -15,19 +14,9 @@ import {
   resetPasswordSchema,
   signupFormSchema,
 } from "./auth.schemas";
+import { siteUrl } from "./site-url";
 
 const LOGIN_ERROR = "Incorrect email or password.";
-
-/** Absolute base URL of the current request, used to build redirect links. */
-async function baseUrl(): Promise<string> {
-  const headerList = await headers();
-  const host =
-    headerList.get("x-forwarded-host") ??
-    headerList.get("host") ??
-    "localhost:3000";
-  const protocol = headerList.get("x-forwarded-proto") ?? "http";
-  return `${protocol}://${host}`;
-}
 
 /**
  * Ask Supabase to (re)send the signup confirmation email. Shared by the
@@ -39,7 +28,7 @@ async function sendVerificationEmail(email: string): Promise<AuthError | null> {
   const { error } = await supabase.auth.resend({
     type: "signup",
     email,
-    options: { emailRedirectTo: `${await baseUrl()}/auth/confirm?next=/` },
+    options: { emailRedirectTo: `${await siteUrl()}/auth/confirm?next=/` },
   });
 
   return error;
@@ -55,7 +44,7 @@ export const signupAction = publicProcedure
       password: parsedInput.password,
       options: {
         data: { full_name: parsedInput.name },
-        emailRedirectTo: `${await baseUrl()}/auth/confirm?next=/`,
+        emailRedirectTo: `${await siteUrl()}/auth/confirm?next=/`,
       },
     });
 
@@ -123,7 +112,7 @@ export const signInWithGoogleAction = publicProcedure
       options: {
         // Validated on this side too: this value decides where the browser
         // lands after signing in.
-        redirectTo: `${await baseUrl()}/auth/confirm?next=${encodeURIComponent(
+        redirectTo: `${await siteUrl()}/auth/confirm?next=${encodeURIComponent(
           safeNextPath(parsedInput.next),
         )}`,
       },
@@ -145,7 +134,7 @@ export const forgotPasswordAction = publicProcedure
     const { error } = await supabase.auth.resetPasswordForEmail(
       parsedInput.email,
       {
-        redirectTo: `${await baseUrl()}/auth/confirm?next=/auth/reset-password`,
+        redirectTo: `${await siteUrl()}/auth/confirm?next=/auth/reset-password`,
       },
     );
 

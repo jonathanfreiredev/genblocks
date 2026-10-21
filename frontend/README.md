@@ -1,6 +1,6 @@
 # Frontend — Next.js
 
-The web client for the [MCPStack](../README.md). It renders the UI, validates forms, and authenticates users with **Supabase Auth** through `@supabase/ssr`. The session lives in cookies managed by the Next.js server; domain data is read from the FastAPI backend.
+The web client for [GenBlocks](../README.md). It renders the public wall, the item pages and the task queue, and it hosts the assistant and the OAuth consent screen. Forms are validated on the server, and authentication uses **Supabase Auth** through `@supabase/ssr`. The session lives in cookies managed by the Next.js server; catalogue and task data come from the FastAPI backend.
 
 ## Tech stack
 
@@ -10,8 +10,9 @@ The web client for the [MCPStack](../README.md). It renders the UI, validates fo
 - **React Hook Form** + **Zod** for forms and validation
 - **next-safe-action** for type-safe server actions
 - **@supabase/ssr** + **@supabase/supabase-js** for authentication
-- **@t3-oss/env-nextjs** for environment variable validation
+- **@shadcn/react** chat primitives, **Streamdown** and **Shiki** for the assistant and code
 - **Motion** for animations
+- **Vitest**, **Testing Library**, **MSW** and **Playwright**
 - **pnpm** as the package manager
 
 ## Project structure
@@ -19,42 +20,41 @@ The web client for the [MCPStack](../README.md). It renders the UI, validates fo
 ```
 frontend/
 ├── app/
-│   ├── (root)/            # Public shell: home page + header layout
-│   ├── auth/              # login, signup, forgot-password, reset-password, verify-email
-│   │   └── confirm/       # Route handler for email links and the OAuth callback
+│   ├── (root)/            # Blocks, images, tasks, profile and the MCP guide
+│   ├── auth/              # Login, signup, recovery, verification and confirm route
 │   ├── api/
-│   │   ├── oauth/         # Route handler that records a consent decision
-│   │   └── warmup/        # Route handler the page asks to wake the demo
-│   ├── profile/           # Protected profile page
-│   ├── layout.tsx         # Root layout (fonts, metadata, Toaster, wake-up provider)
-│   ├── error.tsx          # Route error boundary
-│   ├── not-found.tsx      # 404 page
-│   ├── loading.tsx        # Route loading UI
-│   └── globals.css        # Tailwind + theme tokens
+│   │   ├── agent/         # Chat stream and brief confirmation
+│   │   ├── oauth/         # Consent decision
+│   │   ├── previews/      # Sandboxed document for a published block
+│   │   └── tasks/         # Task polling
+│   ├── oauth/consent/     # Consent screen for an agent grant
+│   ├── layout.tsx         # Root layout (fonts, metadata, theme, Toaster)
+│   └── globals.css        # Tailwind + design tokens
 ├── components/
-│   ├── auth/              # Auth, profile, change-password and verification components
-│   ├── demo/              # The playground: the trace, the approval, and the wake-up
-│   ├── ui/                # shadcn/ui primitives
-│   └── ...                # Header, avatar menu, sidebar, background
+│   ├── auth/              # Session, profile, password and verification UI
+│   ├── shell/             # Header, sidebar and search
+│   ├── vault/             # Wall, item pages, evidence, live preview and chat
+│   ├── mcp/               # Connect-an-agent guide
+│   ├── admin/             # Operator actions
+│   ├── reports/           # Report dialog and decisions
+│   └── ui/                # shadcn/ui primitives
 ├── server/
-│   ├── auth/              # Session helper, server actions, schemas
-│   ├── demo/              # The playground action and the shapes the page reads
-│   └── users/             # Profile + password server actions and schemas
+│   ├── auth/              # Session helper, site URL, server actions
+│   ├── users/             # Profile actions
+│   ├── agent/             # Chat schemas
+│   ├── oauth/             # Consent actions
+│   ├── reports/           # Report actions
+│   └── admin/             # Operator actions
 ├── lib/
-│   ├── env.js             # Validated env vars
-│   ├── auth-providers.ts  # Which login methods are enabled
-│   ├── demo-wake.ts       # The question that wakes the demo, and a wait
-│   ├── supabase/server.ts # Supabase server client (cookies)
-│   ├── supabase/admin.ts  # Supabase admin client (service role; deletes users)
-│   ├── safe-action.ts     # Public / protected action clients
-│   ├── mcp-clients.ts     # The MCP clients the landing documents
-│   └── utils.ts           # cn() helper
-├── proxy.ts               # Refreshes the Supabase session on every request
-├── __tests__/             # Vitest tests (unit, integration, components)
-├── vitest.config.ts       # Vitest configuration
-├── vitest.setup.ts        # Test setup (MSW lifecycle)
-├── e2e/                   # Playwright end-to-end tests
-├── playwright.config.ts   # Playwright configuration
+│   ├── vault/             # API client, types, links, formatting and rubric
+│   ├── agent/             # Stream and event parsing
+│   ├── supabase/          # Server and admin clients
+│   ├── env.js             # Validated environment variables
+│   ├── security-headers.ts
+│   └── utils.ts
+├── proxy.ts               # Session refresh and security headers
+├── __tests__/             # Vitest tests
+├── e2e/                   # Playwright tests
 └── package.json
 ```
 
@@ -71,7 +71,7 @@ frontend/
 pnpm install
 ```
 
-Copy the example environment file and fill in your Supabase project URL and anon key:
+Copy the example environment file and fill in your Supabase project URL, publishable key and secret key:
 
 ```bash
 cp .env.example .env
@@ -90,6 +90,8 @@ Open http://localhost:3000. Both Supabase and the backend must be reachable for 
 | Variable                               | Required | Description                                                                                |
 | -------------------------------------- | -------- | ------------------------------------------------------------------------------------------ |
 | `BACKEND_URL`                          | Yes      | Base URL of the FastAPI backend.                                                           |
+| `SITE_URL`                             | Prod     | Canonical origin used in auth emails and redirects. Required in production; never taken from the request Host header. |
+| `MCP_URL`                              | Prod     | Public MCP address shown on `/mcp`. Required when the app is not served from localhost.     |
 | `NEXT_PUBLIC_SUPABASE_URL`             | Yes      | Supabase project URL (Project Settings > API).                                             |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes      | Supabase publishable key (replaces the legacy anon key).                                   |
 | `SUPABASE_SECRET_KEY`                  | Yes      | Supabase secret key. **Server-only**; the admin client uses it to delete a user's account. |
@@ -103,7 +105,7 @@ Variables are validated with `@t3-oss/env-nextjs` in `lib/env.js`. Set `SKIP_ENV
 1. Create a project at [supabase.com](https://supabase.com).
 2. **Authentication > Providers**: enable **Email** (and **Google** if you want social login). Google needs a Client ID/Secret from Google Cloud, pasted into Supabase.
 3. **Authentication > URL Configuration**: set the **Site URL** and add redirect URLs for your environments, e.g. `http://localhost:3000/auth/confirm` (and the production equivalent). The `emailRedirectTo` / `redirectTo` values used by the actions must be allow-listed here.
-4. Copy the project URL and anon key into `frontend/.env`.
+4. Copy the project URL, publishable key and secret key into `frontend/.env`.
 
 ### Toggling login methods
 
@@ -115,32 +117,11 @@ Supabase is the source of truth: a provider only works if it is enabled in the d
 - **Server actions** — `server/auth/auth.actions.ts` and `server/users/users.actions.ts` call Supabase (`signUp`, `signInWithPassword`, `signOut`, `signInWithOAuth`, `resetPasswordForEmail`, `updateUser`, `resend`) and the backend. Client components invoke them through `next-safe-action`.
 - **Auth flows** — `/auth/login`, `/auth/signup`, `/auth/forgot-password`, `/auth/reset-password` and `/auth/verify-email`. Supabase sends the emails; `app/auth/confirm/route.ts` handles the links (email confirmation, password recovery) and the OAuth callback, exchanges the credential for a session and redirects.
 - **Protected actions** — `protectedProcedure` in `lib/safe-action.ts` requires a valid session and exposes the token and user to the action. The token is forwarded to the backend in the `Authorization` header.
-- **Account deletion** — `deleteUserAction` asks for the password again, then hard-deletes the profile through the backend and the Supabase identity through the admin client (`lib/supabase/admin.ts`, service role key). It then signs out and leaves the protected area.
-- **Guards** — `app/auth/layout.tsx` redirects authenticated users away from the auth pages, while `app/profile/page.tsx` redirects unauthenticated users to `/auth/login`. The root layout shows a resend-verification banner while the email is unverified.
-- **Waking the demo** — the backend is allowed to sleep when nobody is looking, so the page wakes it. See below.
-
-## Waking the demo
-
-A deployment that stops idle services is what keeps this project free, and it costs the
-first visitor of an idle period a wait. Waking the services early is the page's job:
-
-- `components/demo/wake-provider.tsx` sits in the root layout and asks `/api/warmup` as
-  soon as a page mounts, then every three seconds while the answer is "not yet". A hidden
-  tab is not asked at all: nobody is waiting, and asking would keep two containers awake
-  for an audience of none.
-- `app/api/warmup/route.ts` is that question. It goes through the frontend so the browser
-  never calls the API directly — `BACKEND_URL` is a server-side address, and inside
-  compose it is a container name a browser cannot resolve.
-- `components/demo/wake-notice.tsx` says "Waking the demo" under the hero, under the
-  playground's button and under the sign-in form. It renders **nothing** when the services
-  are up, which is the common case, so most visitors never learn that they can sleep.
-- The playground's run (`components/demo/playground.tsx`) retries while the answer is
-  still "not yet", so a click that arrives too early waits instead of failing. A decision
-  given to a stopped run is deliberately **not** retried: replaying an answer would apply
-  it twice.
-
-The wait is bounded. Two minutes without an answer is where the page stops saying the demo
-is waking and starts saying it is still asleep, and the run reports the failure it saw.
+- **Account deletion** — `deleteUserAction` asks for the password again, then hard-deletes the profile through the backend and the Supabase identity through the admin client (`lib/supabase/admin.ts`, secret key). It then signs out and leaves the protected area.
+- **Guards** — `app/auth/layout.tsx` redirects authenticated users away from the auth pages, while protected pages redirect unauthenticated users to `/auth/login`. The app shell shows a resend-verification banner while the email is unverified.
+- **The assistant** — `components/vault/agent-chat.tsx` owns the chat dialog, the transcript and the proposal cards. The browser streams a turn through `app/api/agent/chat/route.ts`; the backend holds the conversation and returns proposals, suggestions and task cards. A task is only queued after the person confirms it through `/api/agent/confirm`.
+- **The vault** — `components/vault/` renders the wall, the item pages, the live preview and the evidence panel. Catalogue and task reads go through `lib/vault/api.ts`; the browser never calls the API directly.
+- **The MCP guide** — `/mcp` resolves the endpoint from `MCP_URL` in production, and from the request host on a local network. The consent screen is `/oauth/consent`.
 
 ## OAuth consent screen
 

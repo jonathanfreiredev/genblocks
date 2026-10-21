@@ -82,6 +82,33 @@ def test_the_sandbox_repeats_the_scaffold_ownership_rule(tmp_path):
         )
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "package.json",
+        "vite.config.ts",
+        "eslint.config.js",
+        "tsconfig.json",
+        "scripts/scan.mjs",
+        "index.html",
+    ],
+)
+def test_a_project_cannot_replace_the_ruler_it_is_measured_with(tmp_path, path):
+    with pytest.raises(ValueError, match="scaffold owns"):
+        modal_app._lay_out(
+            tmp_path / "project",
+            [{"path": path, "content": "anything"}],
+        )
+
+
+def test_a_project_cannot_write_outside_the_source_tree(tmp_path):
+    with pytest.raises(ValueError, match="Only .* files may be written"):
+        modal_app._lay_out(
+            tmp_path / "project",
+            [{"path": "src/payload.json", "content": "{}"}],
+        )
+
+
 def test_the_source_and_bundle_scans_are_gates():
     assert {"ast", "bundle"} <= set(modal_app.GATES)
 

@@ -55,10 +55,7 @@ async function request(
     // a stale gallery is a worse trade than the round trip.
     return await fetch(url, { headers, cache: "no-store" });
   } catch (cause) {
-    throw new VaultUnreadable(
-      `The vault API at ${url.origin} did not answer.`,
-      { cause },
-    );
+    throw new VaultUnreadable("The vault API did not answer.", { cause });
   }
 }
 
@@ -70,9 +67,7 @@ async function read<T>(
   const response = await request(path, query, token);
 
   if (!response.ok) {
-    throw new VaultUnreadable(
-      `The vault API answered ${response.status} for ${new URL(response.url).pathname}.`,
-    );
+    throw new VaultUnreadable(`The vault API answered ${response.status}.`);
   }
 
   return (await response.json()) as T;
@@ -90,9 +85,7 @@ async function readOrNull<T>(
   }
 
   if (!response.ok) {
-    throw new VaultUnreadable(
-      `The vault API answered ${response.status} for ${new URL(response.url).pathname}.`,
-    );
+    throw new VaultUnreadable(`The vault API answered ${response.status}.`);
   }
 
   return (await response.json()) as T;

@@ -20,6 +20,12 @@ export const env = createEnv({
     // it derives the endpoint from the request instead. Optional so a local
     // checkout runs without it. Accepts the base URL or the full `/mcp` URL.
     MCP_URL: z.string().url().optional(),
+    // Canonical origin of this app, used to build the links Supabase emails and
+    // to redirect after authentication. In production it must be set: deriving
+    // these from the request Host header would let an attacker choose where a
+    // confirmation or password-reset link lands. In development the request
+    // origin is a safe fallback.
+    SITE_URL: z.string().url().optional(),
   },
 
   /**
@@ -49,6 +55,7 @@ export const env = createEnv({
     BACKEND_URL: process.env.BACKEND_URL,
     SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
     MCP_URL: process.env.MCP_URL,
+    SITE_URL: process.env.SITE_URL,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,

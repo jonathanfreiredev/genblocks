@@ -10,6 +10,7 @@ import {
 import { VerificationBanner } from "@/components/auth/verification-banner";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import type { Session } from "@/server/auth/auth.lib";
+import { sessionView } from "@/server/auth/session-view";
 import type { Category } from "@/lib/vault/types";
 
 /**
@@ -40,7 +41,9 @@ export function AppShell({
           isAdmin={session?.user.isAdmin ?? false}
         />
         <SidebarInset className="min-h-svh min-w-0">
-          <AppHeader session={session} categories={categories} />
+          {/* Only the view crosses the client boundary; the access token stays
+              on the server. See `sessionView`. */}
+          <AppHeader session={sessionView(session)} categories={categories} />
           {session && !session.user.isVerified ? <VerificationBanner /> : null}
           <Breadcrumbs categories={categories} />
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>

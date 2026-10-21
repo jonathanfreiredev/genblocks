@@ -29,12 +29,30 @@ class ReportTargetMissing(Exception):
 
 async def create_report(
     session: AsyncSession, *, payload: ReportCreate, created_by: uuid.UUID
-) -> Report:
-    """Record one report after checking the target exists and is still public."""
+) -> tuple[Report, bool]:
+    """Record one report, or return the open one this person already filed.
+
+    The second value says whether a row was created. Only a new report is worth
+    an operator email: pressing the button twice should not become two messages.
+    """
     kind = ReportTarget(payload.target_kind)
     target = await _target(session, kind=kind, target_id=payload.target_id, public_only=True)
     if target is None:
         raise ReportTargetMissing("That artifact is not in the public vault.")
+
+    existing = await session.scalar(
+        select(Report)
+        .where(
+            Report.created_by == created_by,
+            Report.target_kind == kind.value,
+            Report.target_id == payload.target_id,
+            Report.reason == payload.reason.value,
+            Report.status == ReportStatus.OPEN,
+        )
+        .order_by(Report.created_at.desc())
+    )
+    if existing is not None:
+        return existing, False
 
     if isinstance(target, Component):
         slug, title = target.slug, target.title
@@ -56,7 +74,7 @@ async def create_report(
     session.add(report)
     await session.commit()
     await session.refresh(report)
-    return report
+    return report, True
 
 
 async def list_reports(

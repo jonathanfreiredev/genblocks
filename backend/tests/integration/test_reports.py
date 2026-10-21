@@ -61,6 +61,36 @@ async def test_a_report_notifies_the_queue_without_gating_the_report(
     assert sent[0].target_slug == "alpha"
 
 
+async def test_a_repeat_report_returns_the_open_one_without_a_second_email(
+    client, db_session, monkeypatch
+):
+    from app.notifications import email as notifications
+
+    category = await create_category(db_session, slug="hero")
+    component = await create_component(db_session, category_id=category.id, slug="alpha")
+    sent: list[object] = []
+
+    async def notify(report):
+        sent.append(report)
+        return True
+
+    monkeypatch.setattr(notifications, "report_created", notify)
+    payload = {
+        "target_kind": "component",
+        "target_id": str(component.id),
+        "reason": "other",
+    }
+
+    token = mint_token()
+    first = await client.post("/v1/reports", headers=auth_header(token), json=payload)
+    second = await client.post("/v1/reports", headers=auth_header(token), json=payload)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["id"] == first.json()["id"]
+    assert len(sent) == 1
+
+
 async def test_a_report_for_an_unknown_target_is_a_404(client):
     response = await client.post(
         "/v1/reports",

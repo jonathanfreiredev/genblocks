@@ -27,7 +27,7 @@ class ImageListQuery(ListParams):
     """
 
     category_id: uuid.UUID | None = None
-    search: str | None = None
+    search: str | None = Field(default=None, max_length=200)
 
 
 class ImagePlanRequest(BaseModel):

@@ -81,6 +81,16 @@ async def test_update_profile(client):
     assert response.json()["full_name"] == "Jane Smith"
 
 
+async def test_update_profile_refuses_a_name_that_is_an_essay(client):
+    response = await client.patch(
+        "/v1/users/me",
+        json={"full_name": "x" * 121},
+        headers=auth_header(mint_token()),
+    )
+
+    assert response.status_code == 422
+
+
 async def test_delete_profile_requires_authentication(client):
     response = await client.delete("/v1/users/me")
 

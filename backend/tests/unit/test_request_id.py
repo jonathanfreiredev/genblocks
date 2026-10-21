@@ -23,3 +23,7 @@ def test_generates_an_id_when_blank():
 
 def test_replaces_an_overlong_id():
     assert _GENERATED_ID.match(resolve_request_id("x" * 500))
+
+
+def test_replaces_an_id_that_could_break_a_log_line():
+    assert _GENERATED_ID.match(resolve_request_id("trace-42\ninjected"))

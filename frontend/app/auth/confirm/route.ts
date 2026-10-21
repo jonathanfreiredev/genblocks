@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { safeNextPath } from "@/lib/safe-next-path";
 import { createClient } from "@/lib/supabase/server";
+import { siteUrl } from "@/server/auth/site-url";
 
 /**
  * Landing point for the links Supabase sends by email (signup confirmation,
@@ -10,7 +11,8 @@ import { createClient } from "@/lib/supabase/server";
  * for a session (writing the auth cookies) and then redirects to `next`.
  */
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = await siteUrl();
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;

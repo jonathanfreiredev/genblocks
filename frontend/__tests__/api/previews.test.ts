@@ -39,6 +39,7 @@ describe("the preview route", () => {
     expect(policy).not.toContain("allow-same-origin");
     expect(policy).toContain("connect-src 'none'");
     expect(policy).toContain("form-action 'none'");
+    expect(policy).toContain("https://res.cloudinary.com/test-cloud");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
