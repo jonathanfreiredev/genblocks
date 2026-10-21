@@ -103,6 +103,12 @@ export interface HarnessViolation {
   impact: string | null;
   help: string;
   nodes: number;
+  /**
+   * Which ground the sandbox found it on. The same rule can fail on both, and
+   * the two are different facts; a row recorded before the field existed is
+   * read as `light`.
+   */
+  scheme?: "light" | "dark";
 }
 
 export interface HarnessChecks {

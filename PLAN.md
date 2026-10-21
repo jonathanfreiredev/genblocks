@@ -398,6 +398,15 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     línea con lo que se movió para que el juez lo puntúe sin otra foto. La
     composición del móvil, la jerarquía y el gusto siguen siendo promesa y
     rúbrica. No hay backfill: los bloques viejos se quedan como están.
+48. **Los comandos del MCP se leen, no se adivinan.** La página `/mcp` (sidebar
+    → Agents → Connect) enseña a conectar opencode, Claude Code, Cursor y n8n.
+    El endpoint no se escribe dos veces ni depende de un flag de build: en local
+    sale del host por el que se está navegando (`http://<host>:8001/mcp`, válido
+    también desde el móvil en la misma red) y en un despliegue sale de
+    `MCP_URL` (servidor), que acepta la base o la URL completa. Si producción no
+    la tiene, la página lo dice en vez de enseñar `localhost` y romper la primera
+    llamada. La detección es por `Host`/`X-Forwarded-Host`, así que el mismo
+    artefacto sirve en los dos modos.
 
 ---
 

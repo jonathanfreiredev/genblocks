@@ -183,12 +183,16 @@ export function EvidencePanel({
             <ul className="flex flex-col gap-1.5 border-t pt-3">
               {judged.checks.violations.map((violation) => (
                 <li
-                  key={violation.id}
+                  // The same rule can be recorded once per ground, so the id
+                  // alone is not unique. The scheme is what tells the two rows
+                  // apart, in the key and in the sentence.
+                  key={`${violation.scheme ?? "light"}-${violation.id}`}
                   className="text-muted-foreground text-xs"
                 >
                   <span className="text-foreground">{violation.id}</span>
                   {violation.impact ? ` · ${violation.impact}` : null}
                   {violation.nodes > 0 ? ` · ${violation.nodes} nodes` : null}
+                  {violation.scheme === "dark" ? " · dark page" : null}
                 </li>
               ))}
             </ul>

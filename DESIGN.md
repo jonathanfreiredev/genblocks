@@ -318,6 +318,8 @@ A real shadcn `Sidebar` (`collapsible="icon"`), full viewport height, its conten
 - Collapsed, the header stacks the mark over the button and the width falls to 48px.
 - **Generate with AI** is the first item under the header: a full-width primary button. Collapsed, it is a single sparkle icon with an accessible name.
 - **Browse** holds Blocks and Images, each with an icon and an active state.
+- **Agents** holds `Connect`, the page that tells a client how to reach the MCP
+  server. It is not part of the taxonomy, so it sits above `Categories`.
 - **Categories** lists `All` and the level-2 types of the section on screen. The list is long by nature; it scrolls.
 - **Footer** holds the theme toggle and a quiet Source link. Collapsed, only the toggle remains.
 
@@ -354,7 +356,7 @@ A muted strip directly under the header (`bg-muted/40`, 1px bottom border, 8px b
 
 - `/blocks` → `Blocks`; `/blocks/hero` → `Blocks / Hero`.
 - `/blocks/<id>` → `Blocks` only; the page's h1 names the item, and repeating it in the band would be the same word twice.
-- `/images` → `Images`; `/tasks` → `Your tasks`; a task detail appends the short id; `/profile` → `Profile`.
+- `/images` → `Images`; `/tasks` → `Your tasks`; a task detail appends the short id; `/profile` → `Profile`; `/mcp` → `Connect an agent`.
 
 There is no `Home` crumb. The section is the root.
 
@@ -432,7 +434,7 @@ The gallery is a wall of pictures, not a list of records.
 
 - **Full width** minus 12–16px of padding. No max-width, no centred column.
 - **Grid**: 2 columns on a phone, 3 on a small tablet, 4 on a laptop, 5 on a wide screen; 12px gap.
-- **Cell**: a square (`aspect-square`) `rounded-xl` frame with a 1px border and 8px of padding. The thumbnail sits inside it, contained rather than cropped, so the proportions the judge saw are the proportions a visitor sees.
+- **Cell**: a square (`aspect-square`) `rounded-xl` frame with a 1px border and 8px of padding. The thumbnail fills its box and is cropped to it (`object-cover`), so the wall reads as one surface; the item page shows the uncropped artifact.
 - **Nothing on the tile** except the picture. On hover the picture lifts 2px, the frame takes a faint muted wash, and the maker's name (`author`, or `GenBlocks` when nobody claimed it) fades in centred at the bottom.
 - **No title, slug, date or category** on the wall. The accessible name is the item's title; the visual text is only the author on hover.
 - **Above the grid**: one small line with the count (`7 blocks`) and, when searching, `for “query”` plus a `Clear search` link. No section title and no description.
@@ -493,6 +495,7 @@ The panel narrows rather than widening the page: never give the evidence more th
 - **Tasks list**: the visible heading is gone; an `sr-only` h1 keeps the page named. The brief, status badge and timestamp form a rule-separated list. The empty state offers the generator.
 - **Task detail**: unchanged in structure. The brief is the heading; status, queue time, finish time and trace sit in a bordered definition row; the checklist is a bordered table; the result is the render plus the evidence panel with its verdict and model.
 - **Profile and auth**: shadcn cards and fields on the same neutral tokens. Auth pages have no shell chrome; they are centred on the canvas.
+- **Connect an agent**: a short guide, not a settings form. An endpoint card states the mode (`Local` or `Production`) and carries the URL with a copy button; three numbered parts follow — add the server (one tab per client), approve the first call, ask for something. The endpoint comes from the request host locally and from `MCP_URL` on a deployment, so no command ever points at the wrong server.
 
 ## Components
 
@@ -508,7 +511,7 @@ The panel narrows rather than widening the page: never give the evidence more th
 - **Empty / Alert** — the shadcn primitives, not bespoke markup.
 - **Chat** — `MessageScroller` + `Message` + `Bubble` + `Marker` + `Trace`; the assistant surface is a composition of these, not a new widget.
 - **ScoreReadout** — the product's one custom data component: 18px semibold tabular number over a 56px track. No donuts, rings or gauges.
-- **AssetPlate** — the product's one media component: a Cloudinary id, a transform width, `object-contain` in the gallery and item view, and an honest muted fallback.
+- **AssetPlate** — the product's one media component: a Cloudinary id, a transform width, `object-cover` in the gallery, `object-contain` on the item page, and an honest muted fallback.
 
 ## Do's and Don'ts
 
@@ -549,7 +552,7 @@ Don't:
 - Tokens live in `frontend/app/globals.css`: the neutral oklch values, the derived radius scale and `--header-height: 3.5rem`.
 - Components live in `frontend/components/ui/` and are added with the shadcn CLI. `components.json` pins `base-nova`, neutral, Geist and Lucide.
 - The shell lives in `components/shell/`; the wall in `components/vault/`.
-- Routes are `/blocks`, `/blocks/<type-or-id>`, `/images`, `/images/<type-or-id>`, `/tasks`, `/tasks/<id>` and `/profile`. `/` redirects to `/blocks`.
+- Routes are `/blocks`, `/blocks/<type-or-id>`, `/images`, `/images/<type-or-id>`, `/tasks`, `/tasks/<id>`, `/profile` and `/mcp`. `/` redirects to `/blocks`.
 - The file rail is always rendered, even for a one-file project, because the list is part of understanding the project.
 - `lib/vault/links.ts` owns the URL shape; `lib/breadcrumbs.ts` owns the trail.
 - When the code and this document disagree, the code wins. Update the document in the same change.

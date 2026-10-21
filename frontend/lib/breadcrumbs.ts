@@ -15,6 +15,7 @@ const SECTION_LABELS: Record<Section, string> = {
 const SEGMENT_LABELS: Record<string, string> = {
   profile: "Profile",
   tasks: "Your tasks",
+  mcp: "Connect an agent",
 };
 
 function humanize(segment: string): string {

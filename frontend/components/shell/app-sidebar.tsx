@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bot,
   FlagIcon,
   ImageIcon,
   LayoutGrid,
@@ -156,6 +157,24 @@ export function AppSidebar({
                   </SidebarMenuItem>
                 );
               })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Agents</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<Link href="/mcp" onClick={closeOnMobile} />}
+                  isActive={pathname === "/mcp" || pathname.startsWith("/mcp/")}
+                  tooltip="Connect an agent"
+                >
+                  <Bot />
+                  <span>Connect</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

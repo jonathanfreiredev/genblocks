@@ -15,6 +15,11 @@ export const env = createEnv({
     // Used by the admin client to delete a user. Server-only: it bypasses RLS
     // and must never reach the browser.
     SUPABASE_SECRET_KEY: z.string().min(1),
+    // Public address of the MCP server, as clients reach it in production. The
+    // connect page shows this when the app is not served from localhost; locally
+    // it derives the endpoint from the request instead. Optional so a local
+    // checkout runs without it. Accepts the base URL or the full `/mcp` URL.
+    MCP_URL: z.string().url().optional(),
   },
 
   /**
@@ -43,6 +48,7 @@ export const env = createEnv({
     NODE_ENV: process.env.NODE_ENV,
     BACKEND_URL: process.env.BACKEND_URL,
     SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
+    MCP_URL: process.env.MCP_URL,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,

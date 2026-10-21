@@ -8,11 +8,12 @@ import type { ComponentSummary, Image } from "@/lib/vault/types";
 /**
  * The gallery is a wall of pictures, not a list of records.
  *
- * Each cell is a square frame with the specimen inside it: a block's render or
- * a stock image, contained rather than cropped, so the proportions the judge
- * saw are the proportions a visitor sees. There is no text on the wall. On
- * hover the specimen lifts a hair and the maker's name arrives under it — the
- * only label a thumbnail needs.
+ * Each cell is a square frame the specimen fills: a block's render or a stock
+ * image, cropped to the frame rather than letterboxed inside it, so the wall
+ * reads as one surface instead of a set of mismatched proportions. The item
+ * page shows the uncropped picture. There is no text on the wall. On hover the
+ * specimen lifts a hair and the maker's name arrives under it — the only label
+ * a thumbnail needs.
  */
 export function ItemGrid({ children }: { children: ReactNode }) {
   return (
@@ -74,7 +75,7 @@ export function ComponentCell({
           alt={`The rendered block: ${component.title}`}
           sizes="(min-width: 1280px) 320px, (min-width: 1024px) 30vw, (min-width: 640px) 40vw, 45vw"
           caption={component.title}
-          fit="contain"
+          fit="cover"
           className="size-full bg-transparent"
         />
       ) : (
@@ -94,7 +95,7 @@ export function ImageCell({ image, href }: { image: Image; href: string }) {
         alt={image.prompt}
         sizes="(min-width: 1280px) 320px, (min-width: 1024px) 30vw, (min-width: 640px) 40vw, 45vw"
         caption={dimensions(image.width, image.height)}
-        fit="contain"
+        fit="cover"
         className="size-full bg-transparent"
       />
     </Cell>

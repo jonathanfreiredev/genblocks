@@ -187,6 +187,46 @@ describe("EvidencePanel", () => {
     expect(screen.getByText(/serious · 2 nodes/)).toBeInTheDocument();
   });
 
+  test("tells the same finding apart on each ground", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const twice: HarnessChecks = {
+      ...FOUND,
+      violations: [
+        {
+          id: "color-contrast",
+          impact: "serious",
+          help: "Elements must meet minimum colour contrast",
+          nodes: 2,
+          scheme: "light",
+        },
+        {
+          id: "color-contrast",
+          impact: "critical",
+          help: "Elements must meet minimum colour contrast",
+          nodes: 1,
+          scheme: "dark",
+        },
+      ],
+    };
+
+    render(
+      <EvidencePanel
+        kind="component"
+        judged={{ ...JUDGED, scores: null, checks: twice }}
+      />,
+    );
+
+    // The id repeats by design; the ground is what makes the rows unique, and
+    // React must not see two children with the same key.
+    expect(screen.getAllByText("color-contrast")).toHaveLength(2);
+    expect(screen.getByText(/dark page/)).toBeInTheDocument();
+    expect(
+      error.mock.calls.some((call) => String(call[0]).includes("same key")),
+    ).toBe(false);
+
+    error.mockRestore();
+  });
+
   test("says nothing about a harness an artifact never went through", () => {
     render(<EvidencePanel kind="image" judged={JUDGED} />);
 

@@ -9,9 +9,10 @@ import { assetUrl } from "@/lib/vault/asset";
 /**
  * The picture an artifact points at, or an honest frame when there is none.
  *
- * `contain` is for the gallery and the item view: a block's render has its own
- * proportions and cropping it to a square would hide the composition the judge
- * scored. `cover` stays the default for surfaces that are already a crop.
+ * `cover` is for the gallery: a thumbnail is a crop, and the wall should read
+ * as one surface. `contain` is for the item view, where a block's render has
+ * its own proportions and cropping it would hide the composition the judge
+ * scored.
  */
 export function AssetPlate({
   path,

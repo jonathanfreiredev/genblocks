@@ -52,6 +52,7 @@ describe("buildBreadcrumbs", () => {
 
   test("a single page is its own crumb", () => {
     expect(buildBreadcrumbs("/profile")).toEqual([{ label: "Profile" }]);
+    expect(buildBreadcrumbs("/mcp")).toEqual([{ label: "Connect an agent" }]);
   });
 
   test("ignores a trailing slash", () => {
