@@ -191,26 +191,47 @@ class Images:
 async def test_an_image_that_clears_the_classifier_is_allowed(monkeypatch):
     monkeypatch.setattr(settings, "openai_api_key", "test-openai")
     monkeypatch.setattr(settings, "env", "development")
-    monkeypatch.setattr(settings, "csam_scan_url", None)
+    monkeypatch.setattr(settings, "csam_scan_enabled", False)
 
     assert await moderation.image_refusal(b"jpeg-bytes", client=Images()) is None
 
 
-async def test_an_image_the_classifier_flags_as_sexual_minors_is_a_csam_event(monkeypatch):
+async def test_an_image_the_classifier_flags_as_sexual_minors_is_blocked(monkeypatch):
     monkeypatch.setattr(settings, "openai_api_key", "test-openai")
     monkeypatch.setattr(settings, "env", "development")
-    monkeypatch.setattr(settings, "csam_scan_url", None)
+    monkeypatch.setattr(settings, "csam_scan_enabled", False)
 
-    with pytest.raises(moderation.CSAMDetected, match="sexual content involving minors"):
+    with pytest.raises(moderation.SexualMinorsDetected, match="sexual content involving minors"):
         await moderation.image_refusal(b"jpeg-bytes", client=Images(flagged=True))
 
 
-async def test_a_csam_match_never_reaches_the_generic_moderator(monkeypatch):
+async def test_the_csam_gate_is_skipped_when_the_switch_is_off(monkeypatch):
+    monkeypatch.setattr(settings, "csam_scan_enabled", False)
     monkeypatch.setattr(settings, "openai_api_key", "test-openai")
-    monkeypatch.setattr(settings, "env", "development")
 
-    async def matched(data, *, media_type="image/png"):
-        raise moderation.CSAMDetected("it matches a known fingerprint")
+    async def never(data, *, media_type):
+        raise AssertionError("the CSAM adapter must not run while disabled")
+
+    monkeypatch.setattr(moderation, "_csam_refusal", never)
+
+    assert await moderation.image_refusal(b"jpeg-bytes", client=Images()) is None
+
+
+async def test_enabling_csam_without_a_url_fails_closed(monkeypatch):
+    monkeypatch.setattr(settings, "csam_scan_enabled", True)
+    monkeypatch.setattr(settings, "csam_scan_url", None)
+    monkeypatch.setattr(settings, "openai_api_key", "test-openai")
+
+    with pytest.raises(moderation.ModerationUnavailable, match="CSAM_SCAN_URL"):
+        await moderation.image_refusal(b"jpeg-bytes", client=Images())
+
+
+async def test_a_csam_match_stops_before_the_generic_classifier(monkeypatch):
+    monkeypatch.setattr(settings, "csam_scan_enabled", True)
+    monkeypatch.setattr(settings, "csam_scan_url", "https://csam.test/scan")
+
+    async def matched(data, *, media_type):
+        raise moderation.CSAMDetected("a known hash")
 
     class NeverAsked(Images):
         async def post(self, *args, **kwargs):
@@ -220,15 +241,6 @@ async def test_a_csam_match_never_reaches_the_generic_moderator(monkeypatch):
 
     with pytest.raises(moderation.CSAMDetected):
         await moderation.image_refusal(b"jpeg-bytes", client=NeverAsked())
-
-
-async def test_production_refuses_an_image_without_a_csam_scanner(monkeypatch):
-    monkeypatch.setattr(settings, "openai_api_key", "test-openai")
-    monkeypatch.setattr(settings, "env", "production")
-    monkeypatch.setattr(settings, "csam_scan_url", None)
-
-    with pytest.raises(moderation.ModerationUnavailable, match="CSAM"):
-        await moderation.image_refusal(b"jpeg-bytes", client=Images())
 
 
 def test_the_brief_refusal_says_what_it_is():

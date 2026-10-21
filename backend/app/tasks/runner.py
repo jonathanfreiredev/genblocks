@@ -53,12 +53,14 @@ from app.images.slug import image_slug
 from app.judge import scoring as judge
 from app.judge.schemas import Judged
 from app.moderation import service as moderation
+from app.notifications import email as notifications
 from app.observability import service as observability
 from app.privacy.redact import redact_pii
 from app.settings import settings
 from app.tasks import service
 from app.tasks import spec as block_spec
 from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
+from app.users.service import display_names
 from app.vectors import service as vectors
 
 logger = structlog.get_logger("app.tasks.runner")
@@ -509,6 +511,22 @@ async def _keep(
     if any(picture is not None for picture in pictures):
         await session.commit()
 
+    # After the rows exist, and only for pictures this run filed: reused library
+    # images already had their notification when they first arrived.
+    if fresh:
+        authors = await display_names(session, ids=[task.created_by])
+        for index, _placed, _judged, _path in fresh:
+            picture = pictures[index]
+            if picture is None:
+                continue
+            await notifications.item_created(
+                kind="image",
+                item_id=picture.id,
+                title=picture.prompt,
+                slug=picture.slug,
+                author=authors.get(task.created_by) if task.created_by else None,
+            )
+
     # Remembered after the rows exist: a picture is the library's from the moment
     # it is filed, whether or not the block that asked for it is published.
     for placed, picture in zip(built.images, pictures, strict=True):
@@ -788,6 +806,17 @@ async def _publish(
                 "files": len(made.attempt.files or {}),
                 "pictures": len(made.pictures),
             },
+        )
+
+        # The row is committed. A Resend failure is only a missing email; it
+        # cannot undo a published block.
+        authors = await display_names(session, ids=[component.created_by])
+        await notifications.item_created(
+            kind="component",
+            item_id=component.id,
+            title=component.title,
+            slug=component.slug,
+            author=authors.get(component.created_by) if component.created_by else None,
         )
 
         # Remembered after the block is committed, and after the step is closed: the

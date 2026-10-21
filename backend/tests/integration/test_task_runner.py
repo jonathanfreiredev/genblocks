@@ -382,7 +382,19 @@ async def _wait_for(session: AsyncSession, task_id: uuid.UUID, status: str) -> N
         await asyncio.sleep(0.02)
 
 
-async def test_a_queued_task_runs_towards_a_published_block(runner_session, harness, judge):
+async def test_a_queued_task_runs_towards_a_published_block(
+    runner_session, harness, judge, monkeypatch
+):
+    from app.notifications import email as notifications
+
+    notified: list[dict] = []
+
+    async def item_created(**kwargs):
+        notified.append(kwargs)
+        return True
+
+    monkeypatch.setattr(notifications, "item_created", item_created)
+
     category = await create_category(runner_session, slug="hero")
     category_id = category.id
     owner = await _owner(runner_session)
@@ -466,6 +478,15 @@ async def test_a_queued_task_runs_towards_a_published_block(runner_session, harn
     assert component.created_by == owner_id
     assert component.winning_generation_id == attempt.id
     assert attempt.component_id == component.id
+    assert notified == [
+        {
+            "kind": "component",
+            "item_id": component.id,
+            "title": component.title,
+            "slug": component.slug,
+            "author": None,
+        }
+    ]
 
     assert await runner.claim_next_task() is None
 
@@ -639,8 +660,20 @@ async def test_a_published_block_answers_its_brief_from_then_on(runner_session, 
     assert found.id == done.component_id
 
 
-async def test_the_pictures_a_block_asks_for_are_filed_and_linked(runner_session, harness, judge):
+async def test_the_pictures_a_block_asks_for_are_filed_and_linked(
+    runner_session, harness, judge, monkeypatch
+):
     """A picture is a library artifact of its own, judged as it enters."""
+    from app.notifications import email as notifications
+
+    notified: list[dict] = []
+
+    async def item_created(**kwargs):
+        notified.append(kwargs)
+        return True
+
+    monkeypatch.setattr(notifications, "item_created", item_created)
+
     await create_category(runner_session, slug="hero")
     await create_category(runner_session, slug=CATEGORY, kind="image")
     owner = await _owner(runner_session)
@@ -686,6 +719,9 @@ async def test_the_pictures_a_block_asks_for_are_filed_and_linked(runner_session
     assert asset.slot == "hero"
     assert asset.component_id == done.component_id
     assert done.steps[3].detail["pictures"] == 1
+    assert [one["kind"] for one in notified] == ["image", "component"]
+    assert notified[0]["item_id"] == image.id
+    assert notified[0]["author"] is None
 
 
 async def test_a_picture_asked_for_by_a_block_that_is_not_published_stays_in_the_library(

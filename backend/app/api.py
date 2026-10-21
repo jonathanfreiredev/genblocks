@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.admin.router import admin_items_router
 from app.agent.router import agent_router
 from app.categories.router import categories_router
 from app.components.router import components_router
@@ -22,3 +23,4 @@ api_v1_router.include_router(tasks_router)
 api_v1_router.include_router(agent_router)
 api_v1_router.include_router(reports_router)
 api_v1_router.include_router(admin_reports_router)
+api_v1_router.include_router(admin_items_router)

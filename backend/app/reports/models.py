@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, ForeignKey, Text
+from sqlalchemy import CheckConstraint, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -48,17 +48,13 @@ class Report(BaseModel):
     """One person's report about one public artifact.
 
     The target is one of two nullable foreign keys rather than a polymorphic
-    ``target_id`` because the database can then enforce that exactly one is set
-    and can follow the row when it is removed. A report outlives a takedown: the
-    target is soft-deleted, so the review can still say what it acted on.
+    ``target_id`` because the database can follow the row while it exists. A
+    report outlives its target: hard deletion sets the foreign keys to null and
+    the snapshot columns keep the kind, id, slug and title the operator acted on.
     """
 
     __tablename__ = "reports"
     __table_args__ = (
-        CheckConstraint(
-            "(component_id IS NOT NULL) <> (image_id IS NOT NULL)",
-            name="one_target",
-        ),
         CheckConstraint(
             "reason IN ('sexual', 'minor', 'violence', 'hate', 'harassment', "
             "'self_harm', 'illegal', 'malware', 'privacy', 'real_person', "
@@ -77,6 +73,12 @@ class Report(BaseModel):
     image_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("images.id", ondelete="SET NULL"), index=True
     )
+    # The target as it was when the report was written. These survive a hard
+    # delete, which the nullable foreign keys above cannot.
+    target_kind: Mapped[str] = mapped_column(String(16), index=True)
+    target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    target_slug: Mapped[str | None] = mapped_column(String(255))
+    target_title: Mapped[str | None] = mapped_column(Text)
     reason: Mapped[str]
     details: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(default=ReportStatus.OPEN)

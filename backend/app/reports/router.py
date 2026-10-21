@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.admin.dependencies import get_admin_user
 from app.authz.dependencies import get_first_party_user
 from app.db.session import get_async_db_session
+from app.deletion.service import DeletionFailed
 from app.notifications import email as notifications
 from app.pagination import OffsetPage
 from app.reports import service
@@ -66,5 +67,11 @@ async def resolve_report(
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
 
-    resolved = await service.resolve_report(session, report=report, payload=payload, operator=user)
+    try:
+        resolved = await service.resolve_report(
+            session, report=report, payload=payload, operator=user
+        )
+    except DeletionFailed as failed:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(failed)) from failed
+
     return await service.as_read(session, resolved)

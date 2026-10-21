@@ -2,8 +2,8 @@
 
 A report is a request for a human to look, not an automatic takedown. The queue
 is therefore append-only until an operator resolves it: opening, reviewing,
-resolving and dismissing are states of the same row, and the target is only
-soft-deleted when the operator says so.
+resolving and dismissing are states of the same row. A takedown permanently
+deletes the target and keeps a snapshot of it on the report.
 """
 
 import uuid
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.components.models import Component
 from app.db.models import utcnow
+from app.deletion import service as deletion
 from app.images.models import Image
 from app.pagination import ListParams
 from app.reports.models import Report, ReportStatus, ReportTarget
@@ -30,12 +31,24 @@ async def create_report(
     session: AsyncSession, *, payload: ReportCreate, created_by: uuid.UUID
 ) -> Report:
     """Record one report after checking the target exists and is still public."""
-    if not await _target_exists(session, kind=payload.target_kind, target_id=payload.target_id):
+    target = await _target(
+        session, kind=payload.target_kind, target_id=payload.target_id, public_only=True
+    )
+    if target is None:
         raise ReportTargetMissing("That artifact is not in the public vault.")
+
+    if isinstance(target, Component):
+        slug, title = target.slug, target.title
+    else:
+        slug, title = target.slug, target.prompt
 
     report = Report(
         component_id=payload.target_id if payload.target_kind is ReportTarget.COMPONENT else None,
         image_id=payload.target_id if payload.target_kind is ReportTarget.IMAGE else None,
+        target_kind=payload.target_kind.value,
+        target_id=payload.target_id,
+        target_slug=slug,
+        target_title=title,
         reason=payload.reason,
         details=payload.details,
         status=ReportStatus.OPEN,
@@ -82,18 +95,19 @@ async def resolve_report(
     payload: ReportUpdate,
     operator: User,
 ) -> Report:
-    """Apply an operator's decision, and take the target down when asked.
+    """Apply an operator's decision, and permanently remove the target when asked.
 
-    A takedown is a soft delete: the report and the audit trail survive, the
-    public read endpoints stop returning the row, and a later review can restore
-    it by clearing ``deleted_at`` if the decision was wrong.
+    A takedown hides the target first, purges its Cloudinary asset and then
+    deletes the row. The report survives with the snapshot taken when it was
+    created, and the audit sentence is kept.
     """
     if payload.take_down:
-        target = await _target(
-            session, kind=_kind_of(report), target_id=_target_id(report), public_only=False
-        )
-        if target is not None:
-            target.deleted_at = utcnow()
+        kind = _kind_of(report)
+        target_id = _target_id(report)
+        if kind is ReportTarget.COMPONENT:
+            await deletion.delete_component(session, component_id=target_id, actor_id=operator.id)
+        else:
+            await deletion.delete_image(session, image_id=target_id, actor_id=operator.id)
 
     report.status = payload.status
     report.resolution = payload.resolution
@@ -108,9 +122,9 @@ async def resolve_report(
 
 async def as_read(session: AsyncSession, report: Report) -> ReportRead:
     """The public shape of a report, with the target and reporter resolved."""
-    target = await _target(
-        session, kind=_kind_of(report), target_id=_target_id(report), public_only=False
-    )
+    kind = _kind_of(report)
+    target_id = _target_id(report)
+    target = await _target(session, kind=kind, target_id=target_id, public_only=False)
     reporter = (
         await display_names(session, ids=[report.created_by])
         if report.created_by is not None
@@ -122,12 +136,13 @@ async def as_read(session: AsyncSession, report: Report) -> ReportRead:
     elif isinstance(target, Image):
         slug, title = target.slug, target.prompt
     else:
-        slug, title = None, None
+        # The target was permanently deleted. The snapshot is the record.
+        slug, title = report.target_slug, report.target_title
 
     return ReportRead(
         id=report.id,
-        target_kind=_kind_of(report),
-        target_id=_target_id(report),
+        target_kind=kind,
+        target_id=target_id,
         target_slug=slug,
         target_title=title,
         reason=report.reason,
@@ -138,12 +153,6 @@ async def as_read(session: AsyncSession, report: Report) -> ReportRead:
         created_at=report.created_at,
         resolved_at=report.resolved_at,
     )
-
-
-async def _target_exists(
-    session: AsyncSession, *, kind: ReportTarget, target_id: uuid.UUID
-) -> bool:
-    return await _target(session, kind=kind, target_id=target_id, public_only=True) is not None
 
 
 async def _target(
@@ -172,11 +181,8 @@ async def _target(
 
 
 def _kind_of(report: Report) -> ReportTarget:
-    return ReportTarget.COMPONENT if report.component_id is not None else ReportTarget.IMAGE
+    return ReportTarget(report.target_kind)
 
 
 def _target_id(report: Report) -> uuid.UUID:
-    found = report.component_id or report.image_id
-    if found is None:  # pragma: no cover - the database check prevents it
-        raise ReportTargetMissing("The report has no target.")
-    return found
+    return report.target_id

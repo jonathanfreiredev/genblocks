@@ -63,7 +63,13 @@ async def create_image(
     prompt: str = "a serene landscape",
 ) -> Image:
     """Insert a stock image directly, for tests that need a library but not a run."""
-    image = Image(prompt=prompt, path=path, width=1024, height=768, category_id=category_id)
+    image = Image(
+        prompt=prompt,
+        path=path,
+        width=1024,
+        height=768,
+        category_id=category_id,
+    )
     session.add(image)
     await session.commit()
     await session.refresh(image)

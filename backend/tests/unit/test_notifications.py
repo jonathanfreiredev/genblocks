@@ -120,3 +120,50 @@ async def test_html_escapes_a_note_instead_of_rendering_it(configured):
     assert "<script>alert(1)</script>" not in sent["html"]
     # The plain-text alternative is not HTML; the same characters are safe there.
     assert "<script>alert(1)</script>" in sent["text"]
+
+
+async def test_a_new_item_notifies_without_attaching_it(configured):
+    import json
+
+    sent: dict = {}
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        sent.update(json.loads(request.read().decode()))
+        return httpx.Response(200, json={"id": "email-1"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+    item_id = uuid.uuid4()
+
+    assert (
+        await email.item_created(
+            kind="image",
+            item_id=item_id,
+            title="A calm office",
+            slug="a-calm-office",
+            author="Jane Doe",
+            client=client,
+        )
+        is True
+    )
+
+    assert "awaiting review" in sent["subject"]
+    assert "A calm office" in sent["text"]
+    assert "https://genblocks.test/admin/items?kind=image" in sent["text"]
+    # No attachment and no public asset URL: the operator opens the auth page.
+    assert "attachments" not in sent
+    assert "res.cloudinary.com" not in sent["html"]
+
+
+async def test_an_item_notification_is_off_without_a_key(monkeypatch):
+    monkeypatch.setattr(settings, "resend_api_key", None)
+
+    assert (
+        await email.item_created(
+            kind="component",
+            item_id=uuid.uuid4(),
+            title="A hero",
+            slug="a-hero",
+            author=None,
+        )
+        is False
+    )

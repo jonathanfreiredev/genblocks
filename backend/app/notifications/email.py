@@ -1,17 +1,17 @@
-"""The one email this product sends: a report entered the queue.
+"""The email this product sends when a person needs to look at something.
 
-A report is a request for a person to look, so the people who can look should
-hear about it without refreshing the admin page. The email is a convenience,
-never a gate: the report is committed before this runs, and a provider outage
-means a missing notification, not a lost report or a failed request.
+A report is a request for a person to look, and a newly generated item is a
+request for the operator's review before it becomes public. Neither email is a
+gate: the row is committed before this runs, and a provider outage means a
+missing notification, not a lost report or a failed generation.
 
-The message contains only what the operator needs to decide whether to open the
-queue: the target, the reason, the reporter's display name, the note they left
-and a link to both the item and the queue. The admin queue is the source of
-truth.
+The messages contain only what the operator needs to decide whether to open the
+admin page. They deliberately carry no attachment and no public image URL: mail
+gets forwarded, and a picture before publication should not travel with it.
 """
 
 import html
+import uuid
 
 import httpx
 import structlog
@@ -45,9 +45,93 @@ async def report_created(report: ReportRead, *, client: httpx.AsyncClient | None
         return False
 
     subject, text, markup = _message(report)
+    return await _send(
+        subject=subject,
+        text=text,
+        markup=markup,
+        client=client,
+        failure="report notification could not be sent",
+    )
+
+
+async def item_created(
+    *,
+    kind: str,
+    item_id: uuid.UUID,
+    title: str,
+    slug: str,
+    author: str | None,
+    client: httpx.AsyncClient | None = None,
+) -> bool:
+    """Tell the operators that a generated item is waiting for review.
+
+    This is intentionally metadata only: the picture is not attached and its
+    public URL is not included. The admin page is authenticated and is the place
+    where the operator looks at the bytes.
+    """
+    if not settings.resend_api_key:
+        logger.debug("item notification is off", reason="RESEND_API_KEY is unset")
+        return False
+
+    recipients = settings.report_notification_recipients
+    if not recipients:
+        logger.warning(
+            "item notification has no recipients",
+            reason="set REPORT_NOTIFICATION_EMAILS or ADMIN_EMAILS",
+        )
+        return False
+
+    label = "block" if kind == "component" else "image"
+    safe_title = title.strip()[:160] or f"a new {label}"
+    who = author or "an unknown maker"
+    admin_url = f"{settings.frontend_url.rstrip('/')}/admin/items?kind={kind}"
+    subject = f"New GenBlocks {label} awaiting review: {safe_title}"
+    text = "\n".join(
+        [
+            f"A new {label} is waiting for review.",
+            "",
+            f"Title: {safe_title}",
+            f"Slug: {slug}",
+            f"Maker: {who}",
+            f"ID: {item_id}",
+            "",
+            f"Review it: {admin_url}",
+        ]
+    )
+    markup = (
+        '<h1 style="font-family: sans-serif; font-size: 18px;">'
+        f"New {html.escape(label)} awaiting review</h1>"
+        '<dl style="font-family: sans-serif;">'
+        f"<dt><strong>Title</strong></dt><dd>{html.escape(safe_title)}</dd>"
+        f"<dt><strong>Slug</strong></dt><dd>{html.escape(slug)}</dd>"
+        f"<dt><strong>Maker</strong></dt><dd>{html.escape(who)}</dd>"
+        f"<dt><strong>ID</strong></dt><dd>{html.escape(str(item_id))}</dd>"
+        "</dl>"
+        f'<p style="font-family: sans-serif;"><a href="{html.escape(admin_url)}">'
+        "Open the review queue</a></p>"
+    )
+
+    return await _send(
+        subject=subject,
+        text=text,
+        markup=markup,
+        client=client,
+        failure="item notification could not be sent",
+    )
+
+
+async def _send(
+    *,
+    subject: str,
+    text: str,
+    markup: str,
+    client: httpx.AsyncClient | None,
+    failure: str,
+) -> bool:
+    """Send one Resend message, swallowing provider failures."""
     payload = {
         "from": settings.resend_from_email,
-        "to": list(recipients),
+        "to": list(settings.report_notification_recipients),
         "subject": subject,
         "text": text,
         "html": markup,
@@ -68,12 +152,12 @@ async def report_created(report: ReportRead, *, client: httpx.AsyncClient | None
                     json=payload,
                 )
     except httpx.HTTPError as broke:
-        logger.warning("report notification could not be sent", error=str(broke))
+        logger.warning(failure, error=str(broke))
         return False
 
     if answer.status_code >= 400:
         logger.warning(
-            "resend refused the report notification",
+            "resend refused the notification",
             status=answer.status_code,
             detail=answer.text[:200],
         )

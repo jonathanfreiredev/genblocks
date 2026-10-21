@@ -147,6 +147,31 @@ async def test_a_deployment_with_no_cloud_says_what_to_configure(monkeypatch):
     assert "CLOUDINARY_CLOUD_NAME" in str(refused.value)
 
 
+async def test_a_delete_can_purge_the_delivery_cache(account):
+    sent: dict = {}
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        sent["body"] = request.read().decode()
+        return httpx.Response(200, json={"result": "ok"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+
+    await cloudinary.destroy(PARAMS["public_id"], invalidate=True, client=client)
+
+    body = sent["body"]
+    assert "invalidate=true" in body
+    assert "public_id=genblocks%2Fscreenshots%2F0123456789ab-1" in body
+
+
+async def test_a_missing_cloudinary_asset_is_still_deleted(account):
+    async def handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"result": "not found"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+
+    await cloudinary.destroy(PARAMS["public_id"], client=client)
+
+
 def _timestamp_in(body: str) -> str:
     return _field_in(body, "timestamp")
 

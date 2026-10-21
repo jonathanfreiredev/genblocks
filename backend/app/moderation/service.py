@@ -7,11 +7,11 @@ the judge or the registry. The **picture** is asked after it comes back from its
 provider and before it is stored, so a generation that should not exist never
 reaches a public CDN.
 
-The image path has two layers on purpose. A generic vision classifier catches
-sexual content, violence and hate; a CSAM hash-matching service answers the one
-question a generic classifier cannot. The second is configurable because vendors
-differ, but in production its absence refuses image work rather than publishing
-an unchecked picture.
+The image path has two layers. A dedicated child-safety adapter runs first when
+`CSAM_SCAN_ENABLED` is true; a match stops before the generic classifier. While
+the deployment waits for provider approval the adapter is off, but the generic
+vision classifier still catches sexual content, violence and hate, and a
+`sexual/minors` hit is treated as a suspected child-safety event.
 
 With no provider configured the check is **off in development and closed in
 production**. A deployment that forgot the key is told instead of silently
@@ -162,6 +162,21 @@ class CSAMDetected(Exception):
         super().__init__(f"The picture was blocked by child-safety scanning — {reason}")
 
 
+class SexualMinorsDetected(Exception):
+    """The generic classifier flagged sexual content involving a minor.
+
+    This is the second child-safety signal, used when the dedicated scanner is
+    disabled or clears an image. The bytes must not be written to a public CDN or
+    put back in front of the model.
+    """
+
+    def __init__(
+        self, reason: str = "the classifier flagged sexual content involving minors"
+    ) -> None:
+        self.reason = reason
+        super().__init__(f"The picture was blocked for sexual content involving minors — {reason}")
+
+
 class BriefRejected(Exception):
     """The brief was refused before it became a task, with the reason."""
 
@@ -240,22 +255,18 @@ async def image_refusal(
 ) -> str | None:
     """Why a generated picture may not be stored or published, or ``None``.
 
-    The dedicated child-safety scanner runs **first**. A known or suspected match
-    stops here and the bytes never reach a general-purpose moderation endpoint;
-    that is what OpenAI's CSAM guidance asks of an application, and it is also the
-    only order that keeps a suspected image out of a third party's logs.
-
-    Only a picture that cleared the child-safety gate reaches the generic vision
-    classifier. The generic classifier is not a CSAM detector; it catches sexual
-    content, violence and hate, and a `sexual/minors` hit is treated as a
-    suspected child-safety event rather than an ordinary refusal.
+    When ``CSAM_SCAN_ENABLED`` is true, the dedicated child-safety adapter runs
+    first and a match stops the bytes before the generic classifier. While the
+    deployment waits for provider approval it stays off; the generic classifier
+    still runs, and a ``sexual/minors`` hit is blocked as its own signal.
     """
     if len(data) > MAX_IMAGE_BYTES:
         raise ModerationUnavailable("The picture is too large to check safely.")
     if len(data) == 0:
         raise ModerationUnavailable("The picture is empty.")
 
-    await _csam_refusal(data, media_type=media_type)
+    if settings.csam_scan_enabled:
+        await _csam_refusal(data, media_type=media_type)
 
     if client is not None:
         verdict = await _review_image(client, data=data, media_type=media_type)
@@ -273,7 +284,7 @@ async def image_refusal(
 
     if not verdict.allowed:
         if "sexual/minors" in verdict.reason:
-            raise CSAMDetected("the generic classifier flagged sexual content involving minors")
+            raise SexualMinorsDetected()
         return verdict.reason
 
     return None
@@ -291,13 +302,7 @@ async def _csam_refusal(data: bytes, *, media_type: str) -> None:
     the picture may continue.
     """
     if not settings.csam_scan_url:
-        if settings.env == "production":
-            raise ModerationUnavailable(
-                "CSAM scanning is not configured: set CSAM_SCAN_URL before image work."
-            )
-
-        logger.warning("CSAM scanning is off", reason="set CSAM_SCAN_URL")
-        return
+        raise ModerationUnavailable("CSAM scanning is enabled but CSAM_SCAN_URL is not configured.")
 
     headers = {"Content-Type": "application/json"}
     if settings.csam_scan_credential:

@@ -10,6 +10,7 @@ from app.briefs import models as briefs_models  # noqa: F401  (register tables)
 from app.categories import models as categories_models  # noqa: F401  (register tables)
 from app.components import models as components_models  # noqa: F401  (register tables)
 from app.db.models import Base
+from app.deletion import models as deletion_models  # noqa: F401  (register tables)
 from app.generations import models as generations_models  # noqa: F401  (register tables)
 from app.images import models as images_models  # noqa: F401  (register tables)
 from app.organizations import models as organizations_models  # noqa: F401  (register tables)

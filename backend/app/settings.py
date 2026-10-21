@@ -59,14 +59,15 @@ class Settings(BaseSettings):
     # classifier, not a chat that a brief can talk into a verdict.
     openai_moderation_model: str = "omni-moderation-latest"
 
-    # A CSAM hash-matching service is not interchangeable with a generic image
-    # classifier. Point this at an adapter that accepts the contract documented
-    # in ``app.moderation.service``. In production its absence refuses image
-    # work rather than publishing unchecked pictures.
+    # A dedicated CSAM hash-matching adapter. It is off by default while the
+    # deployment waits for provider approval; when enabled, an image is checked
+    # before the generic classifier and a match stops the bytes from being
+    # stored. Enabling it without a URL is a configuration error, not a bypass.
+    csam_scan_enabled: bool = False
     csam_scan_url: str | None = None
     csam_scan_api_key: str | None = None
-    # Older deployments named this CSAM_SCAN_KEY. Accept both so a working
-    # scanner is not turned off by a spelling difference in the environment.
+    # Older deployments used this shorter name; accept it while it exists in an
+    # environment file.
     csam_scan_key: str | None = None
 
     # Every picture is decoded, bounded and re-encoded before it is moderated or
@@ -259,6 +260,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
+        # Deployment environments outlive individual settings. Ignoring unknown
+        # keys lets a renamed or retired feature be removed without breaking a
+        # boot; the application only reads the fields declared above.
+        extra="ignore",
     )
 
 

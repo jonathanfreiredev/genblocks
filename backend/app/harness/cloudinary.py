@@ -118,15 +118,24 @@ def _account() -> str:
     return settings.cloudinary_cloud_name
 
 
-async def destroy(public_id: str, *, client: httpx.AsyncClient | None = None) -> None:
-    """Remove one public asset, when a picture passed storage but not publication.
+async def destroy(
+    public_id: str,
+    *,
+    invalidate: bool = False,
+    client: httpx.AsyncClient | None = None,
+) -> None:
+    """Remove one public asset from the CDN.
 
-    A safety refusal never gets here: the picture is checked before it is stored.
-    A rubric refusal can happen after storage, and this is what keeps the library
-    from keeping an asset the registry decided not to publish.
+    ``invalidate`` asks Cloudinary to purge its delivery cache too. A known URL
+    can still survive in a browser or another proxy; this is the strongest purge
+    the provider offers.
     """
     account = _account()
-    params = {"public_id": public_id, "timestamp": str(int(time.time()))}
+    params = {
+        "public_id": public_id,
+        "timestamp": str(int(time.time())),
+        "invalidate": "true" if invalidate else "false",
+    }
     fields = {
         **params,
         "api_key": settings.cloudinary_api_key or "",
@@ -142,6 +151,15 @@ async def destroy(public_id: str, *, client: httpx.AsyncClient | None = None) ->
         await _delete(http, url, fields)
 
 
+def is_configured() -> bool:
+    """Whether this deployment has a Cloudinary account to delete from."""
+    return bool(
+        settings.cloudinary_cloud_name
+        and settings.cloudinary_api_key
+        and settings.cloudinary_api_secret
+    )
+
+
 async def _delete(client: httpx.AsyncClient, url: str, fields: dict[str, str]) -> None:
     response = await client.post(url, data=fields)
 
@@ -149,6 +167,16 @@ async def _delete(client: httpx.AsyncClient, url: str, fields: dict[str, str]) -
         raise StorageUnavailable(
             f"Cloudinary refused the delete ({response.status_code}): {response.text[:200]}"
         )
+
+    try:
+        result = response.json().get("result")
+    except ValueError as broke:
+        raise StorageUnavailable("Cloudinary answered the delete without JSON.") from broke
+
+    # "not found" is success for a destructive operation: a retry after a partial
+    # failure must be able to finish.
+    if result not in {"ok", "not found"}:
+        raise StorageUnavailable(f"Cloudinary did not delete the asset: {result!r}")
 
 
 async def _send(
