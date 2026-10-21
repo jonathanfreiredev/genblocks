@@ -17,5 +17,12 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],
-  build: { outDir: "dist", emptyOutDir: true },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+    // One chunk, because the preview is one file: a dynamic import would become a
+    // sibling request the inliner cannot carry, and a block that needs one is a
+    // block whose page is slower to open than it is to copy.
+    rollupOptions: { output: { codeSplitting: false } },
+  },
 });

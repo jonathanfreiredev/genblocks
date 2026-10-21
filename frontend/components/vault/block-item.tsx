@@ -3,6 +3,7 @@ import { AssetPlate } from "@/components/vault/asset-plate";
 import { CodeTabs } from "@/components/vault/code-tabs";
 import { EvidencePanel } from "@/components/vault/evidence-panel";
 import { ItemDetails } from "@/components/vault/item-details";
+import { LivePreview } from "@/components/vault/live-preview";
 import { judgedFrom } from "@/lib/vault/judged";
 import type { Component, Generation } from "@/lib/vault/types";
 
@@ -33,19 +34,28 @@ export function BlockItem({
   return (
     <div className="flex flex-1 flex-col px-3 py-4 md:px-4">
       <div className="bg-muted/20 rounded-xl border p-2 sm:p-3">
-        <div className="relative mx-auto aspect-[16/10] max-h-[58svh] w-full max-w-6xl">
-          <AssetPlate
-            path={
-              generation?.screenshot_path ?? component.screenshot_path ?? ""
-            }
-            alt={`The rendered block: ${component.title}`}
-            sizes="(min-width: 1280px) 1100px, 100vw"
-            caption={generation?.model ?? "Model not recorded"}
-            fit="contain"
-            className="size-full rounded-lg"
-          />
-        </div>
+        {component.has_preview ? (
+          <LivePreview componentId={component.id} title={component.title} />
+        ) : (
+          <div className="relative mx-auto aspect-[16/10] max-h-[58svh] w-full max-w-6xl">
+            <AssetPlate
+              path={
+                generation?.screenshot_path ?? component.screenshot_path ?? ""
+              }
+              alt={`The rendered block: ${component.title}`}
+              sizes="(min-width: 1280px) 1100px, 100vw"
+              caption={generation?.model ?? "Model not recorded"}
+              fit="contain"
+              className="size-full rounded-lg"
+            />
+          </div>
+        )}
       </div>
+      <p className="text-muted-foreground mt-2 px-1 text-xs">
+        {component.has_preview
+          ? "Interactive preview, sandboxed: nothing you type leaves this page."
+          : "This block has no interactive build yet — showing the render it was published from."}
+      </p>
 
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0">

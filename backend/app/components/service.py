@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.components.models import Component
+from app.components.models import Component, ComponentPreview
 from app.generations.models import Generation
 from app.pagination import ListParams
 from app.settings import settings
@@ -58,6 +58,39 @@ async def get_component_by_slug(session: AsyncSession, *, slug: str) -> Componen
     return await session.scalar(
         select(Component).where(Component.slug == slug, Component.deleted_at.is_(None))
     )
+
+
+async def get_preview(session: AsyncSession, *, component_id: uuid.UUID) -> ComponentPreview | None:
+    """The block's interactive build, if it has one and the block is still here.
+
+    The join is the check that matters: a block removed from the vault stops
+    answering with its document in the same request, so a takedown does not leave
+    a preview reachable by the id somebody already has.
+    """
+    return await session.scalar(
+        select(ComponentPreview)
+        .join(Component, Component.id == ComponentPreview.component_id)
+        .where(
+            ComponentPreview.component_id == component_id,
+            ComponentPreview.deleted_at.is_(None),
+            Component.deleted_at.is_(None),
+        )
+    )
+
+
+async def has_preview(session: AsyncSession, *, component_id: uuid.UUID) -> bool:
+    """Whether the item page has something to run, without loading the document."""
+    found = await session.scalar(
+        select(ComponentPreview.id)
+        .join(Component, Component.id == ComponentPreview.component_id)
+        .where(
+            ComponentPreview.component_id == component_id,
+            ComponentPreview.deleted_at.is_(None),
+            Component.deleted_at.is_(None),
+        )
+    )
+
+    return found is not None
 
 
 async def by_ids(session: AsyncSession, *, ids: Sequence[uuid.UUID]) -> list[Component]:

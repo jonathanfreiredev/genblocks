@@ -49,3 +49,7 @@ class ComponentRead(ComponentSummary):
     winning_generation_id: uuid.UUID | None
     created_by: uuid.UUID | None
     license: str
+    # Whether the item page has a built page to run. The document itself is a
+    # separate read: this answer is four columns, that one is a few hundred
+    # kilobytes.
+    has_preview: bool = False

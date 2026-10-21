@@ -8,6 +8,7 @@ Create Date: 2026-10-21
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "b7c2d9e4f103"
@@ -27,9 +28,7 @@ def upgrade() -> None:
     op.add_column("tasks", sa.Column("image_id", sa.UUID(as_uuid=True), nullable=True))
     op.add_column("tasks", sa.Column("image_width", sa.Integer(), nullable=True))
     op.add_column("tasks", sa.Column("image_height", sa.Integer(), nullable=True))
-    op.add_column(
-        "tasks", sa.Column("image_category_id", sa.UUID(as_uuid=True), nullable=True)
-    )
+    op.add_column("tasks", sa.Column("image_category_id", sa.UUID(as_uuid=True), nullable=True))
     op.create_foreign_key(
         "fk_tasks_image_id_images",
         "tasks",

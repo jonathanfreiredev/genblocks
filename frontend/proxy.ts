@@ -48,7 +48,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on everything except static assets and images.
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // Run on everything except static assets, images, and the block previews:
+    // a preview is a public document, and asking Supabase about the visitor's
+    // session before serving one would add a round trip to every item view for
+    // an answer the route does not use.
+    "/((?!_next/static|_next/image|api/previews|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

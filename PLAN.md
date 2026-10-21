@@ -367,6 +367,24 @@ Supabase Auth, Postgres, multi-tenancy por organización).
     nada más. Se usa el **SDK v5 sobre OTel** porque la API de ingesta v3 de
     Langfuse Cloud se apaga el 16/11/2026 para todo lo que no sean scores: escribir
     OTLP a mano habría sido una dependencia con fecha de caducidad.
+46. **La página del bloque es el bloque, no su foto.** El sandbox pliega el `dist`
+    que ya construyó en **un solo documento** (JS y CSS inline, CSP y puente
+    dentro), y ese documento es lo que se guarda en `component_previews` — no en
+    `components`, porque el catálogo selecciona todas las columnas y no puede
+    arrastrar cientos de kilobytes por tarjeta. El catálogo, la tarea y la
+    evidencia siguen con el screenshot; solo la página del bloque ejecuta.
+    Es una **puerta**: sin documento no se publica, y el tope son 2 MB. La
+    política viaja dos veces —`<meta>` en el documento y cabecera en la ruta de
+    Next— y el navegador aplica la intersección: `sandbox allow-scripts
+    allow-forms` (origen opaco: sin sesión, sin storage, sin DOM del padre),
+    `connect-src 'none'` y `form-action 'none'`. `allow-forms` está porque el
+    `submit` de un formulario es lo que el visitante viene a probar; la petición
+    que haría la corta `form-action`. El tema se pasa en la URL para el primer
+    pintado y por `postMessage` después (cambiarlo no recarga ni pierde lo
+    escrito); el alto viaja por el mismo canal. Se aceptan dos residuos: un bucle
+    que el escáner no vea congela la pestaña (mismo proceso), y un `location`
+    construido en ejecución podría navegar el marco; ambos quedan cubiertos por
+    el escaneo y la intercepción de clics, no por el aislamiento.
 
 ---
 
@@ -541,8 +559,10 @@ vistas: a la derecha, los scores de la generación y el enlace a su trace.
 
 ## 8. Seguridad
 
-- **Render en vivo**: fuera de v1. Se muestra el screenshot; el render seguro
-  (iframe aislado, origen distinto, CSP) se decide después.
+- **Render en vivo**: la página del bloque ejecuta el artefacto en un iframe de
+  origen opaco, con la política repetida en el documento y en la respuesta
+  (decisión 46). El catálogo, la tarea y la evidencia siguen mostrando el
+  screenshot.
 - **Anti-inyección**: todo input externo (brief, retrieval) es dato, nunca
   instrucción; allowlist fija de tools; validación por esquema; el llamante sale
   del token; secretos fuera del sandbox; el código generado solo corre en el

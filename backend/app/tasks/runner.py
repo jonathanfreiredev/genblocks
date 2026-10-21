@@ -39,7 +39,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.briefs import service as briefs
 from app.categories import service as categories_service
-from app.components.models import DEFAULT_LICENSE, Component, ComponentAsset
+from app.components.models import (
+    DEFAULT_LICENSE,
+    Component,
+    ComponentAsset,
+    ComponentPreview,
+)
 from app.db.models import utcnow
 from app.db.session import async_session_maker
 from app.generations.models import Generation, Verdict
@@ -948,6 +953,18 @@ async def _publish(
         )
         session.add(component)
         await session.flush()
+
+        # The page the item view runs. The sandbox's gate already refused a run
+        # without one, so this is the artifact the visitor gets rather than a
+        # best effort; the check and the row are the same document.
+        if made.found.preview is not None:
+            session.add(
+                ComponentPreview(
+                    component_id=component.id,
+                    html=made.found.preview,
+                    bytes=len(made.found.preview.encode("utf-8")),
+                )
+            )
 
         # Every attempt of the task points at the block — one row, and the shape is
         # the same whether a run makes one artifact or several (PLAN.md, decision 21).

@@ -7,7 +7,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.components.models import Component
@@ -15,6 +15,8 @@ from app.components.schemas import ComponentListQuery, ComponentRead, ComponentS
 from app.components.service import (
     get_component,
     get_component_by_slug,
+    get_preview,
+    has_preview,
     list_components,
     renders,
 )
@@ -52,6 +54,7 @@ async def _read(session: AsyncSession, component: Component) -> ComponentRead:
         update={
             "author": summary.author,
             "screenshot_path": summary.screenshot_path,
+            "has_preview": await has_preview(session, component_id=component.id),
         }
     )
 
@@ -103,6 +106,42 @@ async def read_component(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found.")
 
     return await _read(session, component)
+
+
+@components_router.get(
+    "/{component_id}/preview",
+    response_class=Response,
+    responses={200: {"content": {"text/plain": {}}}},
+)
+async def read_component_preview(
+    component_id: uuid.UUID,
+    session: Annotated[AsyncSession, Depends(get_async_db_session)],
+) -> Response:
+    """Return the block's built page, as one HTML document.
+
+    This is the artifact the item view runs, not a description of it: the bytes
+    are the sandbox's build, folded into a single file with a CSP and the bridge
+    that lets the host follow the theme. It is public like the block itself, and
+    it stops being served the moment the block is gone.
+
+    Served as **text**, not as a page. The web app re-emits it with the policy
+    that makes it safe to embed; here it is a document being handed over, and a
+    browser that opened this address directly should see source, not run generated
+    code on the API's origin.
+    """
+    found = await get_preview(session, component_id=component_id)
+    if found is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Component preview not found."
+        )
+
+    return Response(
+        content=found.html,
+        media_type="text/plain; charset=utf-8",
+        # The web app owns the caching answer; the API is read through it, and a
+        # cached copy here would survive a takedown.
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @components_router.get("/{component_id}/generations", response_model=list[GenerationRead])

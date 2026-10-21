@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.briefs import service as briefs
 from app.categories import service as categories_service
-from app.components.models import Component, ComponentAsset
+from app.components.models import Component, ComponentAsset, ComponentPreview
 from app.db.models import utcnow
 from app.generations.models import Generation, Verdict
 from app.harness import agent, cloudinary, sandbox
@@ -136,6 +136,11 @@ def findings(*failing: str) -> SandboxResult:
         ],
         dependencies=dict(DEPENDENCIES),
         screenshot=None if refused & set(FATAL_CHECKS) else PNG,
+        # The built page the sandbox folds out of the same bundle. A run that
+        # failed a gate never gets one, and the fake mirrors that.
+        preview=None
+        if refused & set(FATAL_CHECKS)
+        else "<!doctype html><html><body>Pricing</body></html>",
     )
 
 
@@ -424,7 +429,7 @@ async def test_a_queued_task_runs_towards_a_published_block(
     assert [step.status for step in ran.steps] == [StepStatus.SUCCEEDED] * len(runner.STEP_NAMES)
     assert ran.steps[0].detail == {"category": "hero"}
     assert ran.steps[1].detail == {
-        "checks": "11/11",
+        "checks": "12/12",
         "files": 2,
         "iterations": 3,
         "skills": "1a2b3c4d",
@@ -459,7 +464,7 @@ async def test_a_queued_task_runs_towards_a_published_block(
     assert harness.uploaded == [cloudinary.screenshot_id(task_id, 1)]
     assert attempt.checks is not None
     assert attempt.checks["blocked"] is False
-    assert (attempt.checks["passed"], attempt.checks["total"]) == (11, 11)
+    assert (attempt.checks["passed"], attempt.checks["total"]) == (12, 12)
 
     component = await runner_session.get(Component, ran.component_id)
     assert component is not None
@@ -478,6 +483,15 @@ async def test_a_queued_task_runs_towards_a_published_block(
     assert component.created_by == owner_id
     assert component.winning_generation_id == attempt.id
     assert attempt.component_id == component.id
+
+    # The built page the item view runs, stored beside the block rather than on
+    # it, and only after the gates and the judge cleared the run.
+    preview = await runner_session.scalar(
+        select(ComponentPreview).where(ComponentPreview.component_id == component.id)
+    )
+    assert preview is not None
+    assert preview.html == "<!doctype html><html><body>Pricing</body></html>"
+    assert preview.bytes == len(preview.html.encode("utf-8"))
     assert notified == [
         {
             "kind": "component",
@@ -764,7 +778,7 @@ async def test_findings_that_are_not_fatal_are_evidence_not_a_gate(runner_sessio
     done = await get_task(runner_session, task_id=task_id)
     assert done is not None
     assert done.status == TaskStatus.SUCCEEDED
-    assert done.steps[1].detail["checks"] == "9/11"
+    assert done.steps[1].detail["checks"] == "10/12"
 
     attempt = (await _attempts(runner_session, task_id))[0]
     assert attempt.checks is not None
@@ -775,10 +789,13 @@ async def test_findings_that_are_not_fatal_are_evidence_not_a_gate(runner_sessio
     ]
 
 
-async def test_a_run_with_no_render_is_still_judged_and_publishes_without_a_photo(
-    runner_session, harness, judge
-):
-    """Nothing to photograph is not a failure: the attempt says the asset is not there."""
+async def test_a_run_with_no_page_is_refused_before_it_is_judged(runner_session, harness, judge):
+    """A block a visitor cannot run is not published, so a missing page is a gate.
+
+    Nothing to photograph and nothing to hand over are the same run: the preview
+    is folded from the built page, so a run that never produced one has nothing the
+    item view could show.
+    """
     await create_category(runner_session, slug="hero")
     owner = await _owner(runner_session)
     task = await _queued(runner_session, owner)
@@ -789,15 +806,17 @@ async def test_a_run_with_no_render_is_still_judged_and_publishes_without_a_phot
     await runner.run_task(task_id)
     runner_session.expire_all()
 
-    done = await get_task(runner_session, task_id=task_id)
-    assert done is not None
-    assert done.status == TaskStatus.SUCCEEDED
-    assert judge.shown == [(BRIEF, PROJECT)]
+    failed = await get_task(runner_session, task_id=task_id)
+    assert failed is not None
+    assert failed.status == TaskStatus.FAILED
+    assert "preview" in (failed.error or "")
 
+    assert judge.shown == []
     attempt = (await _attempts(runner_session, task_id))[0]
     assert attempt.screenshot_path is None
-    assert attempt.scores == GOOD
-    assert harness.uploaded == []
+    assert attempt.verdict == Verdict.REJECTED
+    assert await runner_session.scalar(select(Component)) is None
+    assert await runner_session.scalar(select(ComponentPreview)) is None
 
 
 async def test_a_harness_that_writes_nothing_fails_the_task(runner_session, harness, monkeypatch):

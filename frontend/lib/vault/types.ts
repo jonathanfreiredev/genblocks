@@ -1,8 +1,8 @@
 /**
  * What the backend's `/v1` read endpoints return.
  *
- * Hand-written rather than generated: there are seven of them, they change when
- * a service changes, and a stale field surfaces in the page that renders it.
+ * Hand-written rather than generated: there are a handful of them, they change
+ * when a service changes, and a stale field surfaces in the page that renders it.
  */
 
 export type Kind = "component" | "image";
@@ -77,6 +77,12 @@ export interface Component extends ComponentSummary {
   winning_generation_id: string | null;
   created_by: string | null;
   license: string;
+  /**
+   * Whether the item view can run the block instead of showing its render.
+   * Every published block has one; the flag exists so an older or interrupted
+   * row says what it has instead of offering an empty frame.
+   */
+  has_preview: boolean;
 }
 
 /**

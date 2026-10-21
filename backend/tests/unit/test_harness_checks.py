@@ -9,7 +9,15 @@ rather than a look.
 import pytest
 
 from app.harness import checks, sandbox
-from app.harness.schemas import ASSETS, SAFETY, SandboxCheck, SandboxFile, SandboxResult
+from app.harness.schemas import (
+    ASSETS,
+    PREVIEW,
+    PREVIEW_MAX_BYTES,
+    SAFETY,
+    SandboxCheck,
+    SandboxFile,
+    SandboxResult,
+)
 from app.settings import settings
 
 pytestmark = pytest.mark.anyio
@@ -296,13 +304,53 @@ async def test_the_sandbox_is_not_asked_when_the_text_refuses(monkeypatch):
 
 async def test_the_sandbox_answers_after_the_text_passes(monkeypatch):
     async def asked(files):
-        return SandboxResult(checks=[SandboxCheck(name="typecheck", ok=True)])
+        return SandboxResult(
+            checks=[SandboxCheck(name="typecheck", ok=True)],
+            preview="<html></html>",
+        )
 
     monkeypatch.setattr(sandbox, "check", asked)
 
     found = await checks.check(project("<section />"))
 
     # One list for every reader: the text's findings and the sandbox's, in the
-    # order they were made.
-    assert [one.name for one in found.checks] == [ASSETS, SAFETY, "typecheck"]
+    # order they were made, and the preview's own finding at the end — the bar is
+    # applied here because it is the registry's.
+    assert [one.name for one in found.checks] == [ASSETS, SAFETY, "typecheck", PREVIEW]
+    assert all(one.ok for one in found.checks)
     assert found.blocked is False
+
+
+async def test_a_block_without_an_interactive_build_is_refused(monkeypatch):
+    async def asked(files):
+        return SandboxResult(
+            checks=[SandboxCheck(name="typecheck", ok=True)],
+            preview_error="the page could not be folded into one file.",
+        )
+
+    monkeypatch.setattr(sandbox, "check", asked)
+
+    found = await checks.check(project("<section />"))
+
+    assert found.blocked is True
+    preview = next(one for one in found.checks if one.name == PREVIEW)
+    assert preview.ok is False
+    # The sandbox's sentence travels: "there is nothing" is not a reason.
+    assert "folded" in said(preview)
+
+
+async def test_an_interactive_build_over_the_bar_is_refused(monkeypatch):
+    async def asked(files):
+        return SandboxResult(
+            checks=[SandboxCheck(name="typecheck", ok=True)],
+            preview="x" * (PREVIEW_MAX_BYTES + 1),
+        )
+
+    monkeypatch.setattr(sandbox, "check", asked)
+
+    found = await checks.check(project("<section />"))
+
+    assert found.blocked is True
+    preview = next(one for one in found.checks if one.name == PREVIEW)
+    assert preview.ok is False
+    assert str(PREVIEW_MAX_BYTES) in said(preview)

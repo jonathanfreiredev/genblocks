@@ -166,10 +166,18 @@ async def get_component(
     async with async_session_maker() as session:
         component = await _find_component(session, component_id=component_id, slug=slug)
 
-    if component is None:
-        raise ValueError("No component matches that identifier.")
+        if component is None:
+            raise ValueError("No component matches that identifier.")
 
-    return ComponentRead.model_validate(component)
+        # The flag comes from the preview table, not from the block's row, so it
+        # is read beside it rather than derived from the files.
+        return ComponentRead.model_validate(component).model_copy(
+            update={
+                "has_preview": await components_service.has_preview(
+                    session, component_id=component.id
+                )
+            }
+        )
 
 
 @mcp.tool

@@ -8,6 +8,8 @@ import uuid
 
 import pytest
 
+from app.components.models import ComponentPreview
+from app.deletion import service as deletion
 from app.generations.models import Generation
 from app.harness.agent import ENTRY
 from app.users.models import User
@@ -161,6 +163,60 @@ async def test_a_component_is_read_in_full_by_id(client, db_session):
     assert body["delivery_prompt"] == component.delivery_prompt
     assert body["license"] == "MIT"
     assert "provenance" in body
+
+
+async def test_a_components_preview_is_public_and_says_so_on_the_block(client, db_session):
+    category = await create_category(db_session, slug="hero")
+    component = await create_component(db_session, category_id=category.id, slug="alpha")
+    document = "<!doctype html><html><body><section>Sunset</section></body></html>"
+    db_session.add(
+        ComponentPreview(
+            component_id=component.id,
+            html=document,
+            bytes=len(document.encode("utf-8")),
+        )
+    )
+    await db_session.commit()
+
+    full = (await client.get(f"/v1/components/{component.id}")).json()
+    preview = await client.get(f"/v1/components/{component.id}/preview")
+
+    # The block says it has a page to run without carrying the page: the item
+    # view asks for the document separately.
+    assert full["has_preview"] is True
+    assert preview.status_code == 200
+    # A document, not a page: the web app is the only place it is served as HTML.
+    assert preview.headers["content-type"].startswith("text/plain")
+    assert preview.text == document
+    # Not cached by anything between the API and the visitor: a takedown has to
+    # reach the document, not only the row.
+    assert preview.headers["cache-control"] == "no-store"
+
+
+async def test_a_block_without_a_preview_says_so_and_answers_nothing(client, db_session):
+    category = await create_category(db_session, slug="hero")
+    component = await create_component(db_session, category_id=category.id, slug="alpha")
+
+    body = (await client.get(f"/v1/components/{component.id}")).json()
+    preview = await client.get(f"/v1/components/{component.id}/preview")
+
+    assert body["has_preview"] is False
+    assert preview.status_code == 404
+
+
+async def test_an_unknown_blocks_preview_is_not_found(client):
+    assert (await client.get(f"/v1/components/{uuid.uuid4()}/preview")).status_code == 404
+
+
+async def test_a_deleted_blocks_preview_is_not_served(client, db_session):
+    category = await create_category(db_session, slug="hero")
+    component = await create_component(db_session, category_id=category.id, slug="alpha")
+    db_session.add(ComponentPreview(component_id=component.id, html="<html></html>", bytes=13))
+    await db_session.commit()
+
+    await deletion.delete_component(db_session, component_id=component.id)
+
+    assert (await client.get(f"/v1/components/{component.id}/preview")).status_code == 404
 
 
 async def test_a_component_is_read_in_full_by_slug(client, db_session):

@@ -151,6 +151,13 @@ MAX_TOTAL_BYTES = 2_000_000
 # already refuses them; the sandbox repeats the rule because it is the last door.
 RESERVED_PATHS = frozenset({"src/main.tsx", "src/index.css"})
 
+# Where the interactive build lands once the page has been inlined, and how much
+# of it this function will carry. This is the transport's bound, not the policy:
+# what the registry publishes is decided in ``app/harness/schemas.py``, and a
+# preview over its bar is refused there with the size in the finding.
+PREVIEW_PATH = "dist/preview.html"
+MAX_PREVIEW_TRANSPORT_BYTES = 4_000_000
+
 # How long the browser may spend on one operation before Playwright gives up. The
 # render loop has its own deadline; this is the net under a page that blocks its
 # own JavaScript thread.
@@ -236,6 +243,13 @@ def check(request: dict) -> dict[str, Any]:
 
         rendered = _render(project, asset_prefixes=asset_prefixes)
 
+        # The interactive build is made from the same bytes that were just
+        # rendered: a page that did not come up has nothing to hand over, and a
+        # page that did gets its `dist` folded into one document.
+        preview, preview_error = (
+            _inline(project) if rendered["screenshot"] is not None else (None, None)
+        )
+
         return {
             "checks": [*checks, *rendered["checks"]],
             "violations": rendered["violations"],
@@ -243,6 +257,8 @@ def check(request: dict) -> dict[str, Any]:
             "screenshot": rendered["screenshot"],
             "screenshot_dark": rendered["screenshot_dark"],
             "screenshot_media_type": rendered["screenshot_media_type"],
+            "preview": preview,
+            "preview_error": preview_error,
         }
 
 
@@ -255,7 +271,33 @@ def _unrendered(checks: list[dict[str, Any]], dependencies: dict[str, str]) -> d
         "screenshot": None,
         "screenshot_dark": None,
         "screenshot_media_type": SCREENSHOT_MEDIA_TYPE,
+        "preview": None,
+        "preview_error": None,
     }
+
+
+def _inline(project: Path) -> tuple[str | None, str | None]:
+    """Fold the built page into one document, or say why it could not be done.
+
+    The inliner is part of the scaffold, so the rules about what a preview may
+    reach travel with the build. A document over the transport's bound is dropped
+    and named: the registry's own bar is applied on the other side, where the
+    finding is written.
+    """
+    done = _npm(project, script="preview", name="preview")
+    if not done["ok"]:
+        return None, done["detail"] or "the page could not be folded into one file."
+
+    path = project / PREVIEW_PATH
+    if not path.is_file():
+        return None, "the inliner produced no preview."
+
+    text = path.read_text(encoding="utf-8")
+    size = len(text.encode("utf-8"))
+    if size > MAX_PREVIEW_TRANSPORT_BYTES:
+        return None, f"the interactive build is {size} bytes, more than the sandbox carries."
+
+    return text, None
 
 
 def _imports(files: list[dict[str, str]]) -> tuple[dict[str, Any], dict[str, str]]:

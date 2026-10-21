@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "build": "vite build",
+    "preview": "node scripts/inline.mjs",
     "security:source": "node scripts/scan.mjs source",
     "security:bundle": "node scripts/scan.mjs bundle"
   },

@@ -446,7 +446,10 @@ Opening a tile is a navigation, not a dialog: `/blocks/<slug>` or `/images/<slug
 
 Top to bottom:
 
-1. **The render** — inside a muted, bordered frame with 8–12px padding. No tab, no `Render` label. The frame is capped at `58svh` (images at `60svh`) and centred; the whole artifact is contained, never cropped. A block's title is not above it.
+1. **The render** — inside a muted, bordered frame with 8–12px padding. No tab, no `Render` label, no controls. The frame is capped at `58svh` (images at `60svh`) and centred; the whole artifact is contained, never cropped. A block's title is not above it.
+   - **A block runs.** The frame is a sandboxed iframe on the built page, sized by the page itself up to the `58svh` cap (past that it scrolls). A visitor can press, type, submit a form and watch an animation; nothing they do leaves the page. There is no `live`/`still` switch and no reload button — the block is simply live.
+   - **One line of honesty** sits under the frame, 12px muted: `Interactive preview, sandboxed: nothing you type leaves this page.` It is the only copy the render gets.
+   - An image keeps the static render; so do the gallery, the task result and the evidence panel.
 2. **Two columns** below, aligned at the top:
    - **Left, flexible**: the `code` and `prompt` tabs for a block; the prompt card for an image.
    - **Right, 20rem (22rem on a wide screen)**: the evidence.

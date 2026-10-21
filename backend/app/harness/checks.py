@@ -19,7 +19,15 @@ from elsewhere or reaches the network is not an attempt.
 import re
 
 from app.harness import sandbox
-from app.harness.schemas import ASSETS, SAFETY, SandboxCheck, SandboxFile, SandboxResult
+from app.harness.schemas import (
+    ASSETS,
+    PREVIEW,
+    PREVIEW_MAX_BYTES,
+    SAFETY,
+    SandboxCheck,
+    SandboxFile,
+    SandboxResult,
+)
 from app.settings import settings
 
 # How many findings one check reports before it says "and more". A reader fixes
@@ -173,8 +181,45 @@ async def check(files: list[SandboxFile]) -> SandboxResult:
         return SandboxResult(checks=static)
 
     found = await sandbox.check(files)
+    checks = [*static, *found.checks]
 
-    return found.model_copy(update={"checks": [*static, *found.checks]})
+    # A run already refused before the page existed has no preview to judge: the
+    # finding would say "there is no page" about a run that never asked for one.
+    # Every run that got as far as the checks is held to it.
+    if not found.blocked:
+        checks.append(_preview(found))
+
+    return found.model_copy(update={"checks": checks})
+
+
+def _preview(found: SandboxResult) -> SandboxCheck:
+    """Whether the block can be handed to a visitor as a live page.
+
+    The size bar is applied here rather than in the sandbox because it is the
+    registry's decision: the container carries a document, this side decides
+    whether it is small enough to store. A missing document is a failure, not an
+    absent check — an old or broken sandbox must not publish a block the item page
+    cannot show.
+    """
+    if found.preview is None:
+        return SandboxCheck(
+            name=PREVIEW,
+            ok=False,
+            detail=found.preview_error or "the sandbox produced no interactive build.",
+        )
+
+    size = len(found.preview.encode("utf-8"))
+    if size > PREVIEW_MAX_BYTES:
+        return SandboxCheck(
+            name=PREVIEW,
+            ok=False,
+            detail=(
+                f"the interactive build is {size} bytes, over the registry's "
+                f"limit of {PREVIEW_MAX_BYTES}."
+            ),
+        )
+
+    return SandboxCheck(name=PREVIEW, ok=True)
 
 
 def _external_assets(file: SandboxFile, hosts: tuple[str, ...]) -> list[str]:

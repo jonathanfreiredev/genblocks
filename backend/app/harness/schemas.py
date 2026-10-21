@@ -20,6 +20,7 @@ ACCESSIBILITY = "accessibility"
 IMPORTS = "imports"
 AST = "ast"
 BUNDLE = "bundle"
+PREVIEW = "preview"
 
 # The two that never reach the sandbox: they read the project's text.
 ASSETS = "assets"
@@ -35,6 +36,11 @@ LAYOUT_PREFIX = "layout:"
 # cases, a block that stops working the moment somebody copies it. Lint, layout and
 # accessibility findings are evidence for the judge, not gates: a wide hero at
 # 390px is a judgement call, and that is what the judge is for.
+#
+# ``preview`` is a gate because a block is shown to a visitor as a live page: a
+# project that cannot be handed over as one document is a block whose item page
+# would be a picture with an apology under it. The bar is the registry's, not the
+# sandbox's — the sandbox only carries the document.
 FATAL_CHECKS = (
     TYPECHECK,
     BUILD,
@@ -44,7 +50,14 @@ FATAL_CHECKS = (
     BUNDLE,
     ASSETS,
     SAFETY,
+    PREVIEW,
 )
+
+# How large a block's interactive build may be, before it stops being published.
+# A block is React and the scaffold's shelf, which measured 226 KB for the sample;
+# this leaves room for motion and a component library, and bounds what one row of
+# the preview table costs.
+PREVIEW_MAX_BYTES = 2_000_000
 
 
 class SandboxFile(BaseModel):
@@ -97,6 +110,11 @@ class SandboxResult(BaseModel):
     ``dependencies`` is what the project imports from packages, with the version it
     was built against — read by the sandbox from the project itself rather than
     declared by anybody, so a block's install line is a fact and not a promise.
+
+    ``preview`` is the built page folded into one HTML document, CSP and bridge
+    included. It is what the item page embeds; ``preview_error`` is the sandbox's
+    sentence when it could not produce one, so the finding says *why* instead of
+    only that there is nothing.
     """
 
     checks: list[SandboxCheck] = Field(default_factory=list)
@@ -107,6 +125,8 @@ class SandboxResult(BaseModel):
     # The bytes above are JPEG from the sandbox, not the PNG a naive reader might
     # assume; the judge and the model both need the right data-URL media type.
     screenshot_media_type: str = "image/png"
+    preview: str | None = None
+    preview_error: str | None = None
 
     @property
     def blocked(self) -> bool:

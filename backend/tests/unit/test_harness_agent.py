@@ -58,6 +58,9 @@ class Sandbox:
                 SandboxCheck(name="render", ok=True),
             ],
             screenshot=PNG,
+            # A look that passes produces the page a visitor would run too; the
+            # harness's gate reads the same answer.
+            preview="<!doctype html><html><body>Block</body></html>",
         )
 
 

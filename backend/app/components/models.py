@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy import ForeignKey, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -53,6 +53,28 @@ class Component(BaseModel):
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
     license: Mapped[str] = mapped_column(default=DEFAULT_LICENSE)
+
+
+class ComponentPreview(BaseModel):
+    """The block's built page, folded into one document.
+
+    Beside ``components`` rather than on it: the gallery selects every column of
+    the row it lists, and a few hundred kilobytes of HTML do not belong in a card.
+    One per block, because a block is one published artifact; a re-run makes a new
+    block. The document carries its own policy and the bridge the item page talks
+    to (see the scaffold's ``scripts/inline.mjs``).
+    """
+
+    __tablename__ = "component_previews"
+
+    __table_args__ = (UniqueConstraint("component_id", name="uq_component_previews_component_id"),)
+
+    # The unique constraint is the lookup index: a block has one preview.
+    component_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("components.id", ondelete="CASCADE"))
+    html: Mapped[str] = mapped_column(Text)
+    # The size in UTF-8 bytes, kept so an operator can see what a block costs
+    # without loading the document.
+    bytes: Mapped[int]
 
 
 class ComponentAsset(BaseModel):
