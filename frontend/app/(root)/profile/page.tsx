@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { ConnectedAppsCard } from "@/components/auth/connected-apps-card";
 import { DeleteAccountCard } from "@/components/auth/delete-account-card";
+import { AdminCard } from "@/components/auth/admin-card";
 import { ProfileCard } from "@/components/auth/profile-card";
 import { getSession } from "@/server/auth/auth.lib";
 import { listConnectedApps } from "@/server/oauth/oauth.lib";
@@ -27,6 +28,8 @@ export default async function ProfilePage() {
         />
 
         <ConnectedAppsCard result={connectedApps} />
+
+        {session?.user.isAdmin ? <AdminCard /> : null}
 
         <DeleteAccountCard />
       </div>

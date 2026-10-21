@@ -7,8 +7,8 @@ const nextConfig: NextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1536],
     remotePatterns: [
       {
-        // The vault's stock images live on Cloudinary, so the repository and the
-        // database carry a public id instead of bytes.
+        // Block renders and stock images live on Cloudinary, so the repository
+        // and the database carry a public id instead of bytes.
         protocol: "https",
         hostname: "res.cloudinary.com",
       },

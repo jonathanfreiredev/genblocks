@@ -1,3 +1,4 @@
+import { ReportDialog } from "@/components/reports/report-dialog";
 import { AssetPlate } from "@/components/vault/asset-plate";
 import { CodeTabs } from "@/components/vault/code-tabs";
 import { EvidencePanel } from "@/components/vault/evidence-panel";
@@ -17,10 +18,12 @@ export function BlockItem({
   component,
   generations,
   categoryName,
+  signedIn,
 }: {
   component: Component;
   generations: Generation[];
   categoryName: string;
+  signedIn: boolean;
 }) {
   const generation =
     generations.find((one) => one.id === component.winning_generation_id) ??
@@ -68,9 +71,17 @@ export function BlockItem({
                 date={component.created_at}
                 model={generation?.model ?? null}
                 traceId={generation?.langfuse_trace_id ?? null}
+                provenance={component.provenance}
               />
             }
           />
+          <div className="mt-2 flex justify-end">
+            <ReportDialog
+              targetKind="component"
+              targetId={component.id}
+              signedIn={signedIn}
+            />
+          </div>
         </aside>
       </div>
     </div>

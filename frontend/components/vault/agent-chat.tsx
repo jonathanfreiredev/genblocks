@@ -103,6 +103,18 @@ const TOOL_COPY: Record<string, { running: string; done: string }> = {
     running: "Looking through the pictures",
     done: "Looked through the pictures",
   },
+  plan_image: {
+    running: "Checking the image prompt",
+    done: "Checked the image prompt",
+  },
+  generate_image: {
+    running: "Preparing the image",
+    done: "Prepared the image",
+  },
+  plan_component: {
+    running: "Checking the brief",
+    done: "Checked the brief",
+  },
   create_component: {
     running: "Preparing the brief",
     done: "Prepared the brief",
@@ -118,9 +130,24 @@ type Activity = {
 };
 
 type Proposal = {
+  kind: "component" | "image";
   brief: string;
   force: boolean;
+  width: number | null;
+  height: number | null;
+  category: string | null;
 };
+
+function proposalKey(proposal: Proposal): string {
+  return [
+    proposal.kind,
+    proposal.brief,
+    proposal.force,
+    proposal.width,
+    proposal.height,
+    proposal.category,
+  ].join("|");
+}
 
 type Turn = {
   id: number;
@@ -216,23 +243,27 @@ function addSuggestions(
   });
 }
 
-/** Keep one confirmation card per prepared brief. */
+/** Keep one confirmation card per prepared task. */
 function addProposal(turns: Turn[], id: number, proposal: Proposal): Turn[] {
   return turns.map((turn) =>
     turn.id === id &&
-    !turn.proposals.some((one) => one.brief === proposal.brief)
+    !turn.proposals.some(
+      (one) => proposalKey(one) === proposalKey(proposal),
+    )
       ? { ...turn, proposals: [...turn.proposals, proposal] }
       : turn,
   );
 }
 
 /** Drop a proposal once the person has queued it. */
-function removeProposal(turns: Turn[], id: number, brief: string): Turn[] {
+function removeProposal(turns: Turn[], id: number, proposal: Proposal): Turn[] {
   return turns.map((turn) =>
     turn.id === id
       ? {
           ...turn,
-          proposals: turn.proposals.filter((one) => one.brief !== brief),
+          proposals: turn.proposals.filter(
+            (one) => proposalKey(one) !== proposalKey(proposal),
+          ),
         }
       : turn,
   );
@@ -356,13 +387,20 @@ function StepLine({ step }: { step: Task["steps"][number] }) {
 
 function TaskCard({ task }: { task: Task }) {
   const live = isLive(task.status);
+  const isImage = task.kind === "generate_image";
   const heading = task.cached
     ? "Already in the registry"
     : task.status === "failed"
-      ? "The build stopped"
+      ? isImage
+        ? "The image stopped"
+        : "The build stopped"
       : task.status === "succeeded"
-        ? "Block published"
-        : "Building the block";
+        ? isImage
+          ? "Image published"
+          : "Block published"
+        : isImage
+          ? "Generating the image"
+          : "Building the block";
 
   return (
     <div className="bg-muted/20 mt-1 overflow-hidden rounded-xl border">
@@ -426,6 +464,15 @@ function TaskCard({ task }: { task: Task }) {
             Open the block
           </Link>
         ) : null}
+        {task.image_id ? (
+          <Link
+            href={`/images/${task.image_id}`}
+            prefetch={false}
+            className={buttonVariants({ size: "xs" })}
+          >
+            Open the image
+          </Link>
+        ) : null}
       </div>
     </div>
   );
@@ -453,11 +500,20 @@ function ProposalCard({
     <div className="bg-muted/20 flex flex-col gap-3 rounded-lg border p-3">
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium">
-          {proposal.force ? "A new version, ready to build" : "Ready to build"}
+          {proposal.kind === "image"
+            ? "Ready to generate this image"
+            : proposal.force
+              ? "A new version, ready to build"
+              : "Ready to build"}
         </p>
         <p className="text-muted-foreground text-sm whitespace-pre-wrap">
           {proposal.brief}
         </p>
+        {proposal.kind === "image" ? (
+          <p className="text-muted-foreground text-xs tabular-nums">
+            {proposal.width} × {proposal.height} · {proposal.category}
+          </p>
+        ) : null}
       </div>
       <div className="flex justify-end">
         <Button
@@ -471,7 +527,7 @@ function ProposalCard({
           ) : (
             <SparklesIcon data-icon="inline-start" />
           )}
-          Queue block
+          {proposal.kind === "image" ? "Generate image" : "Queue block"}
         </Button>
       </div>
     </div>
@@ -587,8 +643,8 @@ function Welcome({
           Ask about anything in the vault
         </h3>
         <p className="text-muted-foreground text-sm">
-          Find a block, look through the pictures, or describe the block you
-          want to build.
+          Find a block, look through the pictures, describe a block to build,
+          or ask for a new image.
         </p>
       </div>
 
@@ -817,11 +873,7 @@ export function AgentChatProvider({
       const task = (await response.json()) as Task;
       setTasks((current) => ({ ...current, [task.id]: task }));
       setTurns((current) =>
-        addTask(
-          removeProposal(current, turnId, proposal.brief),
-          turnId,
-          task.id,
-        ),
+        addTask(removeProposal(current, turnId, proposal), turnId, task.id),
       );
       router.refresh();
 
@@ -920,8 +972,12 @@ export function AgentChatProvider({
         if (event.type === "proposal") {
           setTurns((current) =>
             addProposal(current, theirs, {
+              kind: event.kind,
               brief: event.brief,
               force: event.force,
+              width: event.width,
+              height: event.height,
+              category: event.category,
             }),
           );
           return;
@@ -999,7 +1055,7 @@ export function AgentChatProvider({
                 Ask GenBlocks
               </DialogTitle>
               <DialogDescription className="truncate text-xs">
-                Blocks, images, or a brief to build.
+                Blocks, stock images, or a brief to build.
               </DialogDescription>
             </div>
 
@@ -1086,7 +1142,7 @@ export function AgentChatProvider({
                   maxLength={MESSAGE_MAX_LENGTH}
                   disabled={thinking}
                   aria-label="Message"
-                  placeholder="Ask about a block, an image, or what to build…"
+                  placeholder="Ask about a block or image, or what to build…"
                   className="max-h-40 min-h-14 py-3"
                 />
                 <InputGroupAddon align="block-end" className="p-2">
@@ -1121,8 +1177,8 @@ export function AgentChatProvider({
               <div className="bg-muted/30 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-muted-foreground text-sm">
                   The assistant needs an account: the conversation belongs to
-                  whoever asks. Sign in to ask about blocks and images, or to
-                  build one.
+                  whoever asks. Sign in to ask about blocks and images, build
+                  one, or generate an image.
                 </p>
                 <Link
                   href="/auth/login?next=%2Fblocks"

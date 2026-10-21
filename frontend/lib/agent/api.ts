@@ -11,7 +11,14 @@ import { env } from "@/lib/env";
  */
 export async function confirmBrief(
   token: string,
-  proposal: { brief: string; force?: boolean },
+  proposal: {
+    kind: "component" | "image";
+    brief: string;
+    force?: boolean;
+    width?: number | null;
+    height?: number | null;
+    category?: string | null;
+  },
 ): Promise<Response> {
   return fetch(`${env.BACKEND_URL}/v1/agent/confirm`, {
     method: "POST",

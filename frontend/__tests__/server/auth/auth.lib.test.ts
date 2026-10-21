@@ -65,8 +65,39 @@ describe("getSession", () => {
         email: "user@example.com",
         name: "From backend",
         isVerified: true,
+        isAdmin: false,
       },
     });
+  });
+
+  test("carries the operator flag from the backend profile", async () => {
+    mockSupabase({
+      claims: { sub: "user-id", email: "admin@example.com" },
+      session: { access_token: "token", expires_at: 1_700_000_000 },
+    });
+    server.use(
+      http.get(`${BACKEND_URL}/v1/users/me`, () =>
+        HttpResponse.json({ full_name: "Operator", is_admin: true }),
+      ),
+    );
+
+    const session = await getSession();
+
+    expect(session?.user.isAdmin).toBe(true);
+  });
+
+  test("treats a suspended backend profile as no session", async () => {
+    mockSupabase({
+      claims: { sub: "user-id", email: "banned@example.com" },
+      session: { access_token: "token", expires_at: 1_700_000_000 },
+    });
+    server.use(
+      http.get(`${BACKEND_URL}/v1/users/me`, () =>
+        HttpResponse.json({ detail: "This account is suspended." }, { status: 403 }),
+      ),
+    );
+
+    await expect(getSession()).resolves.toBeNull();
   });
 
   test("falls back to the metadata name when the backend fails", async () => {

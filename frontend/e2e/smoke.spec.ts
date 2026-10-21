@@ -82,6 +82,18 @@ test("your tasks redirects unauthenticated users to login", async ({
   await expect(page).toHaveURL(/\/auth\/login/);
 });
 
+test("the report queue is not public", async ({ page }) => {
+  await page.goto("/admin/reports");
+
+  await expect(page).toHaveURL(/\/auth\/login/);
+});
+
+test("the item queue is not public", async ({ page }) => {
+  await page.goto("/admin/items");
+
+  await expect(page).toHaveURL(/\/auth\/login/);
+});
+
 test("the mobile navigation is full height and the assistant floats outside it", async ({
   page,
 }) => {

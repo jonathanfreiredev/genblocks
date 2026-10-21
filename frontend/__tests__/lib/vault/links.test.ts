@@ -22,12 +22,20 @@ describe("parseCatalogue", () => {
 
   test("carries the type slug, the search and the page", () => {
     expect(
-      parseCatalogue("images", { q: "harbour", page: "3" }, "photography"),
+      parseCatalogue("blocks", { q: "hero", page: "3" }, "heroes"),
+    ).toEqual({
+      section: "blocks",
+      type: "heroes",
+      q: "hero",
+      page: 3,
+    });
+    expect(
+      parseCatalogue("images", { q: "harbour", page: "2" }, "photography"),
     ).toEqual({
       section: "images",
       type: "photography",
       q: "harbour",
-      page: 3,
+      page: 2,
     });
   });
 
@@ -48,13 +56,12 @@ describe("parseCatalogue", () => {
 describe("hrefs", () => {
   test("leaves a bare section bare", () => {
     expect(catalogueHref({ section: "blocks", page: 1 })).toBe("/blocks");
-    expect(catalogueHref({ section: "images", page: 1 })).toBe("/images");
   });
 
   test("puts a category in the path and the search in the query", () => {
     expect(
-      catalogueHref({ section: "images", type: "scene", q: "dawn", page: 1 }),
-    ).toBe("/images/scene?q=dawn");
+      catalogueHref({ section: "blocks", type: "heroes", q: "dawn", page: 1 }),
+    ).toBe("/blocks/heroes?q=dawn");
   });
 
   test("adds the page only when it is not the first", () => {
@@ -64,16 +71,16 @@ describe("hrefs", () => {
   });
 
   test("an item is an address, not a query", () => {
-    expect(itemHref("images", "abc")).toBe("/images/abc");
     expect(itemHref("blocks", "abc")).toBe("/blocks/abc");
+    expect(itemHref("images", "dawn")).toBe("/images/dawn");
   });
 
   test("round-trips through the parser", () => {
-    const parsed = parseCatalogue("images", { q: "dawn", page: "3" }, "scene");
+    const parsed = parseCatalogue("blocks", { q: "dawn", page: "3" }, "heroes");
 
     expect(parsed).toEqual({
-      section: "images",
-      type: "scene",
+      section: "blocks",
+      type: "heroes",
       q: "dawn",
       page: 3,
     });
@@ -83,7 +90,7 @@ describe("hrefs", () => {
 describe("where the URL is", () => {
   test("reads the section from the first segment", () => {
     expect(sectionFromPath("/blocks")).toBe("blocks");
-    expect(sectionFromPath("/images/scene")).toBe("images");
+    expect(sectionFromPath("/images")).toBe("images");
     expect(sectionFromPath("/tasks")).toBe("blocks");
   });
 
@@ -99,7 +106,6 @@ describe("where the URL is", () => {
         "hero",
       ]),
     ).toBeUndefined();
-    expect(typeFromPath("/images", "images", ["scene"])).toBeUndefined();
   });
 });
 

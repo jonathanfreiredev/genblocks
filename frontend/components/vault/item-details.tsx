@@ -33,12 +33,14 @@ export function ItemDetails({
   date,
   model,
   traceId,
+  provenance,
 }: {
   title?: string | null;
   category: string;
   date: string;
   model: string | null;
   traceId: string | null;
+  provenance?: Record<string, unknown> | null;
 }) {
   const host = process.env.NEXT_PUBLIC_LANGFUSE_HOST?.replace(/\/+$/, "");
   const traceUrl = host && traceId ? `${host}/trace/${traceId}` : null;
@@ -55,6 +57,11 @@ export function ItemDetails({
         <Row label="Category">{category}</Row>
         <Row label="Date">{formatDate(date)}</Row>
         <Row label="Model">{model ?? "No model ran"}</Row>
+        <Row label="Source">
+          {provenance?.digital_source_type === "trainedAlgorithmicMedia"
+            ? "AI-generated"
+            : "Not recorded"}
+        </Row>
         <Row label="Trace">
           {traceUrl ? (
             <a

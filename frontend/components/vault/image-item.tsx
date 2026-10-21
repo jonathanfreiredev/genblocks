@@ -1,4 +1,5 @@
 import { CopyButton } from "@/components/copy-button";
+import { ReportDialog } from "@/components/reports/report-dialog";
 import { AssetPlate } from "@/components/vault/asset-plate";
 import { EvidencePanel } from "@/components/vault/evidence-panel";
 import { ItemDetails } from "@/components/vault/item-details";
@@ -15,9 +16,11 @@ import type { Image } from "@/lib/vault/types";
 export function ImageItem({
   image,
   categoryName,
+  signedIn,
 }: {
   image: Image;
   categoryName: string;
+  signedIn: boolean;
 }) {
   const ratio = `${image.width} / ${image.height}`;
 
@@ -77,6 +80,13 @@ export function ImageItem({
               />
             }
           />
+          <div className="mt-2 flex justify-end">
+            <ReportDialog
+              targetKind="image"
+              targetId={image.id}
+              signedIn={signedIn}
+            />
+          </div>
         </aside>
       </div>
     </div>

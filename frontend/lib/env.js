@@ -28,9 +28,10 @@ export const env = createEnv({
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
     // Comma-separated list of enabled login methods: "email", "google".
     NEXT_PUBLIC_AUTH_PROVIDERS: z.string().default("email"),
-    // Cloudinary cloud name the stock images are delivered from. Optional: the
-    // backend uploads there, and without it an image view falls back to the
-    // recipe its row was generated from instead of pretending to show a picture.
+    // Cloudinary cloud name the block renders and stock images are delivered
+    // from. Optional: the backend uploads there, and without it a view falls back
+    // to the recipe its row was generated from instead of pretending to show a
+    // picture.
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: z.string().optional(),
   },
 

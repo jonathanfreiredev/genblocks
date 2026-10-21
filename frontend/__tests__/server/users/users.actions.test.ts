@@ -38,7 +38,13 @@ beforeEach(() => {
   // `protectedProcedure` resolves the session through `getSession`.
   vi.mocked(getSession).mockResolvedValue({
     session: { token: "token", expiresAt: null },
-    user: { id: USER_ID, email: USER_EMAIL, name: "User", isVerified: true },
+    user: {
+      id: USER_ID,
+      email: USER_EMAIL,
+      name: "User",
+      isVerified: true,
+      isAdmin: false,
+    },
   });
 
   signInWithPassword.mockResolvedValue({ error: null });

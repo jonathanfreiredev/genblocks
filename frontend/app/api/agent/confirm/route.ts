@@ -2,12 +2,8 @@ import { NextResponse } from "next/server";
 
 import { backendErrorMessage } from "@/lib/api-error";
 import { confirmBrief } from "@/lib/agent/api";
-import { chatRequestSchema } from "@/server/agent/agent.schemas";
+import { confirmProposalSchema } from "@/server/agent/agent.schemas";
 import { getSession } from "@/server/auth/auth.lib";
-
-const confirmSchema = chatRequestSchema
-  .pick({ message: true })
-  .transform((value) => ({ brief: value.message }));
 
 /**
  * The person's confirmation, not the model's.
@@ -25,35 +21,19 @@ export async function POST(request: Request) {
   }
 
   const body: unknown = await request.json().catch(() => null);
-  const parsed = confirmSchema.safeParse(
-    body && typeof body === "object"
-      ? {
-          message:
-            "brief" in body && typeof body.brief === "string" ? body.brief : "",
-        }
-      : null,
-  );
+  const parsed = confirmProposalSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "That brief cannot be queued." },
+      { error: "That proposal cannot be queued." },
       { status: 422 },
     );
   }
 
-  const force =
-    body !== null &&
-    typeof body === "object" &&
-    "force" in body &&
-    body.force === true;
-
   let upstream: Response;
 
   try {
-    upstream = await confirmBrief(session.session.token, {
-      ...parsed.data,
-      force,
-    });
+    upstream = await confirmBrief(session.session.token, parsed.data);
   } catch {
     return NextResponse.json(
       { error: "The task could not be queued. Nothing was created." },
@@ -76,7 +56,13 @@ export async function POST(request: Request) {
       },
       {
         status:
-          upstream.status === 422 ? 422 : upstream.status === 429 ? 429 : 502,
+          upstream.status === 409
+            ? 409
+            : upstream.status === 422
+              ? 422
+              : upstream.status === 429
+                ? 429
+                : 502,
       },
     );
   }

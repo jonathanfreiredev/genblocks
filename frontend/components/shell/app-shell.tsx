@@ -35,7 +35,10 @@ export function AppShell({
       userName={session?.user.name ?? null}
     >
       <SidebarProvider>
-        <AppSidebar categories={categories} />
+        <AppSidebar
+          categories={categories}
+          isAdmin={session?.user.isAdmin ?? false}
+        />
         <SidebarInset className="min-h-svh min-w-0">
           <AppHeader session={session} categories={categories} />
           {session && !session.user.isVerified ? <VerificationBanner /> : null}

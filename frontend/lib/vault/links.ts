@@ -3,7 +3,7 @@ import type { Kind } from "@/lib/vault/types";
 /** How many items a page of a section shows. */
 export const PAGE_SIZE = 12;
 
-/** The two addresses the product has. Blocks are the default. */
+/** The two public addresses the product has. Blocks are the default. */
 export type Section = "blocks" | "images";
 
 export const SECTION_KIND: Record<Section, Kind> = {

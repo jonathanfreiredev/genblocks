@@ -100,9 +100,5 @@ export function buildBreadcrumbs(
     trail.push({ label: humanize(segment), href });
   }
 
-  if (trail.length > 0) {
-    trail[trail.length - 1] = { label: trail[trail.length - 1].label };
-  }
-
   return trail;
 }

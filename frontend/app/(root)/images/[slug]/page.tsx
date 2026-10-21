@@ -6,6 +6,7 @@ import { CataloguePage } from "@/components/vault/catalogue-page";
 import { ImageItem } from "@/components/vault/image-item";
 import { getImage, getImageBySlug, listCategories } from "@/lib/vault/api";
 import { isUuid } from "@/lib/vault/links";
+import { getSession } from "@/server/auth/auth.lib";
 
 type Params = { slug: string };
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -62,10 +63,19 @@ export default async function ImageRoute({
     redirect(`/images/${image.slug}`);
   }
 
-  const categories = await listCategories();
+  const [categories, session] = await Promise.all([
+    listCategories(),
+    getSession(),
+  ]);
   const categoryName =
     categories.find((category) => category.id === image.category_id)?.name ??
     "Image";
 
-  return <ImageItem image={image} categoryName={categoryName} />;
+  return (
+    <ImageItem
+      image={image}
+      categoryName={categoryName}
+      signedIn={session !== null}
+    />
+  );
 }

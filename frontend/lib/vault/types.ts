@@ -73,6 +73,7 @@ export interface Component extends ComponentSummary {
   dependencies: Record<string, string> | null;
   delivery_prompt: string;
   spec: Record<string, unknown> | null;
+  provenance: Record<string, unknown> | null;
   winning_generation_id: string | null;
   created_by: string | null;
   license: string;
@@ -133,11 +134,11 @@ export interface Generation {
 }
 
 /**
- * A stock image and its own judge panel.
+ * A public stock image and its own judge panel.
  *
  * `path` is a Cloudinary public id, not a URL: the delivery host and the
- * transform belong to whoever renders it. An image carries its scores directly,
- * because unlike a block it is not produced by a task.
+ * transform belong to whoever renders it. An image carries its scores directly;
+ * a standalone image task points at the row it produced.
  */
 export interface Image {
   id: string;
@@ -156,6 +157,7 @@ export interface Image {
   scores: Record<string, number> | null;
   rubric_version: string | null;
   langfuse_trace_id: string | null;
+  provenance: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -175,6 +177,10 @@ export interface Task {
   status: TaskStatus;
   brief: string;
   component_id: string | null;
+  image_id: string | null;
+  image_width: number | null;
+  image_height: number | null;
+  image_category_id: string | null;
   created_at: string;
   finished_at: string | null;
   error: string | null;

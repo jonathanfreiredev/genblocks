@@ -13,6 +13,8 @@ export type Session = {
     email: string;
     name: string;
     isVerified: boolean;
+    /** A configured operator: the report queue and takedown actions. */
+    isAdmin: boolean;
   };
 };
 
@@ -42,6 +44,7 @@ export const getSession = cache(async (): Promise<Session | null> => {
     : null;
 
   let name = (claims.user_metadata?.full_name as string | undefined) ?? "";
+  let isAdmin = false;
   if (token) {
     const response = await fetch(`${env.BACKEND_URL}/v1/users/me`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -50,6 +53,12 @@ export const getSession = cache(async (): Promise<Session | null> => {
     if (response.ok) {
       const profile = await response.json();
       name = profile.full_name ?? name;
+      isAdmin = profile.is_admin === true;
+    } else if (response.status === 403) {
+      // The backend refuses a suspended account even when its Supabase token is
+      // still cryptographically valid. Treat it as anonymous: public pages keep
+      // working, authenticated ones redirect to the login screen.
+      return null;
     }
   }
 
@@ -62,6 +71,7 @@ export const getSession = cache(async (): Promise<Session | null> => {
       // Email confirmation is not a top-level JWT claim; Supabase mirrors it
       // into user_metadata.email_verified. A missing flag means verified.
       isVerified: claims.user_metadata?.email_verified !== false,
+      isAdmin,
     },
   };
 });

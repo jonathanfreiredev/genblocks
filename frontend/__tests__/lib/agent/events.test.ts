@@ -9,6 +9,10 @@ const TASK: Task = {
   status: "pending",
   brief: "A pricing page",
   component_id: null,
+  image_id: null,
+  image_width: null,
+  image_height: null,
+  image_category_id: null,
   created_at: "2026-10-17T09:12:00Z",
   finished_at: null,
   error: null,
@@ -41,6 +45,30 @@ describe("readAgentEvent", () => {
         data: '{"name":"create_component","state":"finished"}',
       }),
     ).toEqual({ type: "tool", name: "create_component", state: "finished" });
+  });
+
+  test("reads an image proposal with its size and category", () => {
+    expect(
+      readAgentEvent({
+        event: "proposal",
+        data: JSON.stringify({
+          kind: "image",
+          brief: "A quiet harbour at dawn",
+          force: false,
+          width: 1024,
+          height: 768,
+          category: "photography",
+        }),
+      }),
+    ).toEqual({
+      type: "proposal",
+      kind: "image",
+      brief: "A quiet harbour at dawn",
+      force: false,
+      width: 1024,
+      height: 768,
+      category: "photography",
+    });
   });
 
   test("reads the task a tool queued", () => {

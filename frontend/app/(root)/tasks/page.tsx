@@ -61,7 +61,7 @@ export default async function TasksPage() {
 
       <header className="flex flex-col gap-3">
         <p className="text-muted-foreground max-w-[68ch] text-sm">
-          Every brief handed to the generator becomes one of these. The
+          Every block or image handed to the generator becomes one of these. The
           checklist is the task&apos;s own record: a worker writes it as it
           goes, and this page only reads it.
         </p>

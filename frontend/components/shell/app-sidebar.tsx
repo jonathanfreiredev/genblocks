@@ -1,10 +1,13 @@
 "use client";
 
 import {
+  FlagIcon,
   ImageIcon,
   LayoutGrid,
+  ListChecks,
   PanelLeftClose,
   PanelLeftOpen,
+  Users,
   XIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -50,7 +53,13 @@ const SECTIONS: { section: Section; label: string; icon: typeof LayoutGrid }[] =
  * component becomes a sheet that starts under the header, so the header keeps
  * the way back and the sheet keeps the list.
  */
-export function AppSidebar({ categories }: { categories: Category[] }) {
+export function AppSidebar({
+  categories,
+  isAdmin,
+}: {
+  categories: Category[];
+  isAdmin: boolean;
+}) {
   const pathname = usePathname();
   const { isMobile, open, setOpenMobile, toggleSidebar } = useSidebar();
 
@@ -150,6 +159,52 @@ export function AppSidebar({ categories }: { categories: Category[] }) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isAdmin ? (
+          <SidebarGroup>
+            <SidebarGroupLabel>Operate</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={
+                      <Link href="/admin/items" onClick={closeOnMobile} />
+                    }
+                    isActive={pathname.startsWith("/admin/items")}
+                    tooltip="Items"
+                  >
+                    <ListChecks />
+                    <span>Items</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={
+                      <Link href="/admin/reports" onClick={closeOnMobile} />
+                    }
+                    isActive={pathname.startsWith("/admin/reports")}
+                    tooltip="Reports"
+                  >
+                    <FlagIcon />
+                    <span>Reports</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={
+                      <Link href="/admin/users" onClick={closeOnMobile} />
+                    }
+                    isActive={pathname.startsWith("/admin/users")}
+                    tooltip="Users"
+                  >
+                    <Users />
+                    <span>Users</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : null}
 
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
           <SidebarGroupLabel>Categories</SidebarGroupLabel>

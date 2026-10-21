@@ -9,10 +9,10 @@ import type { ComponentSummary, Image } from "@/lib/vault/types";
  * The gallery is a wall of pictures, not a list of records.
  *
  * Each cell is a square frame with the specimen inside it: a block's render or
- * an image, contained rather than cropped, so the proportions the judge saw are
- * the proportions a visitor sees. There is no text on the wall. On hover the
- * specimen lifts a hair and the maker's name arrives under it — the only label
- * a thumbnail needs.
+ * a stock image, contained rather than cropped, so the proportions the judge
+ * saw are the proportions a visitor sees. There is no text on the wall. On
+ * hover the specimen lifts a hair and the maker's name arrives under it — the
+ * only label a thumbnail needs.
  */
 export function ItemGrid({ children }: { children: ReactNode }) {
   return (

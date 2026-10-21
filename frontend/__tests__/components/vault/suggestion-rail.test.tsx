@@ -34,16 +34,13 @@ describe("SuggestionRail", () => {
   });
 
   test("each card opens the item it shows", () => {
-    render(<SuggestionRail items={[BLOCK, PICTURE]} />);
+    render(<SuggestionRail items={[BLOCK]} />);
 
     // The gallery's own URL: the item dialog is a query parameter there, so a
     // card is a link and the browser can keep it.
     expect(
       screen.getByRole("link", { name: /Tiered pricing/ }),
     ).toHaveAttribute("href", `/blocks/${BLOCK.id}`);
-    expect(
-      screen.getByRole("link", { name: /A coastal path at dawn/ }),
-    ).toHaveAttribute("href", `/images/${PICTURE.id}`);
   });
 
   test("names the kind of each card in words", () => {
@@ -51,6 +48,14 @@ describe("SuggestionRail", () => {
 
     expect(screen.getByText("Block")).toBeInTheDocument();
     expect(screen.getByText("Image")).toBeInTheDocument();
+  });
+
+  test("an image card opens the image page", () => {
+    render(<SuggestionRail items={[PICTURE]} />);
+
+    expect(
+      screen.getByRole("link", { name: /A coastal path at dawn/ }),
+    ).toHaveAttribute("href", `/images/${PICTURE.id}`);
   });
 
   test("gives a block with no render something to show rather than an empty frame", () => {

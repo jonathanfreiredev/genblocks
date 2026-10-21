@@ -490,9 +490,11 @@ Notas:
 > Un nombre publicado **nunca se renombra**. Estos quedan congelados.
 
 **Lectura:** `list_categories`, `search_components`, `get_component`,
-`search_images`, `get_task`, `list_tasks`.
+`search_images`, `get_image`, `get_task`, `list_tasks`.
 
-**Escritura:** `create_component`, `generate_image`, `vary_component`.
+**Planificación:** `plan_component`, `plan_image`.
+
+**Escritura:** `create_component`, `generate_image`.
 
 `vary_component` se implementa en una fase posterior; se reserva el nombre.
 
@@ -643,7 +645,7 @@ aparecen en la base.
 **Cambios**
 - Endpoints `/v1`: `categories`, `components` (list + search + get), `images`.
 - Tools MCP de lectura: `list_categories`, `search_components`, `get_component`,
-  `search_images`, `list_tasks`, `get_task`.
+  `search_images`, `get_image`, `list_tasks`, `get_task`.
 - Paginación con `app/pagination.py`.
 
 **Verificación**: consultar desde **opencode** (MCP) y con `curl`; tests de

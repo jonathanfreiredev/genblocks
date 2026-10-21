@@ -29,6 +29,9 @@ describe("buildBreadcrumbs", () => {
       { label: "Blocks", href: "/blocks" },
       { label: "Hero" },
     ]);
+    expect(buildBreadcrumbs("/images/hero", CATEGORIES)).toEqual([
+      { label: "Images", href: "/images" },
+    ]);
   });
 
   test("an item stops at its section: the h1 below names it", () => {

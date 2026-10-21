@@ -30,3 +30,18 @@ export const chatRequestSchema = z.object({
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
+
+/**
+ * What the confirmation button sends. It mirrors the backend's `ConfirmRequest`:
+ * a component has just a brief, an image also carries its size and category.
+ */
+export const confirmProposalSchema = z.object({
+  kind: z.enum(["component", "image"]).default("component"),
+  brief: z.string().trim().min(1).max(2_000),
+  force: z.boolean().default(false),
+  width: z.number().int().min(256).max(1_536).nullable().optional(),
+  height: z.number().int().min(256).max(1_536).nullable().optional(),
+  category: z.string().trim().min(1).max(80).nullable().optional(),
+});
+
+export type ConfirmProposal = z.infer<typeof confirmProposalSchema>;

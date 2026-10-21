@@ -5,14 +5,15 @@ import type { ReactNode } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
+import { ImageResult } from "@/components/vault/image-result";
 import { StatusWord } from "@/components/vault/status-word";
 import { TaskChecklist } from "@/components/vault/task-checklist";
 import { TaskResult } from "@/components/vault/task-result";
 import { getSession } from "@/server/auth/auth.lib";
-import { VaultUnreadable, getTask } from "@/lib/vault/api";
+import { VaultUnreadable, getImage, getTask } from "@/lib/vault/api";
 import { formatDate, formatTime } from "@/lib/vault/format";
 import { TASK_STATUS_LABELS } from "@/lib/vault/task-status";
-import type { TaskDetail } from "@/lib/vault/types";
+import type { Image, TaskDetail } from "@/lib/vault/types";
 
 export const metadata: Metadata = {
   title: "Task",
@@ -57,10 +58,14 @@ export default async function TaskPage({
   }
 
   let task: TaskDetail | null = null;
+  let image: Image | null = null;
   let failure: string | null = null;
 
   try {
     task = await getTask(session.session.token, id);
+    if (task?.image_id) {
+      image = await getImage(task.image_id);
+    }
   } catch (error) {
     if (!(error instanceof VaultUnreadable)) {
       throw error;
@@ -126,13 +131,17 @@ export default async function TaskPage({
           </h2>
           <TaskChecklist steps={task.steps} className="mt-3" />
 
-          {generation ? (
+          {image || generation ? (
             <>
               <h2 className="text-muted-foreground mt-10 text-xs font-medium tracking-wide uppercase">
                 The result
               </h2>
               <div className="mt-3">
-                <TaskResult generation={generation} brief={task.brief} />
+                {image ? (
+                  <ImageResult image={image} />
+                ) : generation ? (
+                  <TaskResult generation={generation} brief={task.brief} />
+                ) : null}
               </div>
             </>
           ) : null}
@@ -145,6 +154,18 @@ export default async function TaskPage({
                 className={buttonVariants({ variant: "link" })}
               >
                 The block this task produced
+              </Link>
+            </p>
+          ) : null}
+
+          {task.image_id ? (
+            <p className="mt-10">
+              <Link
+                href={`/images/${task.image_id}`}
+                prefetch={false}
+                className={buttonVariants({ variant: "link" })}
+              >
+                The image this task produced
               </Link>
             </p>
           ) : null}

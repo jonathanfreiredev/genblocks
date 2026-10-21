@@ -25,6 +25,10 @@ const QUEUED: Task = {
   status: "pending",
   brief: MESSAGE,
   component_id: null,
+  image_id: null,
+  image_width: null,
+  image_height: null,
+  image_category_id: null,
   created_at: "2026-10-17T09:12:00Z",
   finished_at: null,
   error: null,
@@ -200,7 +204,14 @@ describe("AgentChat", () => {
     expect(
       await screen.findByText(/Waiting for a worker to open it/),
     ).toBeInTheDocument();
-    expect(confirmed).toEqual({ brief: MESSAGE, force: false });
+    expect(confirmed).toEqual({
+      kind: "component",
+      brief: MESSAGE,
+      force: false,
+      width: null,
+      height: null,
+      category: null,
+    });
     expect(screen.queryByText("Ready to build")).toBeNull();
   });
 

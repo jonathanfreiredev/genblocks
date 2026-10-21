@@ -11,6 +11,7 @@ import {
   listComponentGenerations,
 } from "@/lib/vault/api";
 import { isUuid } from "@/lib/vault/links";
+import { getSession } from "@/server/auth/auth.lib";
 
 type Params = { slug: string };
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -69,9 +70,10 @@ export default async function BlockRoute({
     redirect(`/blocks/${component.slug}`);
   }
 
-  const [generations, categories] = await Promise.all([
+  const [generations, categories, session] = await Promise.all([
     listComponentGenerations(component.id),
     listCategories(),
+    getSession(),
   ]);
 
   const categoryName =
@@ -83,6 +85,7 @@ export default async function BlockRoute({
       component={component}
       generations={generations}
       categoryName={categoryName}
+      signedIn={session !== null}
     />
   );
 }

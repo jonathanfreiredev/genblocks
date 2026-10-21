@@ -91,18 +91,32 @@ test("the project's files stay visible and collapse", async ({ page }) => {
   await expect(page.getByText("Files", { exact: true })).toBeVisible();
 });
 
+test("the image wall files what the library holds", async ({ page }) => {
+  await page.goto("/images");
+
+  await expect(page.locator('[data-slot="item-cell"]').first()).toBeVisible();
+  await expect(page.getByText(/^\d+ images$/)).toBeVisible();
+});
+
 test("an image whose asset cannot arrive says so rather than breaking", async ({
   page,
 }) => {
-  // The rows have real assets, so the fallback is exercised the only way it
-  // happens in production: the delivery fails. The requests go through Next's
-  // image optimizer, so that is the request to abort.
   await page.route("**/_next/image**", (route) => route.abort());
 
   await page.goto("/images");
 
   await expect(page.locator('[data-slot="item-cell"]').first()).toBeVisible();
   await expect(page.getByText("Awaiting asset").first()).toBeVisible();
+});
+
+test("an image opens as a page on its picture", async ({ page }) => {
+  await page.goto("/images");
+
+  await page.locator('[data-slot="item-cell"] a').first().click();
+
+  await expect(page).toHaveURL(/\/images\/[a-z0-9-]+$/, { timeout: 15_000 });
+  await expect(page.getByText("prompt", { exact: true })).toBeVisible();
+  await expect(page.getByText("Sign in to report")).toBeVisible();
 });
 
 test("search lands on a filtered wall", async ({ page }) => {

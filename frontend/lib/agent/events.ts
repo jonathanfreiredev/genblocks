@@ -12,7 +12,15 @@ export type AgentEvent =
   | { type: "token"; text: string }
   | { type: "tool"; name: string; state: "started" | "finished" }
   | { type: "suggestions"; items: Suggestion[] }
-  | { type: "proposal"; brief: string; force: boolean }
+  | {
+      type: "proposal";
+      kind: "component" | "image";
+      brief: string;
+      force: boolean;
+      width: number | null;
+      height: number | null;
+      category: string | null;
+    }
   | { type: "task"; task: Task }
   | { type: "error"; message: string }
   | { type: "done" };
@@ -50,8 +58,13 @@ export function readAgentEvent(frame: SseEvent): AgentEvent | null {
       return typeof payload.brief === "string"
         ? {
             type: "proposal",
+            kind: payload.kind === "image" ? "image" : "component",
             brief: payload.brief,
             force: payload.force === true,
+            width: typeof payload.width === "number" ? payload.width : null,
+            height: typeof payload.height === "number" ? payload.height : null,
+            category:
+              typeof payload.category === "string" ? payload.category : null,
           }
         : null;
 
