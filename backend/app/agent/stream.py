@@ -54,7 +54,7 @@ class TurnReader:
     _announced: set[str] = field(default_factory=set)
     _shown: set[uuid.UUID] = field(default_factory=set)
     _surfaced: set[tuple[str, uuid.UUID]] = field(default_factory=set)
-    _proposed: set[str] = field(default_factory=set)
+    _proposed: set[tuple] = field(default_factory=set)
 
     def read(self, chunk: Any) -> list[Event]:
         """The events one chunk of the stream becomes."""
@@ -134,11 +134,11 @@ class TurnReader:
         return [Event("suggestions", {"items": fresh})] if fresh else []
 
     def _proposals(self) -> list[Event]:
-        """Briefs waiting for the person's confirmation, each said once."""
-        fresh = [one.as_body() for one in self.proposals.items if one.brief not in self._proposed]
+        """Tasks waiting for the person's confirmation, each said once."""
+        fresh = [one.as_body() for one in self.proposals.items if one.key not in self._proposed]
 
         for one in self.proposals.items:
-            self._proposed.add(one.brief)
+            self._proposed.add(one.key)
 
         return [Event("proposal", one) for one in fresh]
 

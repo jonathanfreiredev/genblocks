@@ -15,10 +15,16 @@ from app.briefs import service as briefs
 from app.components.models import Component
 from app.components.planning import ImageConfirmationRequired, plan
 from app.db.models import utcnow
+from app.images.planning import (
+    ImagePlan,
+    ImagePromptRejected,
+    ImageSuggestionRequired,
+    plan_image,
+)
 from app.moderation import service as moderation
 from app.pagination import ListParams
 from app.tasks import limits
-from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
+from app.tasks.models import StepStatus, Task, TaskKind, TaskStatus, TaskStep
 
 # What the UI is told about a task a restart cut in half. Worded for a reader,
 # because that is where it ends up.
@@ -40,6 +46,65 @@ async def create_task(session: AsyncSession, *, brief: str, created_by: uuid.UUI
     # loop, and the response carries it.
     await session.refresh(task, ["steps"])
     return task
+
+
+async def create_image_task(
+    session: AsyncSession,
+    *,
+    prompt: str,
+    width: int,
+    height: int,
+    category_id: uuid.UUID,
+    created_by: uuid.UUID,
+) -> Task:
+    """Queue one standalone image task, with the inputs the worker needs."""
+    task = Task(
+        kind=TaskKind.GENERATE_IMAGE,
+        brief=prompt,
+        image_width=width,
+        image_height=height,
+        image_category_id=category_id,
+        created_by=created_by,
+    )
+    session.add(task)
+    await session.commit()
+    await session.refresh(task, ["steps"])
+    return task
+
+
+async def enqueue_image_task(
+    session: AsyncSession,
+    *,
+    prompt: str,
+    width: int,
+    height: int,
+    category: str,
+    created_by: uuid.UUID,
+) -> Task:
+    """The door for a standalone image: quota, policy, then a queued task."""
+    await limits.admitted(session, user_id=created_by)
+    await session.commit()
+
+    plan: ImagePlan = await plan_image(
+        session, prompt=prompt, width=width, height=height, category=category
+    )
+    if not plan.ready:
+        if plan.needs_confirmation and plan.suggested_prompt is not None:
+            raise ImageSuggestionRequired(plan)
+        raise ImagePromptRejected(plan)
+
+    if plan.category_id is None:  # pragma: no cover - a ready plan always has one
+        raise ImagePromptRejected(plan)
+
+    await limits.reserve(session, user_id=created_by)
+    return await create_image_task(
+        session,
+        prompt=plan.prompt,
+        width=plan.width,
+        height=plan.height,
+        category_id=plan.category_id,
+        created_by=created_by,
+    )
 
 
 async def enqueue_task(

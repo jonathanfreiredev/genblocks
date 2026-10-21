@@ -719,8 +719,9 @@ async def test_the_pictures_a_block_asks_for_are_filed_and_linked(
     assert asset.slot == "hero"
     assert asset.component_id == done.component_id
     assert done.steps[3].detail["pictures"] == 1
-    assert [one["kind"] for one in notified] == ["component"]
-    assert notified[0]["item_id"] == done.component_id
+    assert [one["kind"] for one in notified] == ["image", "component"]
+    assert notified[0]["item_id"] == image.id
+    assert notified[1]["item_id"] == done.component_id
 
 
 async def test_a_picture_asked_for_by_a_block_that_is_not_published_stays_in_the_library(

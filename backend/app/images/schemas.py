@@ -1,9 +1,22 @@
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.pagination import ListParams
+
+IMAGE_PROMPT_MIN_LENGTH = 10
+IMAGE_PROMPT_MAX_LENGTH = 2_000
+
+ImagePrompt = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=IMAGE_PROMPT_MIN_LENGTH,
+        max_length=IMAGE_PROMPT_MAX_LENGTH,
+    ),
+]
 
 
 class ImageListQuery(ListParams):
@@ -15,6 +28,28 @@ class ImageListQuery(ListParams):
 
     category_id: uuid.UUID | None = None
     search: str | None = None
+
+
+class ImagePlanRequest(BaseModel):
+    """What a caller wants generated: the scene, its size and its type."""
+
+    prompt: ImagePrompt
+    width: int = Field(ge=256, le=1536)
+    height: int = Field(ge=256, le=1536)
+    # The level-2 image category slug, e.g. ``photography``.
+    category: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
+class ImagePlanRead(BaseModel):
+    """The preflight answer for one standalone image prompt."""
+
+    status: str
+    prompt: str
+    width: int
+    height: int
+    category: str
+    reason: str
+    suggested_prompt: str | None
 
 
 class ImageRead(BaseModel):

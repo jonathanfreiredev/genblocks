@@ -146,7 +146,7 @@ async def test_a_new_item_notifies_without_attaching_it(configured):
         is True
     )
 
-    assert "awaiting review" in sent["subject"]
+    assert "New GenBlocks image" in sent["subject"]
     assert "A calm office" in sent["text"]
     assert "https://genblocks.test/admin/items?kind=image" in sent["text"]
     # No attachment and no public asset URL: the operator opens the auth page.

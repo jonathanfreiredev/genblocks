@@ -29,6 +29,11 @@ from app.components import planning
 from app.components import service as components_service
 from app.components.models import Component
 from app.db.session import async_session_maker
+from app.images import planning as image_planning
+from app.images import service as images_service
+from app.images.models import Image
+from app.images.planning import ImagePlan
+from app.images.schemas import ImagePrompt
 from app.notifications import email as notifications
 from app.pagination import ListParams
 from app.tasks.models import Task
@@ -46,6 +51,14 @@ SEARCH_LIMIT = 5
 # pricing table and the next block at 0.63. Cards are a claim that the registry
 # has the thing, so the far ones stay out of the conversation.
 SEARCH_DISTANCE = 0.58
+
+# How many pictures the library offers for one description.
+PICTURE_LIMIT = 3
+
+# Pictures are compared by a prompt against a photograph, so the same query sits
+# further away than it would against code. The nearest unrelated scene is around
+# 0.78; a workshop at 0.67 is still the workshop.
+PICTURE_DISTANCE = 0.72
 
 
 def build_tools(
@@ -79,16 +92,22 @@ def build_tools(
             blocks = await session.scalar(
                 select(func.count()).select_from(Component).where(Component.deleted_at.is_(None))
             )
+            pictures = await session.scalar(
+                select(func.count()).select_from(Image).where(Image.deleted_at.is_(None))
+            )
             categories = await categories_service.list_categories(session)
 
         return {
             "blocks": blocks or 0,
+            "images": pictures or 0,
             "categories": [
                 {"kind": category.kind, "slug": category.slug, "name": category.name}
                 for category in categories
-                if category.level == 2 and category.kind == "component"
+                if category.level == 2
             ],
-            "note": "These are published blocks. Use search_components to show examples.",
+            "note": (
+                "These are public artifacts. Use search_components or find_images to show examples."
+            ),
         }
 
     @tool
@@ -127,6 +146,143 @@ def build_tools(
             "note": (
                 "Nearest first. Name the ones that fit; the cards show the "
                 "render. A block that already exists is not worth building twice."
+            ),
+        }
+
+    @tool
+    async def find_images(query: str, category: str | None = None) -> dict[str, Any]:
+        """Look through the public image library.
+
+        Use it to answer what pictures exist, or to find one before asking a
+        block to make a photograph. The library is reused rather than
+        regenerated: a scene already filed is better than a new generation.
+
+        Args:
+            query: The scene, in the words a photographer would need.
+            category: Which type of image to look in, when the block knows.
+        """
+        async with async_session_maker() as session:
+            nearest = await vectors.find_images(query, limit=PICTURE_LIMIT, category=category)
+            pictures = await _pictures(session, ids=[one.id for one in nearest])
+
+        relevant = [
+            (picture, match.distance)
+            for picture, match in zip(pictures, nearest, strict=False)
+            if match.distance <= PICTURE_DISTANCE
+        ]
+
+        for picture, _distance in relevant:
+            suggested.add(_suggested_image(picture))
+
+        if not relevant:
+            return {
+                "images": [],
+                "note": (
+                    "Nothing in the library is close enough to the scene asked "
+                    "for. Say so; ask for a new picture only if the person "
+                    "genuinely wants one."
+                ),
+            }
+
+        return {
+            "images": [
+                {
+                    "id": str(picture.id),
+                    "slug": picture.slug,
+                    "prompt": picture.prompt,
+                    "width": picture.width,
+                    "height": picture.height,
+                    "distance": round(distance, 3),
+                }
+                for picture, distance in relevant
+            ],
+            "note": (
+                "These are already in the library. Name the ones that fit; the "
+                "cards show the picture."
+            ),
+        }
+
+    @tool
+    async def plan_image(
+        prompt: ImagePrompt, width: int, height: int, category: str
+    ) -> dict[str, Any]:
+        """Check a standalone image prompt before preparing it.
+
+        ``width`` and ``height`` must be multiples of 32 between 256 and 1536.
+        The prompt is checked for unsafe text and for people. If people are
+        incidental, the answer contains a no-person prompt to offer the person.
+        If the answer is ``ready``, call ``generate_image`` with the same prompt.
+        """
+        async with async_session_maker() as session:
+            plan = await image_planning.plan_image(
+                session,
+                prompt=prompt,
+                width=width,
+                height=height,
+                category=category,
+            )
+
+        await _image_policy_notice(caller, plan)
+        return plan.as_body()
+
+    @tool
+    async def generate_image(
+        prompt: ImagePrompt, width: int, height: int, category: str
+    ) -> dict[str, Any]:
+        """Prepare one standalone image task for the person to confirm.
+
+        This does **not** queue anything: the person sees the prompt, its size
+        and its category, and chooses whether to run it. The same monthly quota
+        covers blocks and images.
+
+        A prompt that asks for people is not prepared. Offer the no-person
+        rewrite from ``plan_image`` and call this again only if the person
+        accepts it.
+        """
+        async with async_session_maker() as session:
+            plan = await image_planning.plan_image(
+                session,
+                prompt=prompt,
+                width=width,
+                height=height,
+                category=category,
+            )
+
+        if not plan.ready:
+            await _image_policy_notice(caller, plan)
+            return {
+                "queued": False,
+                "proposed": False,
+                "status": plan.status,
+                "reason": plan.reason,
+                "suggested_prompt": plan.suggested_prompt,
+                "message": (
+                    "Nothing was prepared. Offer the proposed no-person prompt, "
+                    "and only call generate_image again if the person accepts it."
+                    if plan.needs_confirmation
+                    else "Nothing was prepared. Explain the refusal briefly."
+                ),
+            }
+
+        prepared.add(
+            Proposal(
+                kind="image",
+                brief=plan.prompt,
+                width=plan.width,
+                height=plan.height,
+                category=plan.category,
+            )
+        )
+        return {
+            "queued": False,
+            "proposed": True,
+            "brief": plan.prompt,
+            "width": plan.width,
+            "height": plan.height,
+            "category": plan.category,
+            "message": (
+                "The image is ready. Nothing is queued yet: the person sees it "
+                "and chooses whether to run it."
             ),
         }
 
@@ -213,7 +369,15 @@ def build_tools(
             ),
         }
 
-    return [registry_overview, search_components, plan_component, create_component]
+    return [
+        registry_overview,
+        search_components,
+        find_images,
+        plan_image,
+        generate_image,
+        plan_component,
+        create_component,
+    ]
 
 
 async def _nearest_components(session: Any, *, query: str) -> list[tuple[Component, float | None]]:
@@ -248,6 +412,28 @@ def _described(block: Component, distance: float | None) -> dict[str, Any]:
     }
 
 
+async def _pictures(session: Any, *, ids: list[Any]) -> list[Image]:
+    """The library rows for a list of ids, in the order retrieval ranked them."""
+    if not ids:
+        return []
+
+    return await images_service.by_ids(session, ids=ids)
+
+
+def _suggested_image(picture: Image) -> Suggestion:
+    """One picture as the dialog draws it."""
+    return Suggestion(
+        kind="image",
+        id=picture.id,
+        slug=picture.slug,
+        title=picture.prompt,
+        detail=f"{picture.width}×{picture.height}",
+        path=picture.path,
+        width=picture.width,
+        height=picture.height,
+    )
+
+
 def _suggested(block: Component, path: str | None) -> Suggestion:
     """One block as the dialog draws it."""
     return Suggestion(
@@ -269,6 +455,20 @@ async def _policy_notice(caller: User, decision: planning.PlanDecision) -> None:
         kind="image_people" if decision.needs_confirmation else "brief_rejected",
         reason=decision.reason,
         brief=decision.brief,
+        user_id=caller.id,
+        user_email=caller.email,
+    )
+
+
+async def _image_policy_notice(caller: User, plan: ImagePlan) -> None:
+    """Send the operator a metadata-only notice when an image prompt is refused."""
+    if plan.ready:
+        return
+
+    await notifications.policy_event(
+        kind="image_people" if plan.needs_confirmation else "image_prompt_rejected",
+        reason=plan.reason,
+        brief=plan.prompt,
         user_id=caller.id,
         user_email=caller.email,
     )

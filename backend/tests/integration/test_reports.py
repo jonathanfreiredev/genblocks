@@ -4,7 +4,7 @@ import pytest
 
 from app.settings import settings
 from tests.auth_stub import mint_token
-from tests.helpers import auth_header, create_category, create_component
+from tests.helpers import auth_header, create_category, create_component, create_image
 
 pytestmark = pytest.mark.anyio
 
@@ -164,6 +164,31 @@ async def test_an_operator_can_mark_a_report_as_reviewing(client, db_session, mo
     assert reviewing.json()["status"] == "reviewing"
     assert reviewing.json()["resolved_at"] is None
     assert (await client.get(f"/v1/components/{component.id}")).status_code == 200
+
+
+async def test_a_signed_in_visitor_can_report_an_image(client, db_session):
+    scenes = await create_category(db_session, slug="photography", kind="image")
+    image = await create_image(
+        db_session,
+        category_id=scenes.id,
+        path="genblocks/images/harbour",
+        prompt="A quiet harbour at dawn",
+    )
+
+    response = await client.post(
+        "/v1/reports",
+        headers=auth_header(mint_token()),
+        json={
+            "target_kind": "image",
+            "target_id": str(image.id),
+            "reason": "brand",
+            "details": "There is a logo in the boat.",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["target_kind"] == "image"
+    assert response.json()["target_slug"] == image.slug
 
 
 async def test_a_dismissed_report_leaves_the_block_public(client, db_session, monkeypatch):

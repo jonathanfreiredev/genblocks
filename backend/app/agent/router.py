@@ -29,12 +29,14 @@ from app.agent.tools import build_tools
 from app.authz.dependencies import get_first_party_user
 from app.components.planning import ImageConfirmationRequired
 from app.db.session import get_async_db_session
+from app.images.planning import ImagePromptRejected, ImageSuggestionRequired
+from app.images.schemas import ImagePlanRequest
 from app.moderation.service import BriefRejected
 from app.notifications import email as notifications
 from app.tasks.limits import MonthlyQuotaReached
 from app.tasks.models import Task
 from app.tasks.schemas import TaskRead
-from app.tasks.service import enqueue_task
+from app.tasks.service import enqueue_image_task, enqueue_task
 from app.users.models import User
 
 agent_router = APIRouter(prefix="/agent", tags=["agent"])
@@ -129,6 +131,64 @@ async def confirm_brief(
 
     202 for a new task, 200 for a brief the registry already answered.
     """
+    if payload.kind == "image":
+        try:
+            request = ImagePlanRequest(
+                prompt=payload.brief,
+                width=payload.width,
+                height=payload.height,
+                category=payload.category,
+            )
+        except ValueError as invalid:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="An image proposal needs a valid width, height and category.",
+            ) from invalid
+
+        try:
+            task = await enqueue_image_task(
+                session,
+                prompt=request.prompt,
+                width=request.width,
+                height=request.height,
+                category=request.category,
+                created_by=user.id,
+            )
+        except MonthlyQuotaReached as reached:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=str(reached),
+            ) from reached
+        except ImageSuggestionRequired as confirmation:
+            await notifications.policy_event(
+                kind="image_people",
+                reason=confirmation.reason,
+                brief=payload.brief,
+                user_id=user.id,
+                user_email=user.email,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": str(confirmation),
+                    "suggested_prompt": confirmation.suggested_prompt,
+                },
+            ) from confirmation
+        except ImagePromptRejected as refused:
+            await notifications.policy_event(
+                kind="image_prompt_rejected",
+                reason=refused.reason,
+                brief=payload.brief,
+                user_id=user.id,
+                user_email=user.email,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(refused),
+            ) from refused
+
+        return TaskRead.model_validate(task)
+
     try:
         task = await enqueue_task(
             session,

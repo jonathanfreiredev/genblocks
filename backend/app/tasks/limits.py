@@ -1,4 +1,4 @@
-"""How many blocks one person may ask the registry for.
+"""How many generations one person may ask the registry for.
 
 The window is a calendar month because what it protects is a bill somebody reads
 once a month, not a queue that needs to be fair within the hour. The number is a
@@ -26,7 +26,7 @@ from app.users.models import User
 
 
 class MonthlyQuotaReached(Exception):
-    """This person has queued every block their month allows.
+    """This person has queued every generation their month allows.
 
     Says how many, out of how many, and when the door opens again — a limit that
     only says "no" leaves the reader to guess whether it is a day or a year.
@@ -37,7 +37,7 @@ class MonthlyQuotaReached(Exception):
         self.limit = limit
         self.reopens = reopens
         super().__init__(
-            f"You have queued {used} of your {limit} blocks this month. "
+            f"You have queued {used} of your {limit} generations this month. "
             f"Your next one opens on {reopens:%-d %B}."
         )
 

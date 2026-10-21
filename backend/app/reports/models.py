@@ -10,11 +10,7 @@ from app.db.models import BaseModel
 
 
 class ReportTarget(StrEnum):
-    """The artifact a report points at.
-
-    New reports target a component. The image member remains so reports written
-    before the public image catalogue was removed keep their snapshot.
-    """
+    """The public artifact a report points at: a block or a stock image."""
 
     COMPONENT = "component"
     IMAGE = "image"

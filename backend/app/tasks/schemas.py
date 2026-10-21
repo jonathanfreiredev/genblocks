@@ -26,7 +26,7 @@ Brief = Annotated[
 
 
 class TaskCreate(BaseModel):
-    """What a caller supplies to queue a task: what they want built."""
+    """What a caller supplies to queue a component task: what they want built."""
 
     brief: Brief
 
@@ -62,6 +62,10 @@ class TaskRead(BaseModel):
     status: str
     brief: str
     component_id: uuid.UUID | None
+    image_id: uuid.UUID | None = None
+    image_width: int | None = None
+    image_height: int | None = None
+    image_category_id: uuid.UUID | None = None
     created_at: datetime
     finished_at: datetime | None
     error: str | None

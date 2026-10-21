@@ -20,6 +20,7 @@ import httpx
 from app.harness import cloudinary
 from app.harness.network import UnsafeProviderUrl, checked_provider_url
 from app.images.sanitize import ImageRefused, sanitize_image
+from app.images.sizes import size_complaint
 from app.moderation import service as moderation
 from app.settings import settings
 
@@ -28,12 +29,9 @@ from app.settings import settings
 READY = "Ready"
 FAILED = ("Error", "Failed", "Content Moderated", "Request Moderated")
 
-# The sizes the API accepts, and how it rounds. Enforced here rather than at the
-# provider: a request with a side that cannot be generated is a call, and a call
-# that fails late is a turn the agent pays for twice.
-SIZE_STEP = 32
-MIN_SIDE = 256
-MAX_SIDE = 1536
+# The size rules live in ``app.images.sizes`` so the planner can use them without
+# importing Pillow. They are re-exported through this module for callers that
+# already reach the image library.
 
 # How long one generation may take, how often it is asked about, and how long the
 # download of the finished picture may take.
@@ -68,21 +66,6 @@ class Generated:
     # The safety gate ran here, before storage, and cleared the bytes. The runner
     # does not pay for the same check twice.
     screened: bool = False
-
-
-def size_complaint(width: int, height: int) -> str | None:
-    """Why a size cannot be generated, or ``None`` when it can.
-
-    A separate question from :func:`generate` so the tool can answer it without
-    spending a call, and say what to ask for instead.
-    """
-    for side, name in ((width, "width"), (height, "height")):
-        if side % SIZE_STEP:
-            return f"{name} must be a multiple of {SIZE_STEP} (asked for {side})."
-        if not MIN_SIDE <= side <= MAX_SIDE:
-            return f"{name} must be between {MIN_SIDE} and {MAX_SIDE} (asked for {side})."
-
-    return None
 
 
 async def generate(

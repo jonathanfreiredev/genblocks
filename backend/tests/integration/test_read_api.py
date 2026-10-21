@@ -11,7 +11,7 @@ import pytest
 from app.generations.models import Generation
 from app.harness.agent import ENTRY
 from app.users.models import User
-from tests.helpers import create_category, create_component
+from tests.helpers import create_category, create_component, create_image
 
 pytestmark = pytest.mark.anyio
 
@@ -30,6 +30,25 @@ async def test_the_vault_reads_are_public(client, db_session):
 
     for url in urls:
         assert (await client.get(url)).status_code == 200, url
+
+
+async def test_the_image_library_is_public_again(client, db_session):
+    scenes = await create_category(db_session, slug="photography", kind="image")
+    image = await create_image(
+        db_session,
+        category_id=scenes.id,
+        path="genblocks/images/dawn",
+        prompt="A quiet harbour at dawn",
+    )
+
+    page = (await client.get("/v1/images", params={"search": "harbour"})).json()
+    by_slug = await client.get(f"/v1/images/by-slug/{image.slug}")
+    by_id = await client.get(f"/v1/images/{image.id}")
+
+    assert page["total"] == 1
+    assert page["items"][0]["prompt"] == "A quiet harbour at dawn"
+    assert by_slug.status_code == 200
+    assert by_id.status_code == 200
 
 
 async def test_categories_come_back_as_a_tree(client, db_session):

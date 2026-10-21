@@ -1,9 +1,9 @@
 """The email this product sends when a person needs to look at something.
 
 A report is a request for a person to look, and a newly generated item is a
-request for the operator's review before it becomes public. Neither email is a
-gate: the row is committed before this runs, and a provider outage means a
-missing notification, not a lost report or a failed generation.
+notice that it was published after the gates. Neither email is a gate: the row
+is committed before this runs, and a provider outage means a missing
+notification, not a lost report or a failed generation.
 
 The messages contain only what the operator needs to decide whether to open the
 admin page. They deliberately carry no attachment and no public image URL: mail
@@ -63,7 +63,7 @@ async def item_created(
     author: str | None,
     client: httpx.AsyncClient | None = None,
 ) -> bool:
-    """Tell the operators that a generated item is waiting for review.
+    """Tell the operators that a generated item was published.
 
     This is intentionally metadata only: the picture is not attached and its
     public URL is not included. The admin page is authenticated and is the place
@@ -85,10 +85,10 @@ async def item_created(
     safe_title = title.strip()[:160] or f"a new {label}"
     who = author or "an unknown maker"
     admin_url = f"{settings.frontend_url.rstrip('/')}/admin/items?kind={kind}"
-    subject = f"New GenBlocks {label} awaiting review: {safe_title}"
+    subject = f"New GenBlocks {label}: {safe_title}"
     text = "\n".join(
         [
-            f"A new {label} is waiting for review.",
+            f"A new {label} was published after moderation.",
             "",
             f"Title: {safe_title}",
             f"Slug: {slug}",
@@ -100,7 +100,7 @@ async def item_created(
     )
     markup = (
         '<h1 style="font-family: sans-serif; font-size: 18px;">'
-        f"New {html.escape(label)} awaiting review</h1>"
+        f"New {html.escape(label)} published</h1>"
         '<dl style="font-family: sans-serif;">'
         f"<dt><strong>Title</strong></dt><dd>{html.escape(safe_title)}</dd>"
         f"<dt><strong>Slug</strong></dt><dd>{html.escape(slug)}</dd>"

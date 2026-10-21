@@ -214,7 +214,7 @@ async def test_an_eleventh_block_in_the_month_is_refused(client, db_session):
 
     # 429, not 403: the caller may build, just not until the month turns.
     assert response.status_code == 429, response.text
-    assert "10 of your 10 blocks" in response.json()["detail"]
+    assert "10 of your 10 generations" in response.json()["detail"]
     assert (await client.get("/v1/tasks", headers=auth_header(token))).json()["total"] == 10
 
 

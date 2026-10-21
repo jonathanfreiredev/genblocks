@@ -57,7 +57,7 @@ async def test_the_refusal_says_how_many_and_when_it_opens_again():
         used=10, limit=10, reopens=datetime(2026, 11, 1, tzinfo=UTC)
     )
 
-    assert "10 of your 10 blocks" in str(reached)
+    assert "10 of your 10 generations" in str(reached)
     assert "1 November" in str(reached)
 
 

@@ -64,9 +64,10 @@ class Settings(BaseSettings):
     # omni-moderation on purpose: one gate answers "is this safe content?", this
     # one answers "is there a human here at all?".
     people_detection_model: str = "gpt-4o-mini"
-    # The brief-level image policy decides whether a person asked for a picture,
-    # whether the person is incidental to it, and whether a no-person rewrite is
-    # possible. It is text-only and never generates the picture.
+    # The image policy decides whether a component brief or a standalone prompt
+    # asks for a picture, whether the person is incidental to it, and whether a
+    # no-person rewrite is possible. It is text-only and never generates the
+    # picture.
     image_direction_model: str = "gpt-4o-mini"
 
     # Every picture is decoded, bounded and re-encoded before it is moderated or
@@ -161,11 +162,12 @@ class Settings(BaseSettings):
     # How many pictures one block may ask the library for, in one pass near the end
     # of its run. Images are the priciest part of a task by a distance.
     images_per_block: int = 4
-    # How many blocks one person may queue in a calendar month (UTC). A product
-    # decision, not a calibration: it protects the bill and keeps a single account
-    # from spending the month's budget by accident. There is no global breaker in
-    # code on purpose — Modal and OpenAI are capped where they are billed, and a
-    # second number here would be a copy that drifts from the real one.
+    # How many generations one person may queue in a calendar month (UTC), blocks
+    # and images together. A product decision, not a calibration: it protects the
+    # bill and keeps a single account from spending the month's budget by accident.
+    # There is no global breaker in code on purpose — Modal, OpenAI and BFL are
+    # capped where they are billed, and a second number here would be a copy that
+    # drifts from the real one.
     tasks_per_month: int = 10
     # The hosts a block may load a picture or a stylesheet from, comma-separated.
     # Everything else it shows has to travel with it — a relative path or a

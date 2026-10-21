@@ -29,6 +29,10 @@ from app.components.models import Component
 from app.components.planning import ImageConfirmationRequired
 from app.components.schemas import ComponentRead, ComponentSummary
 from app.db.session import async_session_maker
+from app.images import planning as image_planning
+from app.images import service as images_service
+from app.images.planning import ImagePromptRejected, ImageSuggestionRequired
+from app.images.schemas import ImagePlanRead, ImagePrompt, ImageRead
 from app.mcp.server import mcp
 from app.moderation import service as moderation
 from app.notifications import email as notifications
@@ -169,6 +173,61 @@ async def get_component(
 
 
 @mcp.tool
+async def search_images(
+    query: str | None = None,
+    category_id: uuid.UUID | None = None,
+    limit: int = DEFAULT_LIMIT,
+    offset: int = 0,
+) -> OffsetPage[ImageRead]:
+    """Find public stock images, newest first.
+
+    ``query`` matches the prompt that produced the image; ``category_id`` narrows
+    to one type. Each result carries the image's own judge panel. Images made by
+    a block are in the same library.
+    """
+    params = ListParams(limit=limit, offset=offset)
+
+    async with async_session_maker() as session:
+        images, total = await images_service.list_images(
+            session, params=params, category_id=category_id, search=query
+        )
+
+    return OffsetPage(
+        items=[ImageRead.model_validate(image) for image in images],
+        total=total,
+        limit=params.limit,
+        offset=params.offset,
+    )
+
+
+@mcp.tool
+async def get_image(
+    image_id: uuid.UUID | None = None,
+    slug: str | None = None,
+) -> ImageRead:
+    """Read one stock image in full: its prompt, dimensions and judge panel.
+
+    Give exactly one identifier. The image is public; no token is needed to view
+    it, but calling this tool still resolves the caller for the shared MCP rules.
+    """
+    if image_id is None and slug is None:
+        raise ValueError("Give either image_id or slug.")
+    if image_id is not None and slug is not None:
+        raise ValueError("Give either image_id or slug, not both.")
+
+    async with async_session_maker() as session:
+        if image_id is not None:
+            image = await images_service.get_image(session, image_id=image_id)
+        else:
+            image = await images_service.get_image_by_slug(session, slug=slug)
+
+    if image is None:
+        raise ValueError("No image matches that identifier.")
+
+    return ImageRead.model_validate(image)
+
+
+@mcp.tool
 async def list_tasks(
     status: TaskStatus | None = None,
     limit: int = DEFAULT_LIMIT,
@@ -242,8 +301,103 @@ async def plan_component(brief: Brief) -> ComponentPlan:
     )
 
 
-# Write tools. A write is queued, never waited on: building a block takes
-# minutes, and a tool call that blocks for them is a tool call that times out.
+@mcp.tool
+async def plan_image(
+    prompt: ImagePrompt,
+    width: int,
+    height: int,
+    category: str,
+) -> ImagePlanRead:
+    """Check a standalone image prompt before queueing it.
+
+    The prompt is checked for unsafe or injected text and for people. If people
+    are incidental, the answer contains a no-person prompt to offer the person;
+    if people are the subject, or the prompt is otherwise refused, nothing is
+    queued. Width and height must be multiples of 32 between 256 and 1536.
+    """
+    async with async_session_maker() as session:
+        caller = await _caller(session)
+        plan = await image_planning.plan_image(
+            session,
+            prompt=prompt,
+            width=width,
+            height=height,
+            category=category,
+        )
+
+    if not plan.ready:
+        await notifications.policy_event(
+            kind="image_people" if plan.needs_confirmation else "image_prompt_rejected",
+            reason=plan.reason,
+            brief=plan.prompt,
+            user_id=caller.id,
+            user_email=caller.email,
+        )
+
+    return ImagePlanRead(
+        status=plan.status,
+        prompt=plan.prompt,
+        width=plan.width,
+        height=plan.height,
+        category=plan.category,
+        reason=plan.reason,
+        suggested_prompt=plan.suggested_prompt,
+    )
+
+
+# Write tools. A write is queued, never waited on: building a block or an image
+# takes time, and a tool call that blocks for it is a tool call that times out.
+@mcp.tool
+async def generate_image(
+    prompt: ImagePrompt,
+    width: int,
+    height: int,
+    category: str,
+) -> TaskRead:
+    """Generate a standalone stock image and return the task that carries it.
+
+    The image is public after the no-people gate, moderation and the image judge.
+    Images made here join the same library as the pictures made for blocks. A
+    prompt that asks for people is refused; call ``plan_image`` first to obtain
+    the no-person alternative.
+    """
+    async with async_session_maker() as session:
+        caller = await _caller(session)
+        try:
+            task = await tasks_service.enqueue_image_task(
+                session,
+                prompt=prompt,
+                width=width,
+                height=height,
+                category=category,
+                created_by=caller.id,
+            )
+        except limits.MonthlyQuotaReached as reached:
+            raise ValueError(str(reached)) from reached
+        except ImageSuggestionRequired as confirmation:
+            await notifications.policy_event(
+                kind="image_people",
+                reason=confirmation.reason,
+                brief=prompt,
+                user_id=caller.id,
+                user_email=caller.email,
+            )
+            raise ValueError(
+                f"{confirmation} Suggested prompt: {confirmation.suggested_prompt}"
+            ) from confirmation
+        except ImagePromptRejected as refused:
+            await notifications.policy_event(
+                kind="image_prompt_rejected",
+                reason=refused.reason,
+                brief=prompt,
+                user_id=caller.id,
+                user_email=caller.email,
+            )
+            raise ValueError(str(refused)) from refused
+
+    return TaskRead.model_validate(task)
+
+
 @mcp.tool
 async def create_component(brief: Brief) -> TaskRead:
     """Start building a new UI block from a brief.

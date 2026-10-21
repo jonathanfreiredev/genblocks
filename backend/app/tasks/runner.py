@@ -46,6 +46,7 @@ from app.generations.models import Generation, Verdict
 from app.generations.service import list_generations
 from app.harness import agent as harness
 from app.harness import checks, cloudinary
+from app.harness import images as image_library
 from app.harness.schemas import SandboxFile, SandboxResult
 from app.images.models import Image
 from app.images.sanitize import ImageRefused, sanitize_image
@@ -59,7 +60,7 @@ from app.privacy.redact import redact_pii
 from app.settings import settings
 from app.tasks import service
 from app.tasks import spec as block_spec
-from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
+from app.tasks.models import StepStatus, Task, TaskKind, TaskStatus, TaskStep
 from app.users.models import User
 from app.users.service import display_names
 from app.vectors import service as vectors
@@ -69,12 +70,20 @@ logger = structlog.get_logger("app.tasks.runner")
 # What a run's trace is called in Langfuse. The same word as the task's kind, so a
 # trace can be found by the thing it describes.
 TRACE_NAME = "generate_component"
+IMAGE_TRACE_NAME = "generate_image"
 
 STEP_NAMES = (
     "Retrieving references",
     "Generating the block",
     "Judging the attempt",
     "Publishing the block",
+)
+
+IMAGE_STEP_NAMES = (
+    "Checking the prompt",
+    "Generating the image",
+    "Judging the image",
+    "Filing it in the library",
 )
 
 # The image taxonomy's kind. Pictures are filed under their own half of the
@@ -193,41 +202,56 @@ async def run_task(task_id: uuid.UUID) -> None:
             # Deleted between the claim and the run; nothing to report.
             return
 
+        is_image = task.kind == TaskKind.GENERATE_IMAGE
         trace = observability.start(
-            name=TRACE_NAME,
+            name=IMAGE_TRACE_NAME if is_image else TRACE_NAME,
             input={"brief": task.brief},
-            metadata={"task_id": str(task.id), "model": settings.llm_model},
+            metadata={
+                "task_id": str(task.id),
+                "model": settings.image_model if is_image else settings.llm_model,
+            },
         )
         # The id goes in before the checklist's commit, so a reader can follow the
         # trace of a run that is still going. A deployment without Langfuse keeps
         # it null, which is what the panel says out loud.
         task.langfuse_trace_id = trace.id
 
-        steps = await _open_checklist(session, task_id=task.id)
+        steps = await _open_checklist(
+            session,
+            task_id=task.id,
+            names=IMAGE_STEP_NAMES if is_image else STEP_NAMES,
+        )
 
         try:
-            spec = await _retrieve(session, task=task, step=steps[0], trace=trace)
-            made = await _build(session, task=task, step=steps[1], spec=spec, trace=trace)
-            await _judge(
-                session,
-                step=steps[2],
-                attempt=made.attempt,
-                found=made.found,
-                brief=task.brief,
-                trace=trace,
-            )
-            published = await _publish(
-                session, task=task, step=steps[3], spec=spec, made=made, trace=trace
-            )
+            if is_image:
+                picture = await _run_image(session, task=task, steps=steps, trace=trace)
+                output = {"slug": picture.slug, "image_id": str(picture.id)}
+                metadata = {"width": picture.width, "height": picture.height}
+            else:
+                spec = await _retrieve(session, task=task, step=steps[0], trace=trace)
+                made = await _build(session, task=task, step=steps[1], spec=spec, trace=trace)
+                await _judge(
+                    session,
+                    step=steps[2],
+                    attempt=made.attempt,
+                    found=made.found,
+                    brief=task.brief,
+                    trace=trace,
+                )
+                published = await _publish(
+                    session, task=task, step=steps[3], spec=spec, made=made, trace=trace
+                )
+                output = {"slug": published.slug, "component_id": str(published.id)}
+                metadata = {
+                    "iterations": made.built.iterations,
+                    "skills": made.built.skills,
+                }
         except Exception as error:  # noqa: BLE001 - the task row is where this is kept
             await _notify_policy(task=task, error=error)
             await _fail(session, task_id=task.id, error=error)
             trace.finish(error=str(error) or type(error).__name__)
         else:
-            trace.finish(
-                output={"slug": published.slug, "component_id": str(published.id)},
-                metadata={"iterations": made.built.iterations, "skills": made.built.skills},
-            )
+            trace.finish(output=output, metadata=metadata)
         finally:
             # Always after the row has committed: a trace of work Postgres never
             # recorded would be a story about nothing.
@@ -253,14 +277,163 @@ async def run_worker(stop: asyncio.Event, *, poll_seconds: float = POLL_SECONDS)
             logger.exception("task crashed", task_id=str(task_id))
 
 
-async def _open_checklist(session: AsyncSession, *, task_id: uuid.UUID) -> list[TaskStep]:
+async def _open_checklist(
+    session: AsyncSession, *, task_id: uuid.UUID, names: tuple[str, ...]
+) -> list[TaskStep]:
     """Write the whole checklist as pending and return it in order."""
-    steps = [
-        TaskStep(task_id=task_id, index=index, name=name) for index, name in enumerate(STEP_NAMES)
-    ]
+    steps = [TaskStep(task_id=task_id, index=index, name=name) for index, name in enumerate(names)]
     session.add_all(steps)
     await session.commit()
     return steps
+
+
+async def _run_image(
+    session: AsyncSession,
+    *,
+    task: Task,
+    steps: list[TaskStep],
+    trace: observability.Trace,
+) -> Image:
+    """Generate, score and file one standalone picture."""
+    if task.image_width is None or task.image_height is None:
+        raise PictureUnfiled("The image task has no size.")
+    if task.image_category_id is None:
+        raise PictureUnfiled("The image task has no image category.")
+
+    await _begin(session, steps[0])
+    async with trace.step(IMAGE_STEP_NAMES[0], input={"prompt": task.brief}) as span:
+        why = await moderation.image_prompt_refusal(task.brief)
+        if why is not None:
+            raise PictureRejected(f"The prompt did not pass moderation — {why}")
+        await _finish(session, steps[0], detail={"status": "allowed"})
+        span.update(output={"status": "allowed"})
+
+    await _begin(session, steps[1])
+    async with trace.step(
+        IMAGE_STEP_NAMES[1],
+        input={
+            "prompt": task.brief,
+            "width": task.image_width,
+            "height": task.image_height,
+        },
+    ) as span:
+        generated = await image_library.generate(
+            prompt=task.brief,
+            width=task.image_width,
+            height=task.image_height,
+        )
+        await _finish(
+            session,
+            steps[1],
+            detail={
+                "width": generated.width,
+                "height": generated.height,
+                "model": settings.image_model,
+                "screened": generated.screened,
+            },
+        )
+        span.update(
+            output={
+                "path": generated.path,
+                "width": generated.width,
+                "height": generated.height,
+            }
+        )
+
+    await _begin(session, steps[2])
+    async with trace.step(IMAGE_STEP_NAMES[2], input={"prompt": task.brief}) as span:
+        judged = await judge.score_image(
+            prompt=task.brief,
+            image=generated.data,
+            width=generated.width,
+            height=generated.height,
+            media_type=generated.media_type,
+        )
+        if not judged.passed:
+            missed = "; ".join(
+                f"{dimension} {judged.scores[dimension]}, below "
+                f"{judge.threshold_for(dimension)}: {judged.notes[dimension]}"
+                for dimension in judged.below
+            )
+            await _discard_pictures(session, [generated.path])
+            raise PictureRejected(f"The picture did not pass the image rubric — {missed}")
+        await _finish(
+            session,
+            steps[2],
+            detail={
+                "scores": judged.scores,
+                "rubric": judged.version,
+                "summary": judged.summary,
+            },
+        )
+        span.update(output={"scores": judged.scores, "rubric": judged.version})
+
+    await _begin(session, steps[3])
+    async with trace.step(IMAGE_STEP_NAMES[3], input={"path": generated.path}) as span:
+        public_prompt = redact_pii(generated.prompt)
+        public_slug = image_slug(prompt=public_prompt, path=generated.path)
+        category_id = task.image_category_id
+        created_by = task.created_by
+        category = await categories_service.get_category(session, category_id=category_id)
+        picture = Image(
+            slug=public_slug,
+            prompt=public_prompt,
+            path=generated.path,
+            width=generated.width,
+            height=generated.height,
+            category_id=category_id,
+            created_by=created_by,
+            model=settings.image_model,
+            scores=judged.scores,
+            rubric_version=judged.version,
+            langfuse_trace_id=trace.id,
+            provenance=_provenance(
+                kind="image",
+                model=settings.image_model,
+                source=generated.prompt,
+            ),
+        )
+        session.add(picture)
+        try:
+            await session.flush()
+            picture_id = picture.id
+            task.image_id = picture_id
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            await _discard_pictures(session, [generated.path])
+            raise
+
+        remembered = await vectors.remember_image(
+            image_id=picture_id,
+            prompt=public_prompt,
+            picture=generated.data,
+            category=category.slug if category else "",
+        )
+        if not remembered:
+            logger.warning("filed picture is not searchable", path=generated.path)
+
+        authors = await display_names(session, ids=[created_by]) if created_by is not None else {}
+        await notifications.item_created(
+            kind="image",
+            item_id=picture_id,
+            title=public_prompt,
+            slug=public_slug,
+            author=authors.get(created_by) if created_by else None,
+        )
+
+        await _finish(
+            session,
+            steps[3],
+            detail={"slug": public_slug, "image_id": str(picture_id)},
+        )
+        span.update(output={"slug": public_slug, "image_id": str(picture_id)})
+
+    task.status = TaskStatus.SUCCEEDED
+    task.finished_at = utcnow()
+    await session.commit()
+    await session.refresh(picture)
+    return picture
 
 
 async def _retrieve(
@@ -512,6 +685,22 @@ async def _keep(
 
     if any(picture is not None for picture in pictures):
         await session.commit()
+
+    # The operator asked for one notice per generated picture, not per block.
+    # Reused pictures already had theirs when they entered the library.
+    if fresh:
+        authors = await display_names(session, ids=[task.created_by])
+        for index, _placed, _judged, _path in fresh:
+            picture = pictures[index]
+            if picture is None:
+                continue
+            await notifications.item_created(
+                kind="image",
+                item_id=picture.id,
+                title=picture.prompt,
+                slug=picture.slug,
+                author=authors.get(task.created_by) if task.created_by else None,
+            )
 
     # Remembered after the rows exist: a picture is the library's from the moment
     # it is filed, whether or not the block that asked for it is published.
@@ -920,7 +1109,7 @@ async def _notify_policy(*, task: Task, error: Exception) -> None:
         kind = "sexual_minors"
         reason = error.reason
         image_hash = error.image_hash
-    elif isinstance(error, PictureRejected):
+    elif isinstance(error, (PictureRejected, image_library.ImagesRefused)):
         kind = "image_rejected"
         reason = str(error)
     elif isinstance(error, ModerationRefused):

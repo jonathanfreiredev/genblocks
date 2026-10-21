@@ -20,14 +20,21 @@ from app.mcp.server import mcp
 from app.tasks.models import Task, TaskStatus
 from app.tasks.schemas import TaskRead
 from app.users.models import User
+from tests.helpers import create_category
 
 pytestmark = pytest.mark.anyio
 
-# Published the moment they ship and never renamed. ``generate_image`` and
-# ``vary_component`` are reserved (see PLAN.md) and not registered yet.
-PUBLISHED_WRITE_TOOLS = {"plan_component", "create_component"}
+# Published the moment they ship and never renamed. ``vary_component`` remains
+# reserved for a later phase.
+PUBLISHED_WRITE_TOOLS = {
+    "plan_image",
+    "generate_image",
+    "plan_component",
+    "create_component",
+}
 
 BRIEF = "A pricing page for a developer tool, three tiers"
+IMAGE_PROMPT = "A quiet harbour at dawn with fishing boats"
 
 
 @pytest.fixture
@@ -64,6 +71,40 @@ async def test_the_published_write_tools_are_registered():
     listed = {tool.name for tool in await mcp.list_tools()}
 
     assert listed >= PUBLISHED_WRITE_TOOLS
+
+
+async def test_plan_image_answers_without_queueing(tool_session, monkeypatch):
+    subject = uuid.uuid4()
+    sign_in(monkeypatch, subject=subject)
+    await create_category(tool_session, slug="photography", kind="image")
+
+    plan = await tools.plan_image(
+        prompt=IMAGE_PROMPT,
+        width=1024,
+        height=768,
+        category="photography",
+    )
+
+    assert plan.status == "ready"
+    assert await tool_session.scalar(select(func.count()).select_from(Task)) == 0
+
+
+async def test_generate_image_queues_an_image_task(tool_session, monkeypatch):
+    subject = uuid.uuid4()
+    sign_in(monkeypatch, subject=subject)
+    category = await create_category(tool_session, slug="photography", kind="image")
+
+    task = await tools.generate_image(
+        prompt=IMAGE_PROMPT,
+        width=1024,
+        height=768,
+        category="photography",
+    )
+
+    assert task.kind == "generate_image"
+    assert task.image_width == 1024
+    assert task.image_height == 768
+    assert task.image_category_id == category.id
 
 
 async def test_plan_component_answers_without_queueing(tool_session, monkeypatch):
@@ -111,7 +152,7 @@ async def test_create_component_says_when_the_month_is_spent(tool_session, monke
 
     # The third door answers in the same words as the other two: a tool error the
     # calling agent can read and repeat.
-    with pytest.raises(ValueError, match="10 of your 10 blocks"):
+    with pytest.raises(ValueError, match="10 of your 10 generations"):
         await tools.create_component(brief=BRIEF)
 
 

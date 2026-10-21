@@ -40,7 +40,7 @@ ThreadId = Annotated[
 # has near neighbours, few enough that the rail stays a rail.
 LIMIT = 8
 
-Kind = Literal["component"]
+Kind = Literal["component", "image"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,28 +74,43 @@ class Suggestion:
 
 @dataclass(frozen=True, slots=True)
 class Proposal:
-    """A brief the agent prepared, waiting for the person to confirm it.
+    """A task the agent prepared, waiting for the person to confirm it.
 
-    The model writes the brief; the person owns the consequence. Keeping the two
-    apart is what makes prompt injection into a search result unable to spend
-    somebody's quota or start a run.
+    The model writes the brief or the prompt; the person owns the consequence.
+    Keeping the two apart is what makes prompt injection into a search result
+    unable to spend somebody's quota or start a run.
     """
 
     brief: str
     force: bool = False
+    kind: Literal["component", "image"] = "component"
+    width: int | None = None
+    height: int | None = None
+    category: str | None = None
+
+    @property
+    def key(self) -> tuple:
+        return (self.kind, self.brief, self.force, self.width, self.height, self.category)
 
     def as_body(self) -> dict:
-        return {"brief": self.brief, "force": self.force}
+        return {
+            "kind": self.kind,
+            "brief": self.brief,
+            "force": self.force,
+            "width": self.width,
+            "height": self.height,
+            "category": self.category,
+        }
 
 
 @dataclass
 class Proposals:
-    """The briefs one turn prepared, deduplicated by their exact words."""
+    """The tasks one turn prepared, deduplicated by their exact words and inputs."""
 
     items: list[Proposal] = field(default_factory=list)
 
     def add(self, proposal: Proposal) -> bool:
-        if any(one.brief == proposal.brief for one in self.items):
+        if any(one.key == proposal.key for one in self.items):
             return False
 
         self.items.append(proposal)
@@ -134,11 +149,16 @@ class ChatRequest(BaseModel):
 
 
 class ConfirmRequest(BaseModel):
-    """A prepared brief the person pressed "queue" on.
+    """A prepared task the person pressed "queue" on.
 
-    ``force`` is the same escape hatch the conversation offers: the registry has
-    something close, and the person has said they want their own version anyway.
+    ``force`` is the same escape hatch the conversation offers for a component:
+    the registry has something close, and the person has said they want their own
+    version anyway. An image proposal carries its size and category.
     """
 
     brief: Brief
     force: bool = False
+    kind: Literal["component", "image"] = "component"
+    width: int | None = None
+    height: int | None = None
+    category: str | None = None

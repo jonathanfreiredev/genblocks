@@ -68,6 +68,23 @@ def no_image_policy(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_image_prompt_policy(monkeypatch):
+    """Keep the suite off the standalone-prompt classifier as well."""
+    from app.image_policy import prompt as prompt_policy
+
+    async def ready(prompt, *, client=None):
+        return prompt_policy.PromptDecision(
+            status="ready",
+            has_people=False,
+            people_role="none",
+            reason="the prompt has no people",
+            suggested_prompt=None,
+        )
+
+    monkeypatch.setattr(prompt_policy, "evaluate", ready)
+
+
+@pytest.fixture(autouse=True)
 def no_notifications(monkeypatch):
     """Keep the suite from sending real report emails.
 

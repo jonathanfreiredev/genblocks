@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -11,9 +10,7 @@ from app.reports.models import ReportReason, ReportStatus, ReportTarget
 class ReportCreate(BaseModel):
     """What a visitor sends when they think an artifact should not be public."""
 
-    # The public catalogue is blocks only. Image reports remain readable for
-    # legacy rows, but no new image target can be created.
-    target_kind: Literal["component"]
+    target_kind: ReportTarget
     target_id: uuid.UUID
     reason: ReportReason
     details: str | None = Field(default=None, max_length=2_000)

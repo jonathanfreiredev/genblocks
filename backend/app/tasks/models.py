@@ -10,9 +10,10 @@ from app.db.models import BaseModel
 
 
 class TaskKind(StrEnum):
-    """What a background task is doing. One kind so far."""
+    """What a background task is doing."""
 
     GENERATE_COMPONENT = "generate_component"
+    GENERATE_IMAGE = "generate_image"
 
 
 class TaskStatus(StrEnum):
@@ -42,7 +43,7 @@ class Task(BaseModel):
     __tablename__ = "tasks"
 
     __table_args__ = (
-        CheckConstraint("kind IN ('generate_component')", name="kind_valid"),
+        CheckConstraint("kind IN ('generate_component', 'generate_image')", name="kind_valid"),
         CheckConstraint(
             "status IN ('pending', 'running', 'succeeded', 'failed', 'interrupted')",
             name="status_valid",
@@ -56,6 +57,18 @@ class Task(BaseModel):
     # The block this task produced, once it has one.
     component_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("components.id", ondelete="SET NULL"), index=True
+    )
+    # The picture a standalone image task produced. Component tasks leave it null.
+    image_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("images.id", ondelete="SET NULL"), index=True
+    )
+    # Inputs for an image task. They are nullable because a component task has
+    # none, and they are columns rather than an opaque blob because the worker
+    # and the task page both need to read them.
+    image_width: Mapped[int | None]
+    image_height: Mapped[int | None]
+    image_category_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="SET NULL"), index=True
     )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True

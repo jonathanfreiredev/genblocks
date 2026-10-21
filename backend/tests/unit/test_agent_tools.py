@@ -37,6 +37,9 @@ def test_the_conversation_reaches_the_published_tools_by_name():
     assert [tool.name for tool in tools] == [
         "registry_overview",
         "search_components",
+        "find_images",
+        "plan_image",
+        "generate_image",
         "plan_component",
         "create_component",
     ]
@@ -128,6 +131,49 @@ async def test_plan_component_offers_the_no_people_rewrite(monkeypatch):
 
     assert answer["status"] == "needs_image_confirmation"
     assert answer["proposed_brief"] == "A pottery wheel with clay, no hands"
+
+
+async def test_generate_image_prepares_an_image_proposal(monkeypatch):
+    from app.agent.schemas import Proposals
+    from app.images import planning as image_planning
+
+    async def ready(session, *, prompt, width, height, category):
+        return image_planning.ImagePlan(
+            status="ready",
+            prompt=prompt,
+            width=width,
+            height=height,
+            category=category,
+            category_id=uuid.uuid4(),
+            reason="the prompt has no people",
+            suggested_prompt=None,
+        )
+
+    monkeypatch.setattr(image_planning, "plan_image", ready)
+    proposals = Proposals()
+    tool = next(
+        one
+        for one in build_tools(
+            caller=caller(),
+            queued=[],
+            suggested=Suggestions(),
+            proposals=proposals,
+        )
+        if one.name == "generate_image"
+    )
+
+    answer = await tool.ainvoke(
+        {
+            "prompt": "A quiet harbour at dawn with fishing boats",
+            "width": 1024,
+            "height": 768,
+            "category": "photography",
+        }
+    )
+
+    assert answer["proposed"] is True
+    assert proposals.items[0].kind == "image"
+    assert proposals.items[0].brief == "A quiet harbour at dawn with fishing boats"
 
 
 async def test_a_valid_brief_becomes_a_proposal_not_a_task(monkeypatch):

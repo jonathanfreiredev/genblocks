@@ -17,11 +17,12 @@ from sqlalchemy import select
 
 from app.categories.schemas import CategoryRead
 from app.components.schemas import ComponentSummary
+from app.images.schemas import ImageRead
 from app.mcp import tools
 from app.mcp.server import mcp
 from app.tasks.models import Task, TaskStep
 from app.users.models import User
-from tests.helpers import create_category, create_component
+from tests.helpers import create_category, create_component, create_image
 
 pytestmark = pytest.mark.anyio
 
@@ -31,6 +32,8 @@ PUBLISHED_READ_TOOLS = {
     "list_categories",
     "search_components",
     "get_component",
+    "search_images",
+    "get_image",
     "list_tasks",
     "get_task",
 }
@@ -131,6 +134,24 @@ async def test_get_component_demands_exactly_one_identifier(tool_session):
 async def test_get_component_reports_an_unknown_identifier(tool_session):
     with pytest.raises(ValueError, match="No component"):
         await tools.get_component(component_id=uuid.uuid4())
+
+
+async def test_search_images_returns_the_stock_library(tool_session):
+    scenes = await create_category(tool_session, slug="photography", kind="image")
+    image = await create_image(
+        tool_session,
+        category_id=scenes.id,
+        path="genblocks/images/harbour",
+        prompt="A quiet harbour at dawn",
+    )
+
+    page = await tools.search_images(query="harbour")
+    one = await tools.get_image(image_id=image.id)
+
+    assert page.total == 1
+    assert isinstance(page.items[0], ImageRead)
+    assert page.items[0].path == image.path
+    assert one.slug == image.slug
 
 
 async def test_list_tasks_returns_only_the_callers_tasks(tool_session, monkeypatch):
