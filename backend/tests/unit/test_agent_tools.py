@@ -37,7 +37,7 @@ def test_the_conversation_reaches_the_published_tools_by_name():
     assert [tool.name for tool in tools] == [
         "registry_overview",
         "search_components",
-        "find_images",
+        "plan_component",
         "create_component",
     ]
     assert all(tool.description for tool in tools)
@@ -108,6 +108,26 @@ async def test_a_brief_the_registry_already_has_is_not_queued(monkeypatch):
     assert answer["queued"] is False
     assert answer["already"]["slug"] == "tiered-pricing"
     assert [one.id for one in suggested.items] == [found.id]
+
+
+async def test_plan_component_offers_the_no_people_rewrite(monkeypatch):
+    from app.components import planning
+
+    async def needs_rewrite(brief):
+        return planning.PlanDecision(
+            status="needs_image_confirmation",
+            brief=brief,
+            reason="people are not allowed",
+            proposed_brief="A pottery wheel with clay, no hands",
+        )
+
+    monkeypatch.setattr(planning, "plan", needs_rewrite)
+
+    tool = _tool("plan_component", [])
+    answer = await tool.ainvoke({"brief": "A hero with hands shaping clay"})
+
+    assert answer["status"] == "needs_image_confirmation"
+    assert answer["proposed_brief"] == "A pottery wheel with clay, no hands"
 
 
 async def test_a_valid_brief_becomes_a_proposal_not_a_task(monkeypatch):

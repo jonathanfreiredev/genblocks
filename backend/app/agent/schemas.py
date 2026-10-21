@@ -1,7 +1,6 @@
 """What the conversation shows besides words.
 
-A suggestion is a thing the agent found while working — a block that may already
-answer the brief, a picture the library already has — that the person can open.
+A suggestion is a block the agent found while working that the person can open.
 It travels as its own event rather than inside the agent's prose because it is not
 prose: the dialog draws it as a card, and a card has an id to click and a picture
 to show, neither of which survives being read out.
@@ -41,7 +40,7 @@ ThreadId = Annotated[
 # has near neighbours, few enough that the rail stays a rail.
 LIMIT = 8
 
-Kind = Literal["component", "image"]
+Kind = Literal["component"]
 
 
 @dataclass(frozen=True, slots=True)

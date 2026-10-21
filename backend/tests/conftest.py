@@ -45,6 +45,29 @@ def no_moderation(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_image_policy(monkeypatch):
+    """Keep the suite off the image-direction model as well.
+
+    The default is a brief with no explicit image direction: ready, and the
+    builder chooses. A test that wants people, a rewrite or a refusal patches
+    ``app.image_policy.service.evaluate`` itself.
+    """
+    from app.image_policy import service as image_policy
+
+    async def ready(brief, *, client=None):
+        return image_policy.ImagePolicyDecision(
+            status="ready",
+            has_image_direction=False,
+            has_people=False,
+            people_role="none",
+            reason="no explicit image direction; the builder chooses",
+            proposed_brief=None,
+        )
+
+    monkeypatch.setattr(image_policy, "evaluate", ready)
+
+
+@pytest.fixture(autouse=True)
 def no_notifications(monkeypatch):
     """Keep the suite from sending real report emails.
 

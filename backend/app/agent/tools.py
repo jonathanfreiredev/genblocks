@@ -25,11 +25,11 @@ from sqlalchemy import func, select
 
 from app.agent.schemas import Proposal, Proposals, Suggestion, Suggestions
 from app.categories import service as categories_service
+from app.components import planning
 from app.components import service as components_service
 from app.components.models import Component
 from app.db.session import async_session_maker
-from app.images import service as images_service
-from app.images.models import Image
+from app.notifications import email as notifications
 from app.pagination import ListParams
 from app.tasks.models import Task
 from app.tasks.schemas import Brief, TaskCreate
@@ -41,19 +41,11 @@ from app.vectors import service as vectors
 # not crowd out the conversation.
 SEARCH_LIMIT = 5
 
-# How many pictures the library offers for one description.
-PICTURE_LIMIT = 3
-
 # How near a result has to be before it is offered as a match. Cosine distance,
 # smaller is nearer: the measured examples put "pricing block" at 0.51 for the
 # pricing table and the next block at 0.63. Cards are a claim that the registry
 # has the thing, so the far ones stay out of the conversation.
 SEARCH_DISTANCE = 0.58
-
-# Pictures are compared by a prompt against a photograph, so the same query sits
-# further away than it would against code. The nearest unrelated scene is around
-# 0.78; a workshop at 0.67 is still the workshop.
-PICTURE_DISTANCE = 0.72
 
 
 def build_tools(
@@ -77,7 +69,7 @@ def build_tools(
 
     @tool
     async def registry_overview() -> dict[str, Any]:
-        """What the registry holds: how many published blocks and pictures.
+        """What the registry holds: how many published blocks and which categories exist.
 
         Use it for overview questions — "how many blocks are there?", "what can I
         browse?", "which categories exist?" — before searching for a specific
@@ -87,23 +79,16 @@ def build_tools(
             blocks = await session.scalar(
                 select(func.count()).select_from(Component).where(Component.deleted_at.is_(None))
             )
-            pictures = await session.scalar(
-                select(func.count()).select_from(Image).where(Image.deleted_at.is_(None))
-            )
             categories = await categories_service.list_categories(session)
 
         return {
             "blocks": blocks or 0,
-            "images": pictures or 0,
             "categories": [
                 {"kind": category.kind, "slug": category.slug, "name": category.name}
                 for category in categories
-                if category.level == 2
+                if category.level == 2 and category.kind == "component"
             ],
-            "note": (
-                "These are published artifacts. Use search_components or "
-                "find_images to show examples of a category."
-            ),
+            "note": "These are published blocks. Use search_components to show examples.",
         }
 
     @tool
@@ -146,68 +131,18 @@ def build_tools(
         }
 
     @tool
-    async def find_images(query: str, category: str | None = None) -> dict[str, Any]:
-        """Look through the picture library.
+    async def plan_component(brief: Brief) -> dict[str, Any]:
+        """Check a component brief before preparing or queueing it.
 
-        Use it to answer what pictures exist, or to find one before asking a
-        block to make a photograph. The library is reused rather than
-        regenerated: a scene already filed is better than a new generation.
-
-        Args:
-            query: The scene, in the words a photographer would need.
-            category: Which type of image to look in, when the block knows.
+        Every brief is checked for unsafe or injected text and for the image
+        direction. A brief that asks for people in its pictures is not queued:
+        the answer contains a no-person rewrite to offer the person. If the
+        answer is ``ready``, call ``create_component`` with the same brief.
         """
-        async with async_session_maker() as session:
-            nearest = await vectors.find_images(query, limit=PICTURE_LIMIT, category=category)
-            pictures = await _pictures(session, ids=[one.id for one in nearest])
-
-        relevant = [
-            (picture, match.distance)
-            for picture, match in zip(pictures, nearest, strict=False)
-            if match.distance <= PICTURE_DISTANCE
-        ]
-
-        for picture, _distance in relevant:
-            suggested.add(
-                Suggestion(
-                    kind="image",
-                    id=picture.id,
-                    slug=picture.slug,
-                    title=picture.prompt,
-                    detail=f"{picture.width}×{picture.height}",
-                    path=picture.path,
-                    width=picture.width,
-                    height=picture.height,
-                )
-            )
-
-        if not relevant:
-            return {
-                "images": [],
-                "note": (
-                    "Nothing in the library is close enough to the scene asked "
-                    "for. Say so; ask for a new picture only if the block genuinely "
-                    "needs one."
-                ),
-            }
-
-        return {
-            "images": [
-                {
-                    "id": str(picture.id),
-                    "slug": picture.slug,
-                    "prompt": picture.prompt,
-                    "width": picture.width,
-                    "height": picture.height,
-                    "distance": round(distance, 3),
-                }
-                for picture, distance in relevant
-            ],
-            "note": (
-                "These are already in the library. Name the ones that fit; the "
-                "cards show the picture."
-            ),
-        }
+        payload = TaskCreate(brief=brief)
+        decision = await planning.plan(payload.brief)
+        await _policy_notice(caller, decision)
+        return decision.as_body()
 
     @tool
     async def create_component(brief: Brief, force: bool = False) -> dict[str, Any]:
@@ -228,6 +163,23 @@ def build_tools(
         # tool's schema tells the model what a brief looks like, and this is what
         # makes the rule hold when a brief arrives too short anyway.
         payload = TaskCreate(brief=brief)
+
+        decision = await planning.plan(payload.brief)
+        if not decision.ready:
+            await _policy_notice(caller, decision)
+            return {
+                "queued": False,
+                "proposed": False,
+                "status": decision.status,
+                "reason": decision.reason,
+                "proposed_brief": decision.proposed_brief,
+                "message": (
+                    "Nothing was prepared. Offer the proposed no-person brief, "
+                    "and only call create_component again if the person accepts it."
+                    if decision.needs_confirmation
+                    else "Nothing was prepared. Explain the refusal briefly."
+                ),
+            }
 
         async with async_session_maker() as session:
             already = (
@@ -261,7 +213,7 @@ def build_tools(
             ),
         }
 
-    return [registry_overview, search_components, find_images, create_component]
+    return [registry_overview, search_components, plan_component, create_component]
 
 
 async def _nearest_components(session: Any, *, query: str) -> list[tuple[Component, float | None]]:
@@ -285,16 +237,6 @@ async def _nearest_components(session: Any, *, query: str) -> list[tuple[Compone
     return [(block, None) for block in found]
 
 
-async def _pictures(session: Any, *, ids: list[Any]) -> list[Image]:
-    """The library rows for a list of ids, in the order retrieval ranked them."""
-    if not ids:
-        return []
-
-    found = await images_service.by_ids(session, ids=ids)
-
-    return found
-
-
 def _described(block: Component, distance: float | None) -> dict[str, Any]:
     """One block as the model reads it: enough to describe it, and its id."""
     return {
@@ -315,4 +257,18 @@ def _suggested(block: Component, path: str | None) -> Suggestion:
         title=block.title,
         detail=block.description,
         path=path,
+    )
+
+
+async def _policy_notice(caller: User, decision: planning.PlanDecision) -> None:
+    """Send the operator a metadata-only notice when a brief is refused."""
+    if decision.ready:
+        return
+
+    await notifications.policy_event(
+        kind="image_people" if decision.needs_confirmation else "brief_rejected",
+        reason=decision.reason,
+        brief=decision.brief,
+        user_id=caller.id,
+        user_email=caller.email,
     )

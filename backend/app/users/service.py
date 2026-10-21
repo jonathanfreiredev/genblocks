@@ -1,12 +1,60 @@
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.claims import TokenClaims
+from app.db.models import utcnow
 from app.users.models import User
+
+
+async def get_user(session: AsyncSession, *, user_id: uuid.UUID) -> User | None:
+    return await session.get(User, user_id)
+
+
+async def list_users(
+    session: AsyncSession,
+    *,
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[Sequence[User], int]:
+    """A page of profiles for the operator's ban screen."""
+    statement = select(User)
+    if search:
+        pattern = f"%{search.strip()}%"
+        statement = statement.where(or_(User.email.ilike(pattern), User.full_name.ilike(pattern)))
+
+    total = await session.scalar(select(func.count()).select_from(statement.subquery()))
+    found = await session.scalars(
+        statement.order_by(User.created_at.desc()).limit(limit).offset(offset)
+    )
+    return found.all(), total or 0
+
+
+async def set_ban(
+    session: AsyncSession,
+    *,
+    user: User,
+    operator: User,
+    banned: bool,
+    reason: str | None = None,
+) -> User:
+    """Ban or unban one profile. Authorization is the caller's job."""
+    if banned:
+        user.banned_at = utcnow()
+        user.banned_by = operator.id
+        user.ban_reason = reason.strip() if reason and reason.strip() else None
+    else:
+        user.banned_at = None
+        user.banned_by = None
+        user.ban_reason = None
+
+    await session.commit()
+    await session.refresh(user)
+    return user
 
 
 async def display_names(

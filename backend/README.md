@@ -129,9 +129,8 @@ CORS_ORIGINS=http://localhost:3000
 | `IMAGE_MAX_PIXELS`      | No       | `24000000`              | Decoded pixel bound for a picture.                                  |
 | `IMAGE_REENCODE_QUALITY`| No       | `85`                    | JPEG quality used when a picture is re-encoded.                     |
 | `OPENAI_MODERATION_MODEL` | No | `omni-moderation-latest` | OpenAI text/image moderation model. |
-| `CSAM_SCAN_ENABLED`     | No       | `false`                 | Enables the dedicated CSAM adapter. |
-| `CSAM_SCAN_URL`         | No       | –                       | Adapter endpoint; required when enabled. |
-| `CSAM_SCAN_API_KEY`     | No       | –                       | Adapter bearer token. |
+| `PEOPLE_DETECTION_MODEL` | No      | `gpt-4o-mini`           | Vision model that refuses any picture containing a human or human-like figure. |
+| `IMAGE_DIRECTION_MODEL` | No       | `gpt-4o-mini`           | Text model that classifies a brief's image direction and proposes no-person rewrites. |
 | `ADMIN_EMAILS`          | No       | –                       | Comma-separated global operators for the item queue and report takedowns. |
 | `RESEND_API_KEY`        | No       | –                       | Resend key for new-report and new-item notifications. Empty keeps them silent. |
 | `RESEND_FROM_EMAIL`     | No       | `GenBlocks <onboarding@resend.dev>` | Verified sender for operator notifications. |
@@ -299,12 +298,13 @@ Implementation notes:
   order is total and rows cannot repeat or vanish between pages.
 - Filter rows the endpoint owns with typed query parameters, and keep
   soft-deleted rows out with `deleted_at IS NULL`.
-- Public block and image readers have no approval gate: an item is published
-  after moderation. `/v1/admin/components` and `/v1/admin/images` expose the same
-  public rows for operator inspection. Operator deletion is a hard delete through
-  `app/deletion/service.py`: hide, purge Cloudinary, delete the row, forget its
-  vector and write a `deletion_audit` row. Reports keep a snapshot because their
-  foreign keys are set to null when the target disappears.
+- Public block readers have no approval gate: a block is published after
+  moderation. Images are internal assets used by blocks; `/v1/admin/components`
+  and `/v1/admin/images` expose the rows for operator inspection. Operator
+  deletion is a hard delete through `app/deletion/service.py`: hide, purge
+  Cloudinary, delete the row, forget its vector and write a `deletion_audit` row.
+  Reports keep a snapshot because their foreign keys are set to null when the
+  target disappears.
 - Text search: `ILIKE '%term%'` is fine for small tables; move to a `pg_trgm`
   or full-text index when it matters.
 

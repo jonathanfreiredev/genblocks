@@ -21,7 +21,7 @@ from app.mcp import tools
 from app.mcp.server import mcp
 from app.tasks.models import Task, TaskStep
 from app.users.models import User
-from tests.helpers import create_category, create_component, create_image
+from tests.helpers import create_category, create_component
 
 pytestmark = pytest.mark.anyio
 
@@ -31,7 +31,6 @@ PUBLISHED_READ_TOOLS = {
     "list_categories",
     "search_components",
     "get_component",
-    "search_images",
     "list_tasks",
     "get_task",
 }
@@ -132,21 +131,6 @@ async def test_get_component_demands_exactly_one_identifier(tool_session):
 async def test_get_component_reports_an_unknown_identifier(tool_session):
     with pytest.raises(ValueError, match="No component"):
         await tools.get_component(component_id=uuid.uuid4())
-
-
-async def test_search_images_carries_the_generation_panel(tool_session):
-    scenes = await create_category(tool_session, slug="scene", kind="image")
-    image = await create_image(tool_session, category_id=scenes.id, path="images/landscape")
-    image.model = "flux-2-pro"
-    image.scores = {"visual": 88, "prompt_fit": 91, "compliance": 100}
-    await tool_session.commit()
-
-    page = await tools.search_images(query="landscape")
-
-    assert page.total == 1
-    assert page.items[0].path == image.path
-    assert page.items[0].model == "flux-2-pro"
-    assert page.items[0].scores == {"visual": 88, "prompt_fit": 91, "compliance": 100}
 
 
 async def test_list_tasks_returns_only_the_callers_tasks(tool_session, monkeypatch):

@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.briefs import service as briefs
 from app.components.models import Component
+from app.components.planning import ImageConfirmationRequired, plan
 from app.db.models import utcnow
 from app.moderation import service as moderation
 from app.pagination import ListParams
@@ -60,19 +61,26 @@ async def enqueue_task(
     ``fresh`` is somebody who has seen what the registry has and wants their own
     anyway: the cache is skipped, and the run is paid for like any other.
     """
+    # The brief has already produced a public block. That answer stays free; the
+    # policy was applied when it was first built.
     answered = None if fresh else await briefs.find(session, brief=brief)
     if answered is not None:
         return await _answered(session, brief=brief, created_by=created_by, component=answered)
 
     await limits.admitted(session, user_id=created_by)
 
-    # End the read's transaction before the network call; the reservation below
+    # End the read's transaction before the network calls; the reservation below
     # opens the one that matters.
     await session.commit()
 
-    why = await moderation.refusal(brief)
-    if why is not None:
-        raise moderation.BriefRejected(why)
+    decision = await plan(brief)
+    if not decision.ready:
+        if decision.needs_confirmation and decision.proposed_brief is not None:
+            raise ImageConfirmationRequired(
+                reason=decision.reason,
+                proposed_brief=decision.proposed_brief,
+            )
+        raise moderation.BriefRejected(decision.reason)
 
     # From here to the commit inside ``create_task`` is the atomic section: no
     # external call, no second door.

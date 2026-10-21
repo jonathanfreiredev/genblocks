@@ -7,11 +7,11 @@ the judge or the registry. The **picture** is asked after it comes back from its
 provider and before it is stored, so a generation that should not exist never
 reaches a public CDN.
 
-The image path has two layers. A dedicated child-safety adapter runs first when
-`CSAM_SCAN_ENABLED` is true; a match stops before the generic classifier. While
-the deployment waits for provider approval the adapter is off, but the generic
-vision classifier still catches sexual content, violence and hate, and a
-`sexual/minors` hit is treated as a suspected child-safety event.
+The image path has two layers. The person detector runs first and refuses any
+picture with a human or human-like figure; the product does not generate people.
+The generic vision classifier then catches sexual content, violence and hate.
+A `sexual/minors` hit is a suspected child-safety event and is handled as an
+incident, not as an ordinary refusal.
 
 With no provider configured the check is **off in development and closed in
 production**. A deployment that forgot the key is told instead of silently
@@ -21,6 +21,7 @@ fails closed.
 """
 
 import base64
+import hashlib
 import json
 import re
 from collections.abc import Mapping
@@ -29,6 +30,7 @@ from dataclasses import dataclass
 import httpx
 import structlog
 
+from app.moderation.people import PeopleCheckUnavailable, people_refusal
 from app.settings import settings
 
 logger = structlog.get_logger("app.moderation")
@@ -62,14 +64,14 @@ COMMENT = re.compile(r"//\s*(.+)|/\*([\s\S]*?)\*/")
 # dashboards are the product, and a classifier that refuses them is worse than no
 # classifier at all. What is not ordinary, and what this deployment does not
 # publish, is named in the same breath so the model has one standard for a brief, a
-# block's copy and a stock picture.
+# block's copy and one of its decorative pictures.
 FRAME = """\
 You are a safety and scope classifier for GenBlocks, a public library of interface
-blocks and stock images.
+blocks.
 
 The only work this product accepts is an interface block (React/Tailwind sections
-such as pricing, heroes, forms, dashboards, menus, cards) or a stock image scene
-used to illustrate one. Refuse anything outside that scope.
+such as pricing, heroes, forms, dashboards, menus, cards) and the decorative
+pictures used inside one. Refuse anything outside that scope.
 
 Refuse text that is sexual or suggestive, involves a minor in any sexual or
 romantic context, depicts or encourages nudity, is hateful, harassing, violent,
@@ -83,22 +85,24 @@ JSON only, no prose around it:
 {"allowed": true or false, "reason": "one sentence"}
 """
 
-# Image prompts need a stricter line than block copy. A picture of a minor is not
-# something this registry will make, even when the request is not sexual: the cost
-# of a false positive is a refused stock photograph, and the cost of the other
-# mistake is not one a classifier should be asked to price.
+# Image prompts need a stricter line than block copy. A picture may not contain
+# people at all: not a full body, a face, a hand or a humanoid character. The
+# cost of a false positive is a refused decorative photograph, and the cost of
+# the other mistake is not one a classifier should be asked to price.
 IMAGE_FRAME = """\
-You are a safety and scope classifier for the stock-image library of GenBlocks.
+You are a safety and scope classifier for the decorative image library of GenBlocks.
 
 Only a scene for a stock photograph is in scope. Refuse anything that is not a
-stock image scene. Refuse, categorically, any request that depicts a minor, a
-child, a teenager, or a person whose age is ambiguous. Refuse sexual or suggestive
-content, nudity, sexualized people, graphic violence, gore, hate symbols, hateful
-or harassing content, self-harm, illegal activity, malware or phishing, real,
-identifiable people, celebrities, or company logos and trademarks. A request for
-text or lettering inside the image is out of scope unless it is incidental to a
-scene, and a request to imitate a named living artist or a copyrighted character
-is out of scope.
+stock image scene. Refuse, categorically, any request that depicts a person, a
+minor, a child, a teenager, or a person whose age is ambiguous. Refuse any human
+body or body part (face, head, hands, arms, legs, skin), a silhouette, a crowd, a
+humanoid character, a realistic mannequin or a statue of a person. Refuse sexual
+or suggestive content, nudity, sexualized people, graphic violence, gore, hate
+symbols, hateful or harassing content, self-harm, illegal activity, malware or
+phishing, real, identifiable people, celebrities, or company logos and trademarks.
+A request for text or lettering inside the image is out of scope unless it is
+incidental to a scene, and a request to imitate a named living artist or a
+copyrighted character is out of scope.
 
 Answer with JSON only, no prose around it:
 {"allowed": true or false, "reason": "one sentence"}
@@ -148,32 +152,35 @@ class ModerationUnavailable(Exception):
     """The safety model was asked and did not answer usably."""
 
 
-class CSAMDetected(Exception):
-    """A dedicated child-safety service matched the picture.
+class PersonDetected(Exception):
+    """The picture contains a person or a human-like figure.
 
-    This is deliberately a different failure from an ordinary refusal. The bytes
-    must not be passed to a general-purpose moderation endpoint, written to a
-    public CDN, or put back in front of the model; the operational process takes
-    over from here.
+    The product has one visual rule: generated pictures may not contain people.
+    The bytes must not be stored, published or sent on to the generic classifier.
     """
 
-    def __init__(self, reason: str = "it matched a dedicated child-safety blocklist") -> None:
+    def __init__(self, reason: str, *, image_hash: str) -> None:
         self.reason = reason
-        super().__init__(f"The picture was blocked by child-safety scanning — {reason}")
+        self.image_hash = image_hash
+        super().__init__(f"The picture contains a person — {reason}")
 
 
 class SexualMinorsDetected(Exception):
     """The generic classifier flagged sexual content involving a minor.
 
-    This is the second child-safety signal, used when the dedicated scanner is
-    disabled or clears an image. The bytes must not be written to a public CDN or
-    put back in front of the model.
+    This is the second child-safety signal, used when a person slips past the
+    no-people detector. The bytes must not be written to a public CDN or put back
+    in front of the model.
     """
 
     def __init__(
-        self, reason: str = "the classifier flagged sexual content involving minors"
+        self,
+        reason: str = "the classifier flagged sexual content involving minors",
+        *,
+        image_hash: str | None = None,
     ) -> None:
         self.reason = reason
+        self.image_hash = image_hash
         super().__init__(f"The picture was blocked for sexual content involving minors — {reason}")
 
 
@@ -255,18 +262,24 @@ async def image_refusal(
 ) -> str | None:
     """Why a generated picture may not be stored or published, or ``None``.
 
-    When ``CSAM_SCAN_ENABLED`` is true, the dedicated child-safety adapter runs
-    first and a match stops the bytes before the generic classifier. While the
-    deployment waits for provider approval it stays off; the generic classifier
-    still runs, and a ``sexual/minors`` hit is blocked as its own signal.
+    The no-people detector runs first and stops the bytes before the generic
+    classifier sees them. A picture that contains no human then goes through the
+    generic safety classifier, which catches sexual content, violence and hate.
     """
     if len(data) > MAX_IMAGE_BYTES:
         raise ModerationUnavailable("The picture is too large to check safely.")
     if len(data) == 0:
         raise ModerationUnavailable("The picture is empty.")
 
-    if settings.csam_scan_enabled:
-        await _csam_refusal(data, media_type=media_type)
+    digest = hashlib.sha256(data).hexdigest()
+
+    try:
+        person = await people_refusal(data, media_type=media_type)
+    except PeopleCheckUnavailable as broke:
+        raise ModerationUnavailable(str(broke)) from broke
+
+    if person is not None:
+        raise PersonDetected(person, image_hash=digest)
 
     if client is not None:
         verdict = await _review_image(client, data=data, media_type=media_type)
@@ -284,63 +297,10 @@ async def image_refusal(
 
     if not verdict.allowed:
         if "sexual/minors" in verdict.reason:
-            raise SexualMinorsDetected()
+            raise SexualMinorsDetected(image_hash=digest)
         return verdict.reason
 
     return None
-
-
-async def _csam_refusal(data: bytes, *, media_type: str) -> None:
-    """Ask the configured child-safety adapter, or refuse because there is none.
-
-    The adapter contract is deliberately small so the provider can be swapped:
-    ``POST`` JSON ``{"media_type": ..., "image": "<base64>"}`` and answer
-    ``{"match": true|false, "suspected": true|false, "reason": "..."}``. ``match``
-    is a known hash; ``suspected`` is a dedicated child-safety classifier's
-    answer. Either stops the picture. The adapter owns the vendor specifics,
-    hashing and the legal reporting workflow; this service only decides whether
-    the picture may continue.
-    """
-    if not settings.csam_scan_url:
-        raise ModerationUnavailable("CSAM scanning is enabled but CSAM_SCAN_URL is not configured.")
-
-    headers = {"Content-Type": "application/json"}
-    if settings.csam_scan_credential:
-        headers["Authorization"] = f"Bearer {settings.csam_scan_credential}"
-
-    body = {
-        "media_type": media_type,
-        "image": base64.b64encode(data).decode(),
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as http:
-            answer = await http.post(settings.csam_scan_url, headers=headers, json=body)
-    except httpx.HTTPError as broke:
-        raise ModerationUnavailable(f"The CSAM scanner did not answer: {broke}") from broke
-
-    if answer.status_code != 200:
-        raise ModerationUnavailable(f"The CSAM scanner refused the request ({answer.status_code}).")
-
-    try:
-        said = answer.json()
-        matched = said["match"]
-        suspected = said.get("suspected", False)
-        reason = said.get("reason", "it matched a dedicated child-safety blocklist")
-    except (KeyError, TypeError, json.JSONDecodeError) as unreadable:
-        raise ModerationUnavailable(
-            f"The CSAM scanner answered something this service does not understand: {unreadable}"
-        ) from unreadable
-
-    if (
-        not isinstance(matched, bool)
-        or not isinstance(suspected, bool)
-        or not isinstance(reason, str)
-    ):
-        raise ModerationUnavailable("The CSAM scanner answered without a verdict.")
-
-    if matched or suspected:
-        raise CSAMDetected(reason)
 
 
 async def _review_groq(client: httpx.AsyncClient, *, text: str, frame: str = FRAME) -> Verdict:

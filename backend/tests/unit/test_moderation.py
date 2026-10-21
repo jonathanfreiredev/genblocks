@@ -16,6 +16,9 @@ from app.settings import settings
 
 pytestmark = pytest.mark.anyio
 
+# Captured before the autouse fixture stubs the gate for the rest of the suite.
+ORIGINAL_IMAGE_REFUSAL = moderation.image_refusal
+
 KEY = "test-groq-key"
 
 
@@ -191,7 +194,12 @@ class Images:
 async def test_an_image_that_clears_the_classifier_is_allowed(monkeypatch):
     monkeypatch.setattr(settings, "openai_api_key", "test-openai")
     monkeypatch.setattr(settings, "env", "development")
-    monkeypatch.setattr(settings, "csam_scan_enabled", False)
+    monkeypatch.setattr(moderation, "image_refusal", ORIGINAL_IMAGE_REFUSAL)
+
+    async def no_people(data, *, media_type):
+        return None
+
+    monkeypatch.setattr(moderation, "people_refusal", no_people)
 
     assert await moderation.image_refusal(b"jpeg-bytes", client=Images()) is None
 
@@ -199,48 +207,43 @@ async def test_an_image_that_clears_the_classifier_is_allowed(monkeypatch):
 async def test_an_image_the_classifier_flags_as_sexual_minors_is_blocked(monkeypatch):
     monkeypatch.setattr(settings, "openai_api_key", "test-openai")
     monkeypatch.setattr(settings, "env", "development")
-    monkeypatch.setattr(settings, "csam_scan_enabled", False)
+    monkeypatch.setattr(moderation, "image_refusal", ORIGINAL_IMAGE_REFUSAL)
+
+    async def no_people(data, *, media_type):
+        return None
+
+    monkeypatch.setattr(moderation, "people_refusal", no_people)
 
     with pytest.raises(moderation.SexualMinorsDetected, match="sexual content involving minors"):
         await moderation.image_refusal(b"jpeg-bytes", client=Images(flagged=True))
 
 
-async def test_the_csam_gate_is_skipped_when_the_switch_is_off(monkeypatch):
-    monkeypatch.setattr(settings, "csam_scan_enabled", False)
+async def test_a_person_stops_before_the_generic_classifier(monkeypatch):
     monkeypatch.setattr(settings, "openai_api_key", "test-openai")
+    monkeypatch.setattr(settings, "env", "development")
+    monkeypatch.setattr(moderation, "image_refusal", ORIGINAL_IMAGE_REFUSAL)
 
-    async def never(data, *, media_type):
-        raise AssertionError("the CSAM adapter must not run while disabled")
-
-    monkeypatch.setattr(moderation, "_csam_refusal", never)
-
-    assert await moderation.image_refusal(b"jpeg-bytes", client=Images()) is None
-
-
-async def test_enabling_csam_without_a_url_fails_closed(monkeypatch):
-    monkeypatch.setattr(settings, "csam_scan_enabled", True)
-    monkeypatch.setattr(settings, "csam_scan_url", None)
-    monkeypatch.setattr(settings, "openai_api_key", "test-openai")
-
-    with pytest.raises(moderation.ModerationUnavailable, match="CSAM_SCAN_URL"):
-        await moderation.image_refusal(b"jpeg-bytes", client=Images())
-
-
-async def test_a_csam_match_stops_before_the_generic_classifier(monkeypatch):
-    monkeypatch.setattr(settings, "csam_scan_enabled", True)
-    monkeypatch.setattr(settings, "csam_scan_url", "https://csam.test/scan")
-
-    async def matched(data, *, media_type):
-        raise moderation.CSAMDetected("a known hash")
+    async def a_hand(data, *, media_type):
+        return "there is a hand in the frame"
 
     class NeverAsked(Images):
         async def post(self, *args, **kwargs):
-            raise AssertionError("a CSAM match must not reach the generic moderator")
+            raise AssertionError("a person must not reach the generic moderator")
 
-    monkeypatch.setattr(moderation, "_csam_refusal", matched)
+    monkeypatch.setattr(moderation, "people_refusal", a_hand)
 
-    with pytest.raises(moderation.CSAMDetected):
+    with pytest.raises(moderation.PersonDetected, match="hand"):
         await moderation.image_refusal(b"jpeg-bytes", client=NeverAsked())
+
+
+def test_the_image_rule_forbids_people_before_it_lists_brands():
+    from app.moderation.service import IMAGE_FRAME
+
+    assert "any request that depicts a person" in IMAGE_FRAME
+    assert "hands" in IMAGE_FRAME
+    assert "humanoid character" in IMAGE_FRAME
+    assert "company logos and trademarks" in IMAGE_FRAME
+    assert "named living artist" in IMAGE_FRAME
 
 
 def test_the_brief_refusal_says_what_it_is():
@@ -305,11 +308,3 @@ async def test_a_huge_copy_is_capped_before_it_is_sent():
 
     sent = groq.asked["body"]["messages"][-1]["content"]
     assert len(sent) == moderation.MAX_CHARS
-
-
-def test_the_image_rule_names_real_people_and_brands():
-    from app.moderation.service import IMAGE_FRAME
-
-    assert "identifiable people" in IMAGE_FRAME
-    assert "company logos and trademarks" in IMAGE_FRAME
-    assert "named living artist" in IMAGE_FRAME

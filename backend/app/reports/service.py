@@ -31,9 +31,8 @@ async def create_report(
     session: AsyncSession, *, payload: ReportCreate, created_by: uuid.UUID
 ) -> Report:
     """Record one report after checking the target exists and is still public."""
-    target = await _target(
-        session, kind=payload.target_kind, target_id=payload.target_id, public_only=True
-    )
+    kind = ReportTarget(payload.target_kind)
+    target = await _target(session, kind=kind, target_id=payload.target_id, public_only=True)
     if target is None:
         raise ReportTargetMissing("That artifact is not in the public vault.")
 
@@ -43,9 +42,9 @@ async def create_report(
         slug, title = target.slug, target.prompt
 
     report = Report(
-        component_id=payload.target_id if payload.target_kind is ReportTarget.COMPONENT else None,
-        image_id=payload.target_id if payload.target_kind is ReportTarget.IMAGE else None,
-        target_kind=payload.target_kind.value,
+        component_id=payload.target_id if kind is ReportTarget.COMPONENT else None,
+        image_id=payload.target_id if kind is ReportTarget.IMAGE else None,
+        target_kind=kind.value,
         target_id=payload.target_id,
         target_slug=slug,
         target_title=title,

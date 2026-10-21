@@ -120,6 +120,92 @@ async def item_created(
     )
 
 
+async def policy_event(
+    *,
+    kind: str,
+    reason: str,
+    brief: str,
+    user_id: uuid.UUID | None,
+    user_email: str | None,
+    task_id: uuid.UUID | None = None,
+    image_hash: str | None = None,
+    client: httpx.AsyncClient | None = None,
+) -> bool:
+    """Tell the operator that a brief or a picture hit an image policy.
+
+    This is intentionally metadata only. The image is not attached, its public
+    URL is not included, and no report is sent anywhere else. The operator gets
+    enough to decide whether this was an accident, a misunderstanding, or a
+    person to ban.
+    """
+    if not settings.resend_api_key:
+        logger.debug("policy notification is off", reason="RESEND_API_KEY is unset")
+        return False
+
+    recipients = settings.report_notification_recipients
+    if not recipients:
+        logger.warning(
+            "policy notification has no recipients",
+            reason="set REPORT_NOTIFICATION_EMAILS or ADMIN_EMAILS",
+        )
+        return False
+
+    severity = "high" if kind in {"sexual_minors", "prompt_injection"} else "normal"
+    subject = f"[GenBlocks] {severity} image policy event: {kind.replace('_', ' ')}"
+    users_url = (
+        f"{settings.frontend_url.rstrip('/')}/admin/users/{user_id}"
+        if user_id is not None
+        else None
+    )
+    text_lines = [
+        "An image-policy event needs a human decision.",
+        "",
+        f"Kind: {kind}",
+        f"Reason: {reason}",
+        f"User: {user_email or user_id or 'unknown'}",
+        f"Brief: {brief.strip()[:500] or '(empty)'}",
+    ]
+    if task_id is not None:
+        text_lines.append(f"Task: {task_id}")
+    if image_hash is not None:
+        text_lines.append(f"Image SHA-256: {image_hash}")
+    if users_url is not None:
+        text_lines.extend(["", f"Open the user: {users_url}"])
+    text = "\n".join(text_lines)
+
+    markup = (
+        '<h1 style="font-family: sans-serif; font-size: 18px;">'
+        "Image-policy event</h1>"
+        '<dl style="font-family: sans-serif;">'
+        f"<dt><strong>Kind</strong></dt><dd>{html.escape(kind)}</dd>"
+        f"<dt><strong>Reason</strong></dt><dd>{html.escape(reason)}</dd>"
+        "<dt><strong>User</strong></dt>"
+        f"<dd>{html.escape(str(user_email or user_id or 'unknown'))}</dd>"
+        f"<dt><strong>Brief</strong></dt><dd>{html.escape(brief.strip()[:500] or '(empty)')}</dd>"
+        + (f"<dt><strong>Task</strong></dt><dd>{html.escape(str(task_id))}</dd>" if task_id else "")
+        + (
+            f"<dt><strong>Image SHA-256</strong></dt><dd>{html.escape(image_hash)}</dd>"
+            if image_hash
+            else ""
+        )
+        + "</dl>"
+        + (
+            f'<p style="font-family: sans-serif;"><a href="{html.escape(users_url)}">'
+            "Open the user</a></p>"
+            if users_url
+            else ""
+        )
+    )
+
+    return await _send(
+        subject=subject,
+        text=text,
+        markup=markup,
+        client=client,
+        failure="policy notification could not be sent",
+    )
+
+
 async def _send(
     *,
     subject: str,

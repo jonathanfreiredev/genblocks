@@ -10,12 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.dependencies import get_admin_user
 from app.admin.schemas import (
+    AdminBanRequest,
     AdminComponentListQuery,
     AdminComponentSummary,
     AdminDeletionRead,
     AdminImageListQuery,
     AdminImageRead,
+    AdminUserRead,
 )
+from app.admin.service import is_admin
 from app.components.models import Component
 from app.components.service import list_components, renders
 from app.db.session import get_async_db_session
@@ -25,7 +28,7 @@ from app.images.models import Image
 from app.images.service import list_images
 from app.pagination import OffsetPage
 from app.users.models import User
-from app.users.service import display_names
+from app.users.service import display_names, get_user, list_users, set_ban
 
 admin_items_router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -128,6 +131,83 @@ async def read_deletions(
         )
         for row in rows
     ]
+
+
+@admin_items_router.get("/users", response_model=list[AdminUserRead])
+async def read_users(
+    _: Annotated[User, Depends(get_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_async_db_session)],
+    search: Annotated[str | None, Query(max_length=200)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[AdminUserRead]:
+    """The operator's user search, for a manual ban."""
+    users, _total = await list_users(session, search=search, limit=limit, offset=offset)
+    return [AdminUserRead.model_validate(user) for user in users]
+
+
+@admin_items_router.get("/users/{user_id}", response_model=AdminUserRead)
+async def read_user(
+    user_id: uuid.UUID,
+    _: Annotated[User, Depends(get_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_async_db_session)],
+) -> AdminUserRead:
+    user = await get_user(session, user_id=user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such user.")
+    return AdminUserRead.model_validate(user)
+
+
+@admin_items_router.post("/users/{user_id}/ban", response_model=AdminUserRead)
+async def ban_user(
+    user_id: uuid.UUID,
+    operator: Annotated[User, Depends(get_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_async_db_session)],
+    payload: AdminBanRequest | None = None,
+) -> AdminUserRead:
+    """Ban a profile. Supabase is banned by the frontend action after this call."""
+    if user_id == operator.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot ban your own account.",
+        )
+
+    target = await get_user(session, user_id=user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such user.")
+    if is_admin(target):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An operator account cannot be banned from this screen.",
+        )
+
+    await set_ban(
+        session,
+        user=target,
+        operator=operator,
+        banned=True,
+        reason=payload.reason if payload else None,
+    )
+    return AdminUserRead.model_validate(target)
+
+
+@admin_items_router.post("/users/{user_id}/unban", response_model=AdminUserRead)
+async def unban_user(
+    user_id: uuid.UUID,
+    operator: Annotated[User, Depends(get_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_async_db_session)],
+) -> AdminUserRead:
+    target = await get_user(session, user_id=user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such user.")
+    if is_admin(target):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An operator account cannot be banned from this screen.",
+        )
+
+    await set_ban(session, user=target, operator=operator, banned=False)
+    return AdminUserRead.model_validate(target)
 
 
 @admin_items_router.delete("/components/{component_id}", status_code=status.HTTP_204_NO_CONTENT)

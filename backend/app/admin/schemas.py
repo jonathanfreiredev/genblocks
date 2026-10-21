@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from app.components.schemas import ComponentListQuery, ComponentSummary
 from app.images.schemas import ImageListQuery, ImageRead
@@ -36,3 +37,22 @@ class AdminDeletionRead(BaseModel):
     result: str
     error: str | None
     created_at: datetime
+
+
+class AdminUserRead(BaseModel):
+    """A profile as the operator's ban screen sees it."""
+
+    id: uuid.UUID
+    supabase_user_id: uuid.UUID
+    email: str | None
+    full_name: str | None
+    banned_at: datetime | None
+    banned_by: uuid.UUID | None
+    ban_reason: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminBanRequest(BaseModel):
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] | None = None

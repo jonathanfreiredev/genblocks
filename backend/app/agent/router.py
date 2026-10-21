@@ -27,8 +27,10 @@ from app.agent.schemas import ChatRequest, ConfirmRequest, Proposals, Suggestion
 from app.agent.stream import Event, TurnReader, encode
 from app.agent.tools import build_tools
 from app.authz.dependencies import get_first_party_user
+from app.components.planning import ImageConfirmationRequired
 from app.db.session import get_async_db_session
 from app.moderation.service import BriefRejected
+from app.notifications import email as notifications
 from app.tasks.limits import MonthlyQuotaReached
 from app.tasks.models import Task
 from app.tasks.schemas import TaskRead
@@ -140,10 +142,32 @@ async def confirm_brief(
             detail=str(reached),
         ) from reached
     except BriefRejected as refused:
+        await notifications.policy_event(
+            kind="brief_rejected",
+            reason=str(refused),
+            brief=payload.brief,
+            user_id=user.id,
+            user_email=user.email,
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(refused),
         ) from refused
+    except ImageConfirmationRequired as confirmation:
+        await notifications.policy_event(
+            kind="image_people",
+            reason=confirmation.reason,
+            brief=payload.brief,
+            user_id=user.id,
+            user_email=user.email,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": str(confirmation),
+                "proposed_brief": confirmation.proposed_brief,
+            },
+        ) from confirmation
 
     if task.cached:
         response.status_code = status.HTTP_200_OK

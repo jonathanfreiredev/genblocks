@@ -12,10 +12,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.authz.dependencies import get_first_party_user
+from app.components.planning import ImageConfirmationRequired
 from app.db.session import get_async_db_session
 from app.generations.schemas import GenerationRead
 from app.generations.service import list_generations
 from app.moderation.service import BriefRejected
+from app.notifications import email as notifications
 from app.pagination import OffsetPage
 from app.tasks.limits import MonthlyQuotaReached
 from app.tasks.schemas import TaskCreate, TaskDetailRead, TaskListQuery, TaskRead
@@ -48,9 +50,31 @@ async def queue_task(
         ) from reached
     except BriefRejected as refused:
         # 422: the request is well formed and the brief is not buildable as written.
+        await notifications.policy_event(
+            kind="brief_rejected",
+            reason=str(refused),
+            brief=payload.brief,
+            user_id=user.id,
+            user_email=user.email,
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(refused)
         ) from refused
+    except ImageConfirmationRequired as confirmation:
+        await notifications.policy_event(
+            kind="image_people",
+            reason=confirmation.reason,
+            brief=payload.brief,
+            user_id=user.id,
+            user_email=user.email,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": str(confirmation),
+                "proposed_brief": confirmation.proposed_brief,
+            },
+        ) from confirmation
 
     if task.cached:
         response.status_code = status.HTTP_200_OK

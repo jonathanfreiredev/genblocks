@@ -11,7 +11,7 @@ import pytest
 from app.generations.models import Generation
 from app.harness.agent import ENTRY
 from app.users.models import User
-from tests.helpers import create_category, create_component, create_image
+from tests.helpers import create_category, create_component
 
 pytestmark = pytest.mark.anyio
 
@@ -19,7 +19,6 @@ pytestmark = pytest.mark.anyio
 async def test_the_vault_reads_are_public(client, db_session):
     category = await create_category(db_session, slug="hero")
     component = await create_component(db_session, category_id=category.id, slug="alpha")
-    image = await create_image(db_session, category_id=category.id, path="images/landscape")
 
     urls = [
         "/v1/categories",
@@ -27,9 +26,6 @@ async def test_the_vault_reads_are_public(client, db_session):
         f"/v1/components/{component.id}",
         f"/v1/components/{component.id}/generations",
         "/v1/components/by-slug/alpha",
-        "/v1/images",
-        f"/v1/images/{image.id}",
-        f"/v1/images/by-slug/{image.slug}",
     ]
 
     for url in urls:
@@ -206,56 +202,3 @@ async def test_a_typo_in_a_query_parameter_is_rejected(client):
 
 async def test_an_unknown_sort_field_is_rejected(client):
     assert (await client.get("/v1/components", params={"sort": "nope"})).status_code == 422
-
-
-async def test_images_come_back_with_their_generation_panel(client, db_session):
-    scenes = await create_category(db_session, slug="scene", kind="image")
-    image = await create_image(db_session, category_id=scenes.id, path="images/landscape")
-    image.model = "flux-2-pro"
-    image.scores = {"visual": 88, "prompt_fit": 91, "compliance": 100}
-    image.rubric_version = "images-v1"
-    await db_session.commit()
-
-    body = (await client.get("/v1/images", params={"search": "landscape"})).json()
-
-    assert body["total"] == 1
-    # ``path`` is the Cloudinary public id, not a URL: the client picks the host.
-    assert body["items"][0]["path"] == image.path
-    assert body["items"][0]["scores"] == {"visual": 88, "prompt_fit": 91, "compliance": 100}
-
-
-async def test_an_image_carries_its_maker(client, db_session):
-    scenes = await create_category(db_session, slug="scene", kind="image")
-    user = User(supabase_user_id=uuid.uuid4(), full_name="Marisol Vega")
-    db_session.add(user)
-    await db_session.commit()
-    await db_session.refresh(user)
-
-    image = await create_image(db_session, category_id=scenes.id, path="images/landscape")
-    image.created_by = user.id
-    await db_session.commit()
-
-    card = (await client.get("/v1/images")).json()["items"][0]
-    full = (await client.get(f"/v1/images/{image.id}")).json()
-
-    assert card["author"] == "Marisol Vega"
-    assert full["author"] == "Marisol Vega"
-
-
-async def test_an_image_is_read_by_id(client, db_session):
-    scenes = await create_category(db_session, slug="scene", kind="image")
-    image = await create_image(db_session, category_id=scenes.id, path="images/landscape")
-
-    assert (await client.get(f"/v1/images/{image.id}")).json()["id"] == str(image.id)
-    assert (await client.get(f"/v1/images/{uuid.uuid4()}")).status_code == 404
-
-
-async def test_an_image_is_read_by_slug(client, db_session):
-    scenes = await create_category(db_session, slug="scene", kind="image")
-    image = await create_image(db_session, category_id=scenes.id, path="images/landscape")
-
-    body = (await client.get(f"/v1/images/by-slug/{image.slug}")).json()
-
-    assert body["id"] == str(image.id)
-    assert body["slug"] == "landscape"
-    assert (await client.get("/v1/images/by-slug/nope")).status_code == 404

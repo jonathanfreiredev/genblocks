@@ -4,7 +4,7 @@ import pytest
 
 from app.settings import settings
 from tests.auth_stub import mint_token
-from tests.helpers import auth_header, create_category, create_component, create_image
+from tests.helpers import auth_header, create_category, create_component
 
 pytestmark = pytest.mark.anyio
 
@@ -166,17 +166,17 @@ async def test_an_operator_can_mark_a_report_as_reviewing(client, db_session, mo
     assert (await client.get(f"/v1/components/{component.id}")).status_code == 200
 
 
-async def test_a_dismissed_report_leaves_the_image_public(client, db_session, monkeypatch):
+async def test_a_dismissed_report_leaves_the_block_public(client, db_session, monkeypatch):
     monkeypatch.setattr(settings, "admin_emails", "operator@example.com")
-    category = await create_category(db_session, slug="avatar", kind="image")
-    image = await create_image(db_session, category_id=category.id, path="images/a")
+    category = await create_category(db_session, slug="hero")
+    component = await create_component(db_session, category_id=category.id, slug="alpha")
 
     created = await client.post(
         "/v1/reports",
         headers=auth_header(mint_token()),
         json={
-            "target_kind": "image",
-            "target_id": str(image.id),
+            "target_kind": "component",
+            "target_id": str(component.id),
             "reason": "other",
         },
     )
@@ -189,4 +189,4 @@ async def test_a_dismissed_report_leaves_the_image_public(client, db_session, mo
     )
 
     assert resolved.status_code == 200
-    assert (await client.get(f"/v1/images/{image.id}")).status_code == 200
+    assert (await client.get(f"/v1/components/{component.id}")).status_code == 200

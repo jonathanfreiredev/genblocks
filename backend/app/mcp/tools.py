@@ -19,17 +19,19 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.claims import parse_claims
+from app.authz.permissions import PermissionDenied
 from app.categories import service as categories_service
 from app.categories.models import CategoryKind
 from app.categories.schemas import CategoryRead
+from app.components import planning
 from app.components import service as components_service
 from app.components.models import Component
+from app.components.planning import ImageConfirmationRequired
 from app.components.schemas import ComponentRead, ComponentSummary
 from app.db.session import async_session_maker
-from app.images import service as images_service
-from app.images.schemas import ImageRead
 from app.mcp.server import mcp
 from app.moderation import service as moderation
+from app.notifications import email as notifications
 from app.pagination import DEFAULT_LIMIT, ListParams, OffsetPage
 from app.tasks import limits
 from app.tasks import service as tasks_service
@@ -47,6 +49,15 @@ class CallerProfile(BaseModel):
     full_name: str | None
 
 
+class ComponentPlan(BaseModel):
+    """The preflight answer for one component brief."""
+
+    status: str
+    brief: str
+    reason: str
+    proposed_brief: str | None
+
+
 async def _caller(session: AsyncSession) -> User:
     """Resolve the caller from the access token, never from an argument.
 
@@ -57,7 +68,10 @@ async def _caller(session: AsyncSession) -> User:
     if access is None:  # pragma: no cover - the endpoint rejects unauthenticated calls
         raise RuntimeError("An MCP tool was called without an access token")
 
-    return await get_or_create_user(session, parse_claims(access.claims))
+    user = await get_or_create_user(session, parse_claims(access.claims))
+    if user.is_banned:
+        raise PermissionDenied("This account is suspended.")
+    return user
 
 
 @mcp.tool
@@ -155,34 +169,6 @@ async def get_component(
 
 
 @mcp.tool
-async def search_images(
-    query: str | None = None,
-    category_id: uuid.UUID | None = None,
-    limit: int = DEFAULT_LIMIT,
-    offset: int = 0,
-) -> OffsetPage[ImageRead]:
-    """Find stock images to illustrate a block, newest first.
-
-    ``query`` matches the prompt that produced the image; ``category_id`` narrows
-    to one type. Each result carries its own generation panel: the model, the
-    scores and the trace.
-    """
-    params = ListParams(limit=limit, offset=offset)
-
-    async with async_session_maker() as session:
-        images, total = await images_service.list_images(
-            session, params=params, category_id=category_id, search=query
-        )
-
-    return OffsetPage(
-        items=[ImageRead.model_validate(image) for image in images],
-        total=total,
-        limit=params.limit,
-        offset=params.offset,
-    )
-
-
-@mcp.tool
 async def list_tasks(
     status: TaskStatus | None = None,
     limit: int = DEFAULT_LIMIT,
@@ -226,6 +212,36 @@ async def get_task(task_id: uuid.UUID) -> TaskRead:
     return TaskRead.model_validate(task)
 
 
+@mcp.tool
+async def plan_component(brief: Brief) -> ComponentPlan:
+    """Check a component brief before queueing it.
+
+    Every brief is checked for unsafe or injected text and for the image
+    direction. If it asks for people in its pictures, nothing is queued: the
+    answer contains a no-person rewrite to offer the person. If the answer is
+    ``ready``, call ``create_component`` with the same brief.
+    """
+    payload = TaskCreate(brief=brief)
+    async with async_session_maker() as session:
+        caller = await _caller(session)
+
+    decision = await planning.plan(payload.brief)
+    if not decision.ready:
+        await notifications.policy_event(
+            kind="image_people" if decision.needs_confirmation else "brief_rejected",
+            reason=decision.reason,
+            brief=decision.brief,
+            user_id=caller.id,
+            user_email=caller.email,
+        )
+    return ComponentPlan(
+        status=decision.status,
+        brief=decision.brief,
+        reason=decision.reason,
+        proposed_brief=decision.proposed_brief,
+    )
+
+
 # Write tools. A write is queued, never waited on: building a block takes
 # minutes, and a tool call that blocks for them is a tool call that times out.
 @mcp.tool
@@ -238,7 +254,9 @@ async def create_component(brief: Brief) -> TaskRead:
 
     The brief is what the caller wants built, in their own words: it becomes the
     block's delivery prompt, so it is worth writing as the request you would make
-    of a designer rather than as a title.
+    of a designer rather than as a title. A brief that asks for people in its
+    pictures is refused; call ``plan_component`` first to obtain the no-person
+    alternative.
     """
     # Validated through the shared type rather than trusted from the argument:
     # the tool's own schema tells a model what a brief looks like, and this is
@@ -248,13 +266,32 @@ async def create_component(brief: Brief) -> TaskRead:
         caller = await _caller(session)
         try:
             # The same door the API and the conversation use: a cached brief is
-            # answered, the month's quota is spent, and the brief is moderated.
+            # answered, the month's quota is spent, and the brief is moderated
+            # and checked against the image policy.
             task = await tasks_service.enqueue_task(
                 session, brief=payload.brief, created_by=caller.id
             )
         except limits.MonthlyQuotaReached as reached:
             raise ValueError(str(reached)) from reached
+        except ImageConfirmationRequired as confirmation:
+            await notifications.policy_event(
+                kind="image_people",
+                reason=confirmation.reason,
+                brief=payload.brief,
+                user_id=caller.id,
+                user_email=caller.email,
+            )
+            raise ValueError(
+                f"{confirmation} Suggested brief: {confirmation.proposed_brief}"
+            ) from confirmation
         except moderation.BriefRejected as refused:
+            await notifications.policy_event(
+                kind="brief_rejected",
+                reason=str(refused),
+                brief=payload.brief,
+                user_id=caller.id,
+                user_email=caller.email,
+            )
             raise ValueError(str(refused)) from refused
 
     return TaskRead.model_validate(task)

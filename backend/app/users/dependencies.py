@@ -1,7 +1,7 @@
 from typing import Annotated
 
 import structlog
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.claims import TokenClaims
@@ -17,6 +17,11 @@ async def get_current_user(
 ) -> User:
     """Resolve the bearer token to a local profile, provisioning it if needed."""
     user = await get_or_create_user(session, claims)
+    if getattr(user, "is_banned", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is suspended.",
+        )
     # Attach the user to the log context so their requests are traceable.
     structlog.contextvars.bind_contextvars(user_id=str(user.id))
     return user

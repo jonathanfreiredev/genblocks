@@ -167,3 +167,38 @@ async def test_an_item_notification_is_off_without_a_key(monkeypatch):
         )
         is False
     )
+
+
+async def test_a_policy_event_carries_metadata_and_no_image(configured):
+    import json
+
+    sent: dict = {}
+    user_id = uuid.uuid4()
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        sent.update(json.loads(request.read().decode()))
+        return httpx.Response(200, json={"id": "email-1"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+
+    assert (
+        await email.policy_event(
+            kind="person_detected",
+            reason="there is a hand in the frame",
+            brief="A hero for a pottery studio with hands shaping clay",
+            user_id=user_id,
+            user_email="maker@example.com",
+            task_id=uuid.uuid4(),
+            image_hash="a" * 64,
+            client=client,
+        )
+        is True
+    )
+
+    assert "person detected" in sent["subject"].lower()
+    assert "there is a hand in the frame" in sent["text"]
+    assert "a" * 64 in sent["text"]
+    assert f"https://genblocks.test/admin/users/{user_id}" in sent["text"]
+    # The image is not attached and its delivery URL is not in the message.
+    assert "attachment" not in sent
+    assert "res.cloudinary.com" not in sent["text"]

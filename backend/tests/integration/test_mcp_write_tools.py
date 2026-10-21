@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 import pytest
 from fastmcp.server.auth import AccessToken
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.mcp import tools
 from app.mcp.server import mcp
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.anyio
 
 # Published the moment they ship and never renamed. ``generate_image`` and
 # ``vary_component`` are reserved (see PLAN.md) and not registered yet.
-PUBLISHED_WRITE_TOOLS = {"create_component"}
+PUBLISHED_WRITE_TOOLS = {"plan_component", "create_component"}
 
 BRIEF = "A pricing page for a developer tool, three tiers"
 
@@ -64,6 +64,17 @@ async def test_the_published_write_tools_are_registered():
     listed = {tool.name for tool in await mcp.list_tools()}
 
     assert listed >= PUBLISHED_WRITE_TOOLS
+
+
+async def test_plan_component_answers_without_queueing(tool_session, monkeypatch):
+    subject = uuid.uuid4()
+    sign_in(monkeypatch, subject=subject)
+
+    plan = await tools.plan_component(brief=BRIEF)
+
+    assert plan.status == "ready"
+    assert plan.proposed_brief is None
+    assert await tool_session.scalar(select(func.count()).select_from(Task)) == 0
 
 
 async def test_create_component_queues_a_task_for_the_caller(tool_session, monkeypatch):

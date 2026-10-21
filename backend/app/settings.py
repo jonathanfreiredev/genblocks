@@ -58,17 +58,16 @@ class Settings(BaseSettings):
     # The moderation endpoint is deliberately not the generation model: it is a
     # classifier, not a chat that a brief can talk into a verdict.
     openai_moderation_model: str = "omni-moderation-latest"
-
-    # A dedicated CSAM hash-matching adapter. It is off by default while the
-    # deployment waits for provider approval; when enabled, an image is checked
-    # before the generic classifier and a match stops the bytes from being
-    # stored. Enabling it without a URL is a configuration error, not a bypass.
-    csam_scan_enabled: bool = False
-    csam_scan_url: str | None = None
-    csam_scan_api_key: str | None = None
-    # Older deployments used this shorter name; accept it while it exists in an
-    # environment file.
-    csam_scan_key: str | None = None
+    # The picture library has one non-negotiable visual rule: no people. This
+    # vision model checks the bytes themselves, because a prompt filter cannot
+    # guarantee what the generator actually produced. It is a separate call from
+    # omni-moderation on purpose: one gate answers "is this safe content?", this
+    # one answers "is there a human here at all?".
+    people_detection_model: str = "gpt-4o-mini"
+    # The brief-level image policy decides whether a person asked for a picture,
+    # whether the person is incidental to it, and whether a no-person rewrite is
+    # possible. It is text-only and never generates the picture.
+    image_direction_model: str = "gpt-4o-mini"
 
     # Every picture is decoded, bounded and re-encoded before it is moderated or
     # stored. The bounds are both a safety limit and a bill: a provider that
@@ -208,11 +207,6 @@ class Settings(BaseSettings):
     def mcp_internal_endpoint(self) -> str:
         """The full URL of the MCP endpoint this service calls as a client."""
         return f"{self.mcp_internal_url.rstrip('/')}/mcp"
-
-    @property
-    def csam_scan_credential(self) -> str | None:
-        """The child-safety scanner credential, under either supported name."""
-        return self.csam_scan_api_key or self.csam_scan_key
 
     @property
     def bfl_polling_hosts(self) -> tuple[str, ...]:

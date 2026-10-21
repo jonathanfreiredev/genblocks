@@ -60,6 +60,7 @@ from app.settings import settings
 from app.tasks import service
 from app.tasks import spec as block_spec
 from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
+from app.users.models import User
 from app.users.service import display_names
 from app.vectors import service as vectors
 
@@ -219,6 +220,7 @@ async def run_task(task_id: uuid.UUID) -> None:
                 session, task=task, step=steps[3], spec=spec, made=made, trace=trace
             )
         except Exception as error:  # noqa: BLE001 - the task row is where this is kept
+            await _notify_policy(task=task, error=error)
             await _fail(session, task_id=task.id, error=error)
             trace.finish(error=str(error) or type(error).__name__)
         else:
@@ -510,22 +512,6 @@ async def _keep(
 
     if any(picture is not None for picture in pictures):
         await session.commit()
-
-    # After the rows exist, and only for pictures this run filed: reused library
-    # images already had their notification when they first arrived.
-    if fresh:
-        authors = await display_names(session, ids=[task.created_by])
-        for index, _placed, _judged, _path in fresh:
-            picture = pictures[index]
-            if picture is None:
-                continue
-            await notifications.item_created(
-                kind="image",
-                item_id=picture.id,
-                title=picture.prompt,
-                slug=picture.slug,
-                author=authors.get(task.created_by) if task.created_by else None,
-            )
 
     # Remembered after the rows exist: a picture is the library's from the moment
     # it is filed, whether or not the block that asked for it is published.
@@ -921,6 +907,39 @@ async def _finish(session: AsyncSession, step: TaskStep, *, detail: dict) -> Non
     step.finished_at = utcnow()
     step.detail = detail
     await session.commit()
+
+
+async def _notify_policy(*, task: Task, error: Exception) -> None:
+    """Tell the operator about a policy refusal, with metadata only."""
+    image_hash: str | None = None
+    if isinstance(error, moderation.PersonDetected):
+        kind = "person_detected"
+        reason = error.reason
+        image_hash = error.image_hash
+    elif isinstance(error, moderation.SexualMinorsDetected):
+        kind = "sexual_minors"
+        reason = error.reason
+        image_hash = error.image_hash
+    elif isinstance(error, PictureRejected):
+        kind = "image_rejected"
+        reason = str(error)
+    elif isinstance(error, ModerationRefused):
+        kind = "moderation_refused"
+        reason = str(error)
+    else:
+        return
+
+    async with async_session_maker() as session:
+        user = await session.get(User, task.created_by) if task.created_by else None
+        await notifications.policy_event(
+            kind=kind,
+            reason=reason,
+            brief=task.brief,
+            user_id=task.created_by,
+            user_email=user.email if user else None,
+            task_id=task.id,
+            image_hash=image_hash,
+        )
 
 
 async def _fail(session: AsyncSession, *, task_id: uuid.UUID, error: Exception) -> None:

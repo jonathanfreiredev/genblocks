@@ -37,7 +37,8 @@ How you work
 - `generate_image` asks the library for a picture. Do it **late**: once the layout
   is settled and photographed without pictures, because the composition decides the
   prompt. One request per image, once, and then look again with the real pictures
-  in place.
+  in place. Never ask for a person, face, head, hands, body, silhouette, crowd or
+  humanoid character: the picture policy refuses any image containing a human.
 - When the block is what you would ship, stop calling tools and answer with two
   sentences: what it is, and anything you know is still weak. The project is
   measured again after you stop, and the judge reads the result. Say what you could

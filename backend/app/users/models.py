@@ -1,5 +1,7 @@
 import uuid
+from datetime import datetime
 
+from sqlalchemy import ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,3 +24,15 @@ class User(BaseModel):
     # which would otherwise leave an orphan row blocking a later signup.
     email: Mapped[str | None] = mapped_column(index=True, default=None)
     full_name: Mapped[str | None] = mapped_column(default=None)
+
+    # A manual operator ban. Supabase is also told to refuse a new login; this
+    # column is what stops an access token that was issued before the ban.
+    banned_at: Mapped[datetime | None] = mapped_column(index=True, default=None)
+    banned_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), default=None
+    )
+    ban_reason: Mapped[str | None] = mapped_column(Text, default=None)
+
+    @property
+    def is_banned(self) -> bool:
+        return self.banned_at is not None

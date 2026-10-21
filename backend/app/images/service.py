@@ -1,4 +1,4 @@
-"""Read side of the stock image library. Public, like the blocks."""
+"""Read side of the internal image library used by blocks."""
 
 import uuid
 from collections.abc import Sequence
