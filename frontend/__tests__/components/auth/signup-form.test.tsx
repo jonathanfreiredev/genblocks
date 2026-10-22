@@ -49,6 +49,19 @@ function fillAndSubmit(confirmPassword: string) {
 }
 
 describe("SignupForm", () => {
+  test("shows the age confirmation and legal links", () => {
+    render(<SignupForm />);
+
+    expect(screen.getByText(/at least 16 years old/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Terms of Use" })).toHaveAttribute(
+      "href",
+      "/terms",
+    );
+    expect(
+      screen.getByRole("link", { name: "Privacy Notice" }),
+    ).toHaveAttribute("href", "/privacy");
+  });
+
   test("blocks submission and toasts when the passwords do not match", async () => {
     render(<SignupForm />);
 

@@ -221,6 +221,25 @@ export function SignupForm({
 
           {googleEnabled ? <GoogleSignInButton className="w-full" /> : null}
 
+          <p className="text-muted-foreground text-center text-xs leading-relaxed">
+            By creating an account, you confirm that you are at least 16 years
+            old and agree to the{" "}
+            <Link
+              href="/terms"
+              className="hover:text-foreground underline underline-offset-4"
+            >
+              Terms of Use
+            </Link>{" "}
+            and the{" "}
+            <Link
+              href="/privacy"
+              className="hover:text-foreground underline underline-offset-4"
+            >
+              Privacy Notice
+            </Link>
+            .
+          </p>
+
           <FieldDescription className="text-center">
             Already have an account?{" "}
             <Link href="/auth/login">

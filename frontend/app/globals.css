@@ -150,3 +150,114 @@
     @apply bg-primary text-primary-foreground;
   }
 }
+
+/*
+ * Long-form legal text.
+ *
+ * Streamdown styles chat answers; a notice needs a quieter reading rhythm:
+ * one measure, headings that open space above them, and no card around the
+ * document. The tokens come from the same theme as the rest of the shell.
+ */
+.legal-prose {
+  color: var(--foreground);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.legal-prose h1 {
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.legal-prose h1 + p {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  margin-top: 0.5rem;
+}
+
+.legal-prose h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  margin-top: 2.5rem;
+  text-wrap: balance;
+}
+
+.legal-prose h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.45;
+  margin-top: 1.75rem;
+}
+
+.legal-prose p {
+  font-size: 1rem;
+  line-height: 1.75;
+  margin-top: 0.875rem;
+  text-wrap: pretty;
+}
+
+.legal-prose ul,
+.legal-prose ol {
+  margin-top: 0.875rem;
+  padding-left: 1.35rem;
+}
+
+.legal-prose ul {
+  list-style: disc;
+}
+
+.legal-prose ol {
+  list-style: decimal;
+}
+
+.legal-prose li {
+  font-size: 1rem;
+  line-height: 1.75;
+  margin-top: 0.35rem;
+  padding-left: 0.25rem;
+}
+
+.legal-prose li::marker {
+  color: var(--muted-foreground);
+}
+
+.legal-prose a {
+  text-decoration-line: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 0.18em;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.legal-prose a:hover {
+  color: var(--muted-foreground);
+  text-decoration-color: currentColor;
+}
+
+.legal-prose a:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.legal-prose strong {
+  font-weight: 600;
+}
+
+.legal-prose code {
+  background: var(--muted);
+  border-radius: calc(var(--radius) - 4px);
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  padding: 0.1em 0.35em;
+}
+
+.legal-prose hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}

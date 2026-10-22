@@ -1,8 +1,8 @@
 # GenBlocks Content Policy
 
-This is the product policy for what GenBlocks will generate, publish and keep. It
-is written to be reused by the public terms page later; it is not itself the
-contract with a user.
+This is the working text for what GenBlocks will generate, publish and keep. The
+binding version is section 8 of the public Terms of Use; this file is the source
+we edit first, and the Terms must be updated from it in the same change.
 
 GenBlocks is a registry of **interface blocks** and **generated stock images**. A
 block is a React/Tailwind project that somebody copies into their own site. An

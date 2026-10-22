@@ -652,6 +652,9 @@ function Welcome({
           Find a block, look through the pictures, describe a block to build,
           or ask for a new image.
         </p>
+        <p className="text-muted-foreground text-xs">
+          This is an AI assistant. It can be wrong.
+        </p>
       </div>
 
       {signedIn ? (

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { AppHeader } from "@/components/shell/app-header";
 import { AppSidebar } from "@/components/shell/app-sidebar";
+import { SiteFooter } from "@/components/shell/site-footer";
 import {
   AgentChatProvider,
   AgentChatTrigger,
@@ -47,6 +48,7 @@ export function AppShell({
           {session && !session.user.isVerified ? <VerificationBanner /> : null}
           <Breadcrumbs categories={categories} />
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+          <SiteFooter />
         </SidebarInset>
       </SidebarProvider>
 
