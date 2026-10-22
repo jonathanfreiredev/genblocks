@@ -1,25 +1,45 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
 import { BlockItem } from "@/components/vault/block-item";
 import { CataloguePage } from "@/components/vault/catalogue-page";
+import {
+  JsonLd,
+  breadcrumbJsonLd,
+  softwareSourceCodeJsonLd,
+} from "@/lib/seo/json-ld";
+import { pageMetadata } from "@/lib/seo/metadata";
+import { categoryDescription } from "@/lib/seo/categories";
 import {
   getComponent,
   getComponentBySlug,
   listCategories,
   listComponentGenerations,
 } from "@/lib/vault/api";
-import { isUuid } from "@/lib/vault/links";
+import { isUuid, parseCatalogue } from "@/lib/vault/links";
 import { getSession } from "@/server/auth/auth.lib";
+import type { Category } from "@/lib/vault/types";
 
 type Params = { slug: string };
 type SearchParams = Record<string, string | string[] | undefined>;
+
+/** The taxonomy is read by both the metadata and the page in one request. */
+const loadCategories = cache(listCategories);
 
 /** One block by its readable address, or by an old id link, once per request. */
 const loadComponent = cache(async (slug: string) =>
   isUuid(slug) ? getComponent(slug) : getComponentBySlug(slug),
 );
+
+function findType(categories: Category[], slug: string): Category | undefined {
+  return categories.find(
+    (category) =>
+      category.kind === "component" &&
+      category.level === 2 &&
+      category.slug === slug,
+  );
+}
 
 /**
  * One address serves a category and an item: a type is a word the taxonomy
@@ -28,21 +48,57 @@ const loadComponent = cache(async (slug: string) =>
  */
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<Params>;
+  searchParams: Promise<SearchParams>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const component = await loadComponent(slug);
+  const [component, categories] = await Promise.all([
+    loadComponent(slug),
+    loadCategories(),
+  ]);
 
-  if (!component) {
-    return { title: "Block" };
+  if (component) {
+    const category = categories.find((one) => one.id === component.category_id);
+
+    return pageMetadata({
+      title: component.title,
+      description: component.description,
+      path: `/blocks/${component.slug}`,
+      type: "article",
+      publishedTime: component.created_at,
+      authors: [component.author ?? "GenBlocks"],
+      section: category?.name,
+    });
   }
 
-  return {
-    title: component.title,
-    description: component.description,
-    alternates: { canonical: `/blocks/${component.slug}` },
-  };
+  const category = findType(categories, slug);
+
+  if (category) {
+    const view = parseCatalogue("blocks", await searchParams, category.slug);
+
+    return pageMetadata({
+      title:
+        view.page > 1
+          ? `${category.name} UI Blocks — Page ${view.page}`
+          : `${category.name} UI Blocks`,
+      description: categoryDescription(category.slug, category.name, "blocks"),
+      path: view.q
+        ? `/blocks/${category.slug}`
+        : view.page > 1
+          ? `/blocks/${category.slug}?page=${view.page}`
+          : `/blocks/${category.slug}`,
+      noindex: Boolean(view.q),
+    });
+  }
+
+  return pageMetadata({
+    title: "Block not found",
+    description: "This block is not in the registry.",
+    path: `/blocks/${slug}`,
+    noindex: true,
+  });
 }
 
 export default async function BlockRoute({
@@ -67,25 +123,41 @@ export default async function BlockRoute({
 
   // A UUID still resolves, but the address a person shares is the slug.
   if (slug !== component.slug) {
-    redirect(`/blocks/${component.slug}`);
+    permanentRedirect(`/blocks/${component.slug}`);
   }
 
   const [generations, categories, session] = await Promise.all([
     listComponentGenerations(component.id),
-    listCategories(),
+    loadCategories(),
     getSession(),
   ]);
 
-  const categoryName =
-    categories.find((category) => category.id === component.category_id)
-      ?.name ?? "Unfiled";
+  const category = categories.find((one) => one.id === component.category_id);
+  const categoryName = category?.name ?? "Unfiled";
 
   return (
-    <BlockItem
-      component={component}
-      generations={generations}
-      categoryName={categoryName}
-      signedIn={session !== null}
-    />
+    <>
+      <JsonLd data={softwareSourceCodeJsonLd(component, categoryName)} />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Blocks", path: "/blocks" },
+          ...(category
+            ? [
+                {
+                  name: category.name,
+                  path: `/blocks/${category.slug}`,
+                },
+              ]
+            : []),
+          { name: component.title },
+        ])}
+      />
+      <BlockItem
+        component={component}
+        generations={generations}
+        categoryName={categoryName}
+        signedIn={session !== null}
+      />
+    </>
   );
 }

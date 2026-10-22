@@ -20,6 +20,7 @@ export function AssetPlate({
   sizes,
   caption,
   fit = "cover",
+  priority = false,
   className,
 }: {
   path: string;
@@ -28,6 +29,8 @@ export function AssetPlate({
   /** What is known about a missing asset: the model and the dimensions. */
   caption: string;
   fit?: "cover" | "contain";
+  /** Set on the one image that is the page's LCP, never on a grid. */
+  priority?: boolean;
   className?: string;
 }) {
   const src = assetUrl(path);
@@ -41,6 +44,7 @@ export function AssetPlate({
           alt={alt}
           fill
           sizes={sizes}
+          priority={priority}
           onError={() => setUnavailable(true)}
           className={cn(
             "object-cover",

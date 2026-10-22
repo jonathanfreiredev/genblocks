@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
 import { getSession } from "@/server/auth/auth.lib";
 import { redirect } from "next/navigation";
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false, noarchive: true },
+};
 
 export default async function Layout({
   children,

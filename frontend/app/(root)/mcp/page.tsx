@@ -5,12 +5,15 @@ import { ConnectAgent } from "@/components/mcp/connect-agent";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { env } from "@/lib/env";
 import { resolveMcpEndpoint } from "@/lib/mcp";
+import { JsonLd, webPageJsonLd } from "@/lib/seo/json-ld";
+import { pageMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
-  title: "Connect an agent",
+export const metadata: Metadata = pageMetadata({
+  title: "Connect an AI agent over MCP",
   description:
     "Point Claude Code, Cursor, opencode or n8n at the GenBlocks MCP server, and let an agent search, read and build in the same library this site shows.",
-};
+  path: "/mcp",
+});
 
 /**
  * How an agent reaches the vault.
@@ -31,9 +34,17 @@ export default async function McpPage() {
 
   return (
     <div className="mx-auto w-full max-w-[900px] px-6 py-12">
-      <h1 className="sr-only">Connect an agent</h1>
+      <JsonLd
+        data={webPageJsonLd({
+          name: "Connect an AI agent over MCP",
+          description:
+            "Point an MCP client at GenBlocks to search, read and build in the public registry.",
+          path: "/mcp",
+        })}
+      />
 
-      <p className="text-muted-foreground max-w-[68ch] text-sm">
+      <h1 className="text-xl font-semibold tracking-tight">Connect an agent</h1>
+      <p className="text-muted-foreground mt-2 max-w-[68ch] text-sm">
         GenBlocks speaks MCP, the protocol agent clients use to call tools.
         Point a client at the server once and it can search the library, read an
         item and queue a block or an image. The first call opens this

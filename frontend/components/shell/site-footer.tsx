@@ -13,9 +13,15 @@ export function SiteFooter() {
       <div className="text-muted-foreground mx-auto flex w-full max-w-6xl flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
         <p>© {new Date().getFullYear()} GenBlocks. All rights reserved.</p>
         <nav
-          aria-label="Legal"
+          aria-label="Site"
           className="flex flex-wrap items-center gap-x-4 gap-y-2"
         >
+          <Link
+            href="/about"
+            className="hover:text-foreground underline-offset-4 transition-colors hover:underline"
+          >
+            About
+          </Link>
           <Link
             href="/impressum"
             className="hover:text-foreground underline-offset-4 transition-colors hover:underline"

@@ -1,9 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "streamdown/styles.css";
 import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { JsonLd, siteJsonLd } from "@/lib/seo/json-ld";
+import {
+  SITE_AUTHOR,
+  SITE_DESCRIPTION,
+  SITE_LOCALE,
+  SITE_NAME,
+  SITE_ORIGIN,
+  SITE_TITLE,
+} from "@/lib/site";
 
 // The shadcn preset's typeface: one neutral sans for everything, one mono for
 // code and figures. The product mark lives in `app/icon.png`.
@@ -18,19 +27,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  // The canonical address of the site. Everything relative in the metadata below — the
-  // social card above all — is resolved against it, so this is the one line to change
-  // if the domain ever does.
-  metadataBase: new URL("https://genblocks.jonathanfreire.com"),
+  // The canonical address of the site. Everything relative in the metadata below —
+  // the social cards above all — is resolved against it. `SITE_URL` is the one
+  // setting to change if the domain ever does.
+  metadataBase: new URL(SITE_ORIGIN),
   title: {
-    default: "GenBlocks",
-    template: "%s | GenBlocks",
+    default: SITE_TITLE,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "A public registry of UI blocks and stock images generated from a prompt, each carrying the score of an independent judge and, for blocks, the checks behind it.",
-  // Declaring this group replaces the icons Next wires up on its own from the files in
-  // this directory, so every size in the set is listed here and the browser picks the
-  // one it wants. The manifest is still the file next to this one; Next links it alone.
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  authors: [SITE_AUTHOR],
+  creator: SITE_AUTHOR.name,
+  publisher: SITE_NAME,
+  category: "Design",
+  // The generated files are in `public/` rather than `app/` because the manifest
+  // and the social cards need stable paths to the same set.
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -40,17 +52,41 @@ export const metadata: Metadata = {
     ],
     apple: { url: "/apple-icon.png", sizes: "180x180" },
   },
-  // The card image is not declared here: `app/opengraph-image.png` next to this file is
-  // picked up and wired in by Next, so the picture can change without touching code.
+  // The root card is `app/opengraph-image.tsx`; a route segment can override it
+  // with its own image. The same composition is aliased for Twitter in
+  // `app/twitter-image.tsx`.
   openGraph: {
     type: "website",
-    siteName: "GenBlocks",
+    siteName: SITE_NAME,
+    locale: SITE_LOCALE,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
   },
   twitter: {
     card: "summary_large_image",
-    title: "GenBlocks",
-    description: "Every block and image, with the judge's scores.",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
   },
+  appleWebApp: {
+    capable: true,
+    title: SITE_NAME,
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
+    address: false,
+    email: false,
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
 };
 
 export default function RootLayout({
@@ -74,6 +110,7 @@ export default function RootLayout({
             __html: `(function(){try{var s=localStorage.getItem("genblocks-theme");var d=s?s==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d)}catch(e){}})();`,
           }}
         />
+        <JsonLd data={siteJsonLd()} />
         <TooltipProvider>{children}</TooltipProvider>
         <Toaster />
       </body>

@@ -4,12 +4,25 @@ const nextConfig: NextConfig = {
   // The framework name and version are not a secret, but they are a free hint
   // for a scanner and nothing needs them.
   poweredByHeader: false,
+  // A redirect declared here is answered before the React tree renders, so a
+  // crawler receives a real 308 instead of a streamed page with a client-side
+  // destination.
+  async redirects() {
+    return [{ source: "/", destination: "/blocks", permanent: true }];
+  },
   // The legal pages read their Markdown from `content/legal` at request time
   // because the app shell reads the session. Keep both possible project roots
   // in the server trace, and include the documents on every route so a host
   // that resolves the page differently still receives them.
   outputFileTracingIncludes: {
-    "/**": ["./content/legal/**/*.md", "./frontend/content/legal/**/*.md"],
+    "/**": [
+      "./content/legal/**/*.md",
+      "./frontend/content/legal/**/*.md",
+      // The social-card route reads the mark from disk so Satori never fetches
+      // the site it is rendering a card for.
+      "./public/brand/**/*.png",
+      "./frontend/public/brand/**/*.png",
+    ],
   },
   images: {
     // The library never stores more than 1536px, so asking Next for a 3840px

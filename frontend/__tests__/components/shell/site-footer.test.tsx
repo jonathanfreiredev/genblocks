@@ -4,9 +4,13 @@ import { describe, expect, test } from "vitest";
 import { SiteFooter } from "@/components/shell/site-footer";
 
 describe("SiteFooter", () => {
-  test("links to both legal notices and the contact address", () => {
+  test("links to About and the legal notices", () => {
     render(<SiteFooter />);
 
+    expect(screen.getByRole("link", { name: "About" })).toHaveAttribute(
+      "href",
+      "/about",
+    );
     expect(screen.getByRole("link", { name: "Impressum" })).toHaveAttribute(
       "href",
       "/impressum",

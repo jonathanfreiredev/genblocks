@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { ConnectedAppsCard } from "@/components/auth/connected-apps-card";
 import { DeleteAccountCard } from "@/components/auth/delete-account-card";
@@ -5,6 +6,11 @@ import { AdminCard } from "@/components/auth/admin-card";
 import { ProfileCard } from "@/components/auth/profile-card";
 import { getSession } from "@/server/auth/auth.lib";
 import { listConnectedApps } from "@/server/oauth/oauth.lib";
+
+export const metadata: Metadata = {
+  title: "Your profile",
+  robots: { index: false, follow: false, noarchive: true },
+};
 
 export default async function ProfilePage() {
   const session = await getSession();

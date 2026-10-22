@@ -15,6 +15,8 @@ import {
   ImageCell,
   ItemGrid,
 } from "@/components/vault/item-grid";
+import { categoryDescription, catalogueIntro } from "@/lib/seo/categories";
+import { JsonLd, collectionPageJsonLd } from "@/lib/seo/json-ld";
 import {
   PAGE_SIZE,
   SECTION_KIND,
@@ -127,10 +129,10 @@ function NothingFiled({
 /**
  * The public wall of one section.
  *
- * No hero, no description, no oversized section title: the sidebar says where
- * you are and the pictures are the argument. The only text above the grid is
- * the count, and the only text on a cell appears when the pointer asks for the
- * maker's name.
+ * The heading is small on purpose: the sidebar says where you are, and the
+ * pictures are the argument. It exists because a landing page needs an H1 and
+ * a sentence for a reader who arrives from search, not because the wall needs
+ * a hero.
  */
 export async function CataloguePage({
   section,
@@ -146,6 +148,7 @@ export async function CataloguePage({
   const kind = SECTION_KIND[section];
 
   let categories: Category[] = [];
+  let type: Category | undefined;
   let items: (ComponentSummary | Image)[] = [];
   let total = 0;
   let failure: string | null = null;
@@ -153,7 +156,7 @@ export async function CataloguePage({
   try {
     categories = await listCategories();
 
-    const type = typeSlug
+    type = typeSlug
       ? categories.find(
           (category) =>
             category.kind === kind &&
@@ -190,9 +193,43 @@ export async function CataloguePage({
     failure = error.message;
   }
 
+  const heading = type
+    ? `${type.name} ${section === "images" ? "images" : "blocks"}`
+    : section === "images"
+      ? "Stock images"
+      : "UI blocks";
+  const intro = type
+    ? categoryDescription(type.slug, type.name, section)
+    : catalogueIntro(section);
+  const schemaPath = catalogueHref({ ...view, q: undefined });
+  const collectionItems =
+    section === "images"
+      ? (items as Image[]).map((image) => ({
+          name: image.prompt,
+          path: itemHref(section, image.slug ?? image.id),
+        }))
+      : (items as ComponentSummary[]).map((component) => ({
+          name: component.title,
+          path: itemHref(section, component.slug),
+        }));
+
   return (
     <div className="flex flex-1 flex-col px-3 py-4 md:px-4">
-      <h1 className="sr-only">{section === "images" ? "Images" : "Blocks"}</h1>
+      {!failure ? (
+        <JsonLd
+          data={collectionPageJsonLd({
+            name: heading,
+            description: intro,
+            path: schemaPath,
+            items: collectionItems,
+          })}
+        />
+      ) : null}
+
+      <div className="flex flex-col gap-1 pb-4">
+        <h1 className="text-xl font-semibold tracking-tight">{heading}</h1>
+        <p className="text-muted-foreground max-w-[72ch] text-sm">{intro}</p>
+      </div>
 
       {failure ? (
         <Alert variant="destructive">

@@ -264,7 +264,7 @@ Two faces, both Geist:
 
 The scale is short and intentional:
 
-- **Page title** — 24px, semibold, tight tracking. One per page: visible on an item, `sr-only` on the wall and the task list.
+- **Page title** — 24px, semibold, tight tracking. One per page: visible on an item and on a catalogue landing page, `sr-only` on the task list. Catalogue titles are allowed to be the 20px compact heading described under the wall; they are not a hero.
 - **Section label** — 12px, medium, uppercase, wide tracking, muted. Used for `JUDGE`, `HARNESS`, `Browse`, `Categories`, `Files`.
 - **Body / row text** — 14px. Labels are muted and regular; values are foreground and medium.
 - **Small** — 12px, for status words, counts and secondary hints.
@@ -358,7 +358,7 @@ A muted strip directly under the header (`bg-muted/40`, 1px bottom border, 8px b
 
 - `/blocks` → `Blocks`; `/blocks/hero` → `Blocks / Hero`.
 - `/blocks/<id>` → `Blocks` only; the page's h1 names the item, and repeating it in the band would be the same word twice.
-- `/images` → `Images`; `/tasks` → `Your tasks`; a task detail appends the short id; `/profile` → `Profile`; `/mcp` → `Connect an agent`.
+- `/images` → `Images`; `/tasks` → `Your tasks`; a task detail appends the short id; `/profile` → `Profile`; `/mcp` → `Connect an agent`; `/about` → `About`.
 
 There is no `Home` crumb. The section is the root.
 
@@ -439,7 +439,7 @@ The gallery is a wall of pictures, not a list of records.
 - **Cell**: a square (`aspect-square`) `rounded-xl` frame with a 1px border and 8px of padding. The thumbnail fills its box and is cropped to it (`object-cover`), so the wall reads as one surface. It is a separate render at phone width (390px), not the judge's desktop screenshot: at card width a block is compact and nearly square, so the crop does not cut the composition. The item page shows the uncropped desktop artifact.
 - **Nothing on the tile** except the picture. On hover the picture lifts 2px, the frame takes a faint muted wash, and the maker's name (`author`, or `GenBlocks` when nobody claimed it) fades in centred at the bottom.
 - **No title, slug, date or category** on the wall. The accessible name is the item's title; the visual text is only the author on hover.
-- **Above the grid**: one small line with the count (`7 blocks`) and, when searching, `for “query”` plus a `Clear search` link. No section title and no description.
+- **Above the grid**: a compact heading (20px, semibold) and one sentence of orientation, then the count (`7 blocks`) and, when searching, `for “query”` plus a `Clear search` link. The heading and sentence are a landing-page label, not a hero: no large display type, no card, no second call to action.
 - **Pagination**: two outline buttons and a small `Page x of y`, below the grid.
 
 Loading and missing assets are honest: the `AssetPlate` shows a muted frame with `Awaiting asset` and what is known (model or dimensions) rather than a broken image.
@@ -537,7 +537,7 @@ Don't:
 
 - Don't use the old `type-*` utilities, `text-ink*`, `bg-panel*`, `border-rule`, coral, bands or pill buttons. They are gone.
 - Don't use raw hex, named palette colors or manual `dark:` overrides in components.
-- Don't put a section title, a description, a count hero or a breadcrumb inside the page body; the band and the sidebar already said it.
+- Don't put a hero, a count block or a breadcrumb inside the page body; the band and the sidebar already said where you are. The compact catalogue heading and its one-sentence introduction are the exception, because a landing page needs an H1 and a line for a reader arriving from search.
 - Don't put text on a gallery tile other than the author on hover.
 - Don't make the render taller than the viewport or crop the artifact to fill a square.
 - Don't make the evidence panel wider than 22rem or let its labels and values drift to different sizes.

@@ -26,9 +26,10 @@ export function ImageItem({
 
   return (
     <div className="flex flex-1 flex-col px-3 py-4 md:px-4">
-      <h1 className="text-2xl font-semibold tracking-tight text-balance">
-        {categoryName}
+      <h1 className="line-clamp-3 text-2xl font-semibold tracking-tight text-balance">
+        {image.prompt}
       </h1>
+      <p className="text-muted-foreground mt-1 text-sm">{categoryName}</p>
 
       <div className="bg-muted/20 mt-4 rounded-xl border p-2 sm:p-3">
         <div
@@ -41,6 +42,7 @@ export function ImageItem({
             sizes="(min-width: 1280px) 1000px, 100vw"
             caption={`${image.width} × ${image.height}`}
             fit="contain"
+            priority
             className="size-full rounded-lg"
           />
         </div>

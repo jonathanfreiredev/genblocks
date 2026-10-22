@@ -13,6 +13,7 @@ const SECTION_LABELS: Record<Section, string> = {
 };
 
 const SEGMENT_LABELS: Record<string, string> = {
+  about: "About",
   profile: "Profile",
   tasks: "Your tasks",
   mcp: "Connect an agent",

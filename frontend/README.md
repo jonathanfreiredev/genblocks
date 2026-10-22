@@ -20,7 +20,7 @@ The web client for [GenBlocks](../README.md). It renders the public wall, the it
 ```
 frontend/
 ├── app/
-│   ├── (root)/            # Blocks, images, tasks, profile and the MCP guide
+│   ├── (root)/            # Blocks, images, About, legal pages, tasks and MCP
 │   ├── auth/              # Login, signup, recovery, verification and confirm route
 │   ├── api/
 │   │   ├── agent/         # Chat stream and brief confirmation
@@ -122,6 +122,7 @@ Supabase is the source of truth: a provider only works if it is enabled in the d
 - **The assistant** — `components/vault/agent-chat.tsx` owns the chat dialog, the transcript and the proposal cards. The browser streams a turn through `app/api/agent/chat/route.ts`; the backend holds the conversation and returns proposals, suggestions and task cards. A task is only queued after the person confirms it through `/api/agent/confirm`.
 - **The vault** — `components/vault/` renders the wall, the item pages, the live preview and the evidence panel. Catalogue and task reads go through `lib/vault/api.ts`; the browser never calls the API directly.
 - **The MCP guide** — `/mcp` resolves the endpoint from `MCP_URL` in production, and from the request host on a local network. The consent screen is `/oauth/consent`.
+- **SEO and sharing** — `lib/site.ts` is the canonical origin and product identity. `app/sitemap.ts`, `app/robots.ts` and `app/manifest.ts` generate the crawl files, and `lib/seo/` owns page metadata, JSON-LD and the dynamic social cards. Public pages are indexable; `/tasks`, `/profile`, `/admin`, `/auth`, `/oauth` and `/api` are `noindex` and disallowed. `/` answers with a permanent redirect to `/blocks`.
 
 ## OAuth consent screen
 
