@@ -141,7 +141,7 @@ You can complain to the data protection authority of your habitual residence, yo
 
 ## 8. Deleting your account and your content
 
-You can delete your account from your profile. Deletion requires a fresh password confirmation. If you signed in only with Google and cannot use the password confirmation, contact us and we will delete the account after verifying that you control it.
+You can delete your account from your profile. If the account has a password, deletion asks you to enter it again. If you sign in only with Google and have no password, you confirm by typing `DELETE`. Either way, account deletion removes your profile and your Supabase identity.
 
 Account deletion removes your profile and your Supabase identity. It does not automatically remove published blocks or images, because those are public registry entries and may already have been copied or cited. The author link is removed. Where a brief or artifact still contains personal data, we will erase or redact that data on request, even if a de-identified artifact remains public. We do not treat a public artifact as a reason to refuse an erasure request that the law requires us to grant.
 

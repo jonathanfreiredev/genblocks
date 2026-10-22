@@ -22,6 +22,7 @@ import {
 import { Field, FieldGroup, FieldTitle } from "../ui/field";
 import { ChangePasswordForm } from "./change-password-form";
 import { ProfileEditForm } from "./profile-edit-form";
+import { RequestPasswordSetup } from "./request-password-setup";
 
 /**
  * The profile card. It reads rather than edits: the details are shown and the two
@@ -34,7 +35,7 @@ import { ProfileEditForm } from "./profile-edit-form";
 export const ProfileCard = ({
   user,
 }: {
-  user: { name: string; email: string };
+  user: { name: string; email: string; hasPassword: boolean };
 }) => {
   const [isEditOpen, setEditOpen] = useState(false);
   const [isChangePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -79,19 +80,33 @@ export const ProfileCard = ({
           onOpenChange={setChangePasswordOpen}
         >
           <DialogTrigger
-            render={<Button variant="outline">Change password</Button>}
+            render={
+              <Button variant="outline">
+                {user.hasPassword ? "Change password" : "Set a password"}
+              </Button>
+            }
           />
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Change password</DialogTitle>
+              <DialogTitle>
+                {user.hasPassword ? "Change password" : "Set a password"}
+              </DialogTitle>
               <DialogDescription>
-                Enter your new password below to change your password.
+                {user.hasPassword
+                  ? "Enter your new password below to change your password."
+                  : "This account signs in with Google and has no password yet."}
               </DialogDescription>
             </DialogHeader>
 
-            <ChangePasswordForm
-              onSuccess={() => setChangePasswordOpen(false)}
-            />
+            {user.hasPassword ? (
+              <ChangePasswordForm
+                onSuccess={() => setChangePasswordOpen(false)}
+              />
+            ) : (
+              <RequestPasswordSetup
+                onSent={() => setChangePasswordOpen(false)}
+              />
+            )}
           </DialogContent>
         </Dialog>
       </CardFooter>

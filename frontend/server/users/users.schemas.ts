@@ -17,6 +17,23 @@ export const updateUserPasswordSchema = z.object({
   }),
 });
 
+/**
+ * The word an account without a password types to confirm a deletion.
+ *
+ * It lives here so the form and the action cannot drift: the form disables the
+ * button on a mismatch, the action rejects anything else.
+ */
+export const DELETE_CONFIRMATION = "DELETE";
+
+/**
+ * How the caller proves they own the account before it is deleted.
+ *
+ * A password account sends `password`; an account created through Google has
+ * none and sends `confirmation` instead. Which field counts is decided by the
+ * action from the session, never from this payload, so sending the wrong one
+ * cannot skip the check.
+ */
 export const deleteUserSchema = z.object({
-  password: z.string().min(1, { message: "Password is required" }),
+  password: z.string().optional(),
+  confirmation: z.string().optional(),
 });

@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   deleteUserSchema,
+  DELETE_CONFIRMATION,
   updateUserPasswordSchema,
   updateUserSchema,
 } from "./users.schemas";
@@ -91,14 +92,24 @@ export const deleteUserAction = protectedProcedure
   .action(async ({ parsedInput, ctx }) => {
     const supabase = await createClient();
 
-    // Deleting is irreversible, so re-authenticate before doing anything.
-    const { error: reauthError } = await supabase.auth.signInWithPassword({
-      email: ctx.user.email,
-      password: parsedInput.password,
-    });
+    // Deleting is irreversible, so the caller proves ownership again. An
+    // account created through Google has no password to re-enter, so it types
+    // the confirmation word instead. The branch reads the session: a password
+    // account that sends `confirmation` is still asked for its password.
+    if (ctx.user.hasPassword) {
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: ctx.user.email,
+        password: parsedInput.password ?? "",
+      });
 
-    if (reauthError) {
-      returnServerError({ code: 400, message: "Incorrect password." });
+      if (reauthError) {
+        returnServerError({ code: 400, message: "Incorrect password." });
+      }
+    } else if (parsedInput.confirmation !== DELETE_CONFIRMATION) {
+      returnServerError({
+        code: 400,
+        message: `Type ${DELETE_CONFIRMATION} to confirm.`,
+      });
     }
 
     // 1. Remove the local profile while the access token is still valid.

@@ -30,6 +30,7 @@ export default async function ProfilePage() {
           user={{
             name: session?.user.name || "",
             email: session?.user.email || "",
+            hasPassword: session?.user.hasPassword ?? true,
           }}
         />
 
@@ -37,7 +38,7 @@ export default async function ProfilePage() {
 
         {session?.user.isAdmin ? <AdminCard /> : null}
 
-        <DeleteAccountCard />
+        <DeleteAccountCard hasPassword={session?.user.hasPassword ?? true} />
       </div>
     </div>
   );

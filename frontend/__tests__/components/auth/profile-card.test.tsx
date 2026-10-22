@@ -16,14 +16,27 @@ vi.mock("@/server/users/users.actions", () => ({
   updateUserPasswordAction: vi.fn(),
 }));
 
+vi.mock("@/server/auth/auth.actions", () => ({
+  requestPasswordSetupAction: vi.fn(),
+}));
+
 import { ProfileCard } from "@/components/auth/profile-card";
 import { toast } from "@/components/ui/toast";
+import { requestPasswordSetupAction } from "@/server/auth/auth.actions";
 import { updateUserAction } from "@/server/users/users.actions";
 
-const USER = { name: "Jane Doe", email: "jane@example.com" };
+const USER = { name: "Jane Doe", email: "jane@example.com", hasPassword: true };
+const GOOGLE_USER = {
+  name: "Jane Doe",
+  email: "jane@example.com",
+  hasPassword: false,
+};
 
 beforeEach(() => {
   vi.mocked(updateUserAction).mockResolvedValue({
+    data: { success: true },
+  } as never);
+  vi.mocked(requestPasswordSetupAction).mockResolvedValue({
     data: { success: true },
   } as never);
 });
@@ -42,7 +55,11 @@ describe("ProfileCard", () => {
   });
 
   test("shows a dash when the profile has no name yet", () => {
-    render(<ProfileCard user={{ name: "", email: "jane@example.com" }} />);
+    render(
+      <ProfileCard
+        user={{ name: "", email: "jane@example.com", hasPassword: true }}
+      />,
+    );
 
     expect(screen.getByText("—")).toBeInTheDocument();
   });
@@ -123,5 +140,39 @@ describe("ProfileCard", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("New Password")).toBeInTheDocument();
     expect(screen.getByLabelText("Confirm Password")).toBeInTheDocument();
+  });
+
+  test("offers to set a password instead when the account has none", async () => {
+    render(<ProfileCard user={GOOGLE_USER} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Change password" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Set a password" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Send the link" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Current Password")).not.toBeInTheDocument();
+  });
+
+  test("sends the setup link, toasts and closes the dialog", async () => {
+    render(<ProfileCard user={GOOGLE_USER} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set a password" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Send the link" }),
+    );
+
+    await waitFor(() =>
+      expect(requestPasswordSetupAction).toHaveBeenCalledTimes(1),
+    );
+    expect(toast.add).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Check your email", type: "success" }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
   });
 });

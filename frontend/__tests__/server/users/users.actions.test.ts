@@ -44,6 +44,7 @@ beforeEach(() => {
       name: "User",
       isVerified: true,
       isAdmin: false,
+      hasPassword: true,
     },
   });
 
@@ -172,5 +173,67 @@ describe("deleteUserAction", () => {
     expect(result.serverError?.message).toBe("Nope");
     expect(adminDeleteUser).not.toHaveBeenCalled();
     expect(signOut).not.toHaveBeenCalled();
+  });
+
+  test("ignores the confirmation word when the account has a password", async () => {
+    // The real Auth server rejects the empty password this payload leaves.
+    signInWithPassword.mockResolvedValue({ error: { message: "bad" } });
+
+    const result = await deleteUserAction({ confirmation: "DELETE" });
+
+    expect(signInWithPassword).toHaveBeenCalledWith({
+      email: USER_EMAIL,
+      password: "",
+    });
+    expect(result.serverError?.message).toBe("Incorrect password.");
+    expect(adminDeleteUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteUserAction for an account without a password", () => {
+  // A sign-up through Google has no password to re-enter.
+  beforeEach(() => {
+    vi.mocked(getSession).mockResolvedValue({
+      session: { token: "token", expiresAt: null },
+      user: {
+        id: USER_ID,
+        email: USER_EMAIL,
+        name: "User",
+        isVerified: true,
+        isAdmin: false,
+        hasPassword: false,
+      },
+    });
+
+    server.use(
+      http.delete(
+        `${BACKEND_URL}/v1/users/me`,
+        () => new HttpResponse(null, { status: 204 }),
+      ),
+    );
+  });
+
+  test("deletes the profile and the Supabase user when the word matches", async () => {
+    const result = await deleteUserAction({ confirmation: "DELETE" });
+
+    expect(result.serverError).toBeUndefined();
+    expect(result.data).toEqual({ success: true });
+    expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(adminDeleteUser).toHaveBeenCalledWith(USER_ID);
+    expect(signOut).toHaveBeenCalled();
+  });
+
+  test("rejects any other word without touching the backend", async () => {
+    const result = await deleteUserAction({ confirmation: "delete" });
+
+    expect(result.serverError?.message).toBe("Type DELETE to confirm.");
+    expect(adminDeleteUser).not.toHaveBeenCalled();
+  });
+
+  test("rejects a missing confirmation", async () => {
+    const result = await deleteUserAction({});
+
+    expect(result.serverError?.code).toBe(400);
+    expect(adminDeleteUser).not.toHaveBeenCalled();
   });
 });

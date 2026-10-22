@@ -126,6 +126,43 @@ export const signInWithGoogleAction = publicProcedure
     return { url: data.url };
   });
 
+/**
+ * Send the "set a password" link to an account that signs in only with Google.
+ *
+ * Supabase has no endpoint that adds a password from nothing, but its recovery
+ * flow does exactly that: the link lands on `/auth/confirm`, which exchanges
+ * the token and forwards to `/auth/reset-password`. The account keeps its
+ * Google identity; the password is added beside it.
+ */
+export const requestPasswordSetupAction = protectedProcedure.action(
+  async ({ ctx }) => {
+    const supabase = await createClient();
+
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      ctx.user.email,
+      {
+        redirectTo: `${await siteUrl()}/auth/confirm?next=/auth/reset-password`,
+      },
+    );
+
+    if (error?.status === 429) {
+      returnServerError({
+        code: 429,
+        message: "Too many attempts. Please try again later.",
+      });
+    }
+
+    if (error) {
+      returnServerError({
+        code: error.status ?? 400,
+        message: "Could not send the password setup link. Please try again.",
+      });
+    }
+
+    return { success: true };
+  },
+);
+
 export const forgotPasswordAction = publicProcedure
   .inputSchema(forgotPasswordSchema)
   .action(async ({ parsedInput }) => {

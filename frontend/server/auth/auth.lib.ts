@@ -15,8 +15,30 @@ export type Session = {
     isVerified: boolean;
     /** A configured operator: the report queue and takedown actions. */
     isAdmin: boolean;
+    /**
+     * Whether the account also has a password. A sign-up through Google has
+     * none, so the screens that re-enter one have to offer an alternative.
+     */
+    hasPassword: boolean;
   };
 };
+
+/**
+ * Whether the account can also sign in with a password.
+ *
+ * Supabase mirrors the linked identities into the token's `app_metadata`, so a
+ * Google-only sign-up lists `google` alone and an email account lists `email`.
+ * A token without the claim predates it or comes from another issuer: it is
+ * treated as password-backed so the stricter re-authentication stays the
+ * fallback rather than the exception.
+ */
+function hasPasswordIdentity(providers: string[] | undefined): boolean {
+  if (!providers) {
+    return true;
+  }
+
+  return providers.includes("email");
+}
 
 /**
  * Resolve the current session. The access token is verified locally (cached
@@ -73,6 +95,7 @@ export const getSession = cache(async (): Promise<Session | null> => {
       // verification, so it is treated as unverified.
       isVerified: claims.user_metadata?.email_verified === true,
       isAdmin,
+      hasPassword: hasPasswordIdentity(claims.app_metadata?.providers),
     },
   };
 });

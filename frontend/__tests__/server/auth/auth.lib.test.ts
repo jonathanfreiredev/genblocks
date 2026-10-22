@@ -66,8 +66,49 @@ describe("getSession", () => {
         name: "From backend",
         isVerified: true,
         isAdmin: false,
+        hasPassword: true,
       },
     });
+  });
+
+  test("reports no password for an account created through Google", async () => {
+    mockSupabase({
+      claims: {
+        sub: "user-id",
+        email: "user@example.com",
+        app_metadata: { provider: "google", providers: ["google"] },
+      },
+      session: { access_token: "token", expires_at: 1_700_000_000 },
+    });
+    server.use(
+      http.get(`${BACKEND_URL}/v1/users/me`, () =>
+        HttpResponse.json({ full_name: "Name" }),
+      ),
+    );
+
+    const session = await getSession();
+
+    expect(session?.user.hasPassword).toBe(false);
+  });
+
+  test("reports a password when Google was linked to a password account", async () => {
+    mockSupabase({
+      claims: {
+        sub: "user-id",
+        email: "user@example.com",
+        app_metadata: { provider: "email", providers: ["email", "google"] },
+      },
+      session: { access_token: "token", expires_at: 1_700_000_000 },
+    });
+    server.use(
+      http.get(`${BACKEND_URL}/v1/users/me`, () =>
+        HttpResponse.json({ full_name: "Name" }),
+      ),
+    );
+
+    const session = await getSession();
+
+    expect(session?.user.hasPassword).toBe(true);
   });
 
   test("carries the operator flag from the backend profile", async () => {

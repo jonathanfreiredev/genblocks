@@ -14,6 +14,7 @@ const SESSION: Session = {
     name: "Marisol Vega",
     isVerified: true,
     isAdmin: false,
+    hasPassword: true,
   },
 };
 

@@ -24,7 +24,11 @@ import { DeleteAccountForm } from "./delete-account-form";
  * Destructive actions live in their own card, visually separated and red, so
  * they are never mistaken for a routine edit.
  */
-export const DeleteAccountCard = () => {
+export const DeleteAccountCard = ({
+  hasPassword,
+}: {
+  hasPassword: boolean;
+}) => {
   const [isOpen, setOpen] = useState(false);
 
   return (
@@ -47,11 +51,17 @@ export const DeleteAccountCard = () => {
               <DialogTitle>Delete account</DialogTitle>
               <DialogDescription>
                 This permanently deletes your account and profile, and cannot be
-                undone. Enter your password to confirm.
+                undone.{" "}
+                {hasPassword
+                  ? "Enter your password to confirm."
+                  : "This account signs in with Google and has no password, so type DELETE to confirm."}
               </DialogDescription>
             </DialogHeader>
 
-            <DeleteAccountForm onSuccess={() => setOpen(false)} />
+            <DeleteAccountForm
+              hasPassword={hasPassword}
+              onSuccess={() => setOpen(false)}
+            />
           </DialogContent>
         </Dialog>
       </CardContent>
