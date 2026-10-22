@@ -14,16 +14,11 @@ const simulateDelay = async () => {
 /**
  * Machine-readable reasons a server error can carry, so clients can branch on
  * the cause without matching on the human-readable message.
- *
- * `service_waking` means the API did not answer in time, which is what a slept
- * container starting looks like from here. It is worth its own reason because it
- * is the one failure a client is expected to retry instead of reporting.
  */
-export type ActionErrorReason =
-  "email_not_confirmed" | "rate_limited" | "service_waking";
+export type ActionErrorReason = "email_not_confirmed" | "rate_limited";
 
 /**
- * Base client with global middleware for logging and delay
+ * Base client with the development delay applied to every action.
  */
 export const actionClient = createSafeActionClient({
   // Global error handler

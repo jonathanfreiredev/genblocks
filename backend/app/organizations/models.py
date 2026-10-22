@@ -9,7 +9,11 @@ from app.users.models import User
 
 
 class Organization(BaseModel):
-    """A tenant. Every domain row belongs to exactly one organization."""
+    """A tenant in the template's organization model.
+
+    GenBlocks keeps the table and its endpoints, but the public catalogue and the
+    per-user task queue do not belong to an organization.
+    """
 
     __tablename__ = "organizations"
 
@@ -22,9 +26,9 @@ class Organization(BaseModel):
 class Membership(BaseModel):
     """Grants a user a role inside one organization.
 
-    Every authorization check reads this table: permissions are never stored on
-    the user, they are resolved through the membership of the organization being
-    acted on (see ``app/authz``).
+    The organization endpoints read this table. Product access does not: a task is
+    scoped to its owner and the operator queue is gated by ``ADMIN_EMAILS`` (see
+    ``app/admin/service.py``).
     """
 
     __tablename__ = "memberships"

@@ -1,10 +1,9 @@
 """The global operator role.
 
-Organization roles answer "what may this person do inside this tenant". The
-report queue is not a tenant concern: one report can point at any public block,
-and an owner of one organization must not be able to remove another's work.
-Operators are therefore configured by email, not by a membership row, and the
-check lives in the service so a router cannot forget it.
+The report queue is not scoped to an organization: one report can point at any
+public block or image. Operators are configured by email, not by a membership
+row, and the check lives in the service so a router cannot forget it. The
+organization roles in ``app/authz`` belong to the template endpoints only.
 """
 
 from app.authz.permissions import PermissionDenied

@@ -13,20 +13,20 @@ kept in two places are rules that will disagree.
 from app.harness import skills
 
 HARNESS_PROMPT = f"""\
-You build one block for GenBlocks, a public registry of UI blocks. Every block in
-it was built, rendered and measured before it was published, and an independent
-judge reads the result: what you leave behind is what gets scored, so leave what
-you would ship.
+You build one block for GenBlocks, a public registry of UI blocks. Published
+blocks are rendered and measured before they enter it, and an independent judge
+reads the result: what you leave behind is what gets scored, so leave what you
+would ship.
 
 How you work
 - Write with `write_file`. `src/Block.tsx` is the entry point and has to exist:
   that is the file the page imports. Other files under `src/` are yours, except
   the scaffold's mount (`src/main.tsx`) and its ground (`src/index.css`), which
   are not part of the block.
-- The block is presentational. It never loads from another host, embeds a script,
-  iframe, object or form action, navigates the page, reads browser storage, or
-  touches `window`, `document` or `navigator`. Those are not style rules; a
-  project that does them is refused.
+- The block is presentational. It never fetches data, loads an asset from a host
+  outside the image library, embeds a script, iframe, object or form action,
+  navigates the page, reads browser storage, or touches `window`, `document` or
+  `navigator`. Those are not style rules; a project that does them is refused.
 - `look` builds the project and renders it. It answers with what the checker found
   and with the render itself — twice: on a light page and on the dark one the
   registry switches to. Read both, fix what is wrong, and look again. This is the

@@ -83,10 +83,10 @@ def _load(name: str, *, kind: str, dimensions: tuple[str, ...]) -> Rubric:
 COMPONENTS = _load(
     "components",
     kind="component",
-    # Novelty is not here on purpose: it is the distance to the nearest blocks in
-    # the library, and the library has no vectors until Fase 10. A judge asked to
-    # guess it would be answering a different question than the one the phase
-    # that measures it will answer, under the same name.
+    # Novelty is not a judge dimension. Retrieval measures distance to the nearest
+    # blocks; a judge asked to score that distance would be guessing at a number
+    # another part of the system already computes. Seeded attempts may still carry
+    # a legacy novelty score, but no production run does and no threshold gates it.
     dimensions=("render", "accessibility", "visual", "copy", "compliance"),
 )
 

@@ -41,6 +41,8 @@ COMPONENT_MODEL = "gpt-6-luna"
 COMPONENT_RUBRIC_VERSION = "seed-v0"
 IMAGE_MODEL = "flux-2-pro"
 IMAGE_RUBRIC_VERSION = "seed-v0"
+# Seeded attempts still carry the retired `novelty` score so the old archive reads
+# as it did. The live component rubric has five dimensions and does not emit it.
 
 # Fixed timestamps: a re-run rewrites the same rows instead of drifting, and the
 # task drawer reads as one morning of work rather than as "just now".

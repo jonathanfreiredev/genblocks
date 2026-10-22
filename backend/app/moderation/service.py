@@ -1,11 +1,11 @@
 """Whether text or a picture may become public, asked of a safety classifier.
 
-Three doors ask the same question at different moments. The **brief** is asked
-before it becomes a task, so a refusal costs nothing. The **copy** the block shows
-is asked after the harness has written it, so a block that is unsafe never reaches
-the judge or the registry. The **picture** is asked after it comes back from its
-provider and before it is stored, so a generation that should not exist never
-reaches a public CDN.
+Three moments ask the same question. The **brief** is asked before it becomes a
+task, so a refusal costs nothing. The **copy** the block shows is asked after the
+harness has written it, so a block that is unsafe never reaches the judge or the
+registry. The **picture** is asked after it comes back from its provider and
+before it is stored, so a generation that should not exist never reaches a public
+CDN.
 
 The image path has two layers. The person detector runs first and refuses any
 picture with a human or human-like figure; the product does not generate people.
@@ -39,10 +39,10 @@ GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 OPENAI_MODERATION_ENDPOINT = "https://api.openai.com/v1/moderations"
 TIMEOUT_SECONDS = 15.0
 
-# How much of the copy is sent. The safety model's free tier allows 2,000 tokens a
-# minute, and the frame below takes a couple of hundred of them; what is left is a
-# few hundred words of copy, which is more than a block shows. The bound is also a
-# bill: a runaway project cannot turn one call into a request the provider refuses.
+# How much of the copy is sent. The text classifier gets a few hundred words, which
+# is more than a block shows; the bound is also a bill, so a runaway project cannot
+# turn one call into a request the provider refuses. Groq's free tier is the
+# tighter limit here.
 MAX_CHARS = 2_500
 
 # A picture is bounded before it reaches a classifier. The generated sizes are far
@@ -64,14 +64,14 @@ COMMENT = re.compile(r"//\s*(.+)|/\*([\s\S]*?)\*/")
 # dashboards are the product, and a classifier that refuses them is worse than no
 # classifier at all. What is not ordinary, and what this deployment does not
 # publish, is named in the same breath so the model has one standard for a brief, a
-# block's copy and one of its decorative pictures.
+# block's copy and one of its pictures.
 FRAME = """\
 You are a safety and scope classifier for GenBlocks, a public library of interface
 blocks.
 
 The only work this product accepts is an interface block (React/Tailwind sections
-such as pricing, heroes, forms, dashboards, menus, cards) and the decorative
-pictures used inside one. Refuse anything outside that scope.
+such as pricing, heroes, forms, dashboards, menus, cards) and the stock pictures
+used inside one. Refuse anything outside that scope.
 
 Refuse text that is sexual or suggestive, involves a minor in any sexual or
 romantic context, depicts or encourages nudity, is hateful, harassing, violent,
@@ -87,10 +87,10 @@ JSON only, no prose around it:
 
 # Image prompts need a stricter line than block copy. A picture may not contain
 # people at all: not a full body, a face, a hand or a humanoid character. The
-# cost of a false positive is a refused decorative photograph, and the cost of
-# the other mistake is not one a classifier should be asked to price.
+# cost of a false positive is a refused stock photograph, and the cost of the
+# other mistake is not one a classifier should be asked to price.
 IMAGE_FRAME = """\
-You are a safety and scope classifier for the decorative image library of GenBlocks.
+You are a safety and scope classifier for the stock image library of GenBlocks.
 
 Only a scene for a stock photograph is in scope. Refuse anything that is not a
 stock image scene. Refuse, categorically, any request that depicts a person, a

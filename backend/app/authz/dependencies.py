@@ -2,8 +2,9 @@
 
 The API and the MCP server are two doors into the same domain: this one serves
 the application's own session, the other serves AI agents. A Supabase access
-token says which door it was issued for through its ``client_id`` claim, and each
-door only accepts its own.
+token says which door it was issued for through its ``client_id`` claim. The API
+accepts only first-party tokens; the MCP verifier accepts both, and its tool
+policies constrain what an agent token can do.
 """
 
 from typing import Annotated

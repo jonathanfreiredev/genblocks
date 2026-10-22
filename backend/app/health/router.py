@@ -48,13 +48,12 @@ async def readiness(
     return {"status": "ok", "database": "up"}
 
 
-@health_router.get("/warmup", summary="Wake the demo and report what is up")
+@health_router.get("/warmup", summary="Wake the MCP service and report what is up")
 async def warmup(response: Response) -> dict[str, str]:
-    """Bring the demo's two services up, and say which of them answered.
+    """Wake the MCP service and say whether it answered yet.
 
-    The playground's page calls this the moment it is opened. On a platform that
-    sleeps an idle service, that moves the wait for a cold container to while the
-    visitor is still reading, instead of to the moment they press a button.
+    It is kept for an orchestrator, scheduler or external monitor that runs on a
+    platform which stops idle services. The current frontend does not call it.
 
     It answers 200 either way, and always with a body: the caller polls it, and a
     status code meaning "not yet" would tell it no more than ``mcp`` does. Nothing

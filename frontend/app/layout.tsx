@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 // The shadcn preset's typeface: one neutral sans for everything, one mono for
-// code and figures. Identity, if it comes, is a later decision.
+// code and figures. The product mark lives in `app/icon.png`.
 const geist = Geist({
   variable: "--font-sans",
   subsets: ["latin"],
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     template: "%s | GenBlocks",
   },
   description:
-    "A public registry of UI blocks and stock images generated from a prompt, each carrying the scores of an independent judge and the attempts that came before it.",
+    "A public registry of UI blocks and stock images generated from a prompt, each carrying the score of an independent judge and, for blocks, the checks behind it.",
   // Declaring this group replaces the icons Next wires up on its own from the files in
   // this directory, so every size in the set is listed here and the browser picks the
   // one it wants. The manifest is still the file next to this one; Next links it alone.

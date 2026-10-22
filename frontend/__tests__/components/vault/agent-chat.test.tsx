@@ -75,6 +75,7 @@ function turn(...events: Array<[string, unknown]>) {
 async function open() {
   render(<AgentChat userName="Marisol Vega" />);
   fireEvent.click(screen.getByRole("button", { name: "Ask AI" }));
+  await screen.findByRole("heading", { name: "Ask AI" });
   await screen.findByText(/Ask about anything in the vault/);
 }
 

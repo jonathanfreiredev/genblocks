@@ -23,7 +23,8 @@ CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 
 FRAME = """\
 You are a strict visual policy classifier for GenBlocks, a library of interface
-blocks and their decorative images.
+blocks and stock images. A picture may belong to a block or stand on its own;
+either way the rule is the same.
 
 The only question is whether the picture contains a human or a human-like figure.
 Refuse any person, face, head, body, hand, arm, leg, skin, silhouette, crowd,

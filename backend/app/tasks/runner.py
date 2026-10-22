@@ -9,8 +9,9 @@ worth is decided by a judge that did not write it (``app.judge``).
 **One attempt, and a gate.** A run makes one attempt. The judge reads it once, at
 the end, and is a **gate**: a block that does not clear every threshold is not
 published, its attempt stays on the task with the judge's reasons on it, and the
-task fails. The registry only holds blocks that passed — that is an invariant of
-the product, not a promise (PLAN.md, decisions 30 and 31). Retrying is a person's
+task fails. The generated registry only holds blocks that passed — that is an
+invariant of the product, not a promise (PLAN.md, decisions 30 and 31). The
+seeded specimens are a hand-authored archive. Retrying is a person's
 decision (``POST /v1/tasks``, with the brief in front of them), and the loop that
 used to live here now lives inside the harness, where it can see the artifact.
 

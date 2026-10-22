@@ -10,6 +10,7 @@ import {
   SquareIcon,
   XIcon,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -23,6 +24,7 @@ import {
   type ReactNode,
 } from "react";
 
+import logo from "@/app/icon.png";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -634,9 +636,13 @@ function Welcome({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-5 px-6 py-10 text-center">
-      <div className="bg-muted/40 flex size-12 items-center justify-center rounded-full border">
-        <SparklesIcon className="size-5" />
-      </div>
+      <Image
+        src={logo}
+        alt=""
+        width={48}
+        height={48}
+        className="size-12 shrink-0 rounded-xl"
+      />
 
       <div className="flex max-w-sm flex-col gap-1.5">
         <h3 className="text-base font-semibold">
@@ -1046,13 +1052,17 @@ export function AgentChatProvider({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:h-[min(88svh,760px)] sm:max-h-[min(88svh,760px)] sm:max-w-3xl">
           <DialogHeader className="flex shrink-0 flex-row items-center gap-3 border-b px-4 py-3 pr-12">
-            <span className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-full">
-              <SparklesIcon className="size-4" />
-            </span>
+            <Image
+              src={logo}
+              alt=""
+              width={32}
+              height={32}
+              className="size-8 shrink-0 rounded-lg"
+            />
 
             <div className="flex min-w-0 flex-1 flex-col">
               <DialogTitle className="truncate text-sm font-semibold">
-                Ask GenBlocks
+                Ask AI
               </DialogTitle>
               <DialogDescription className="truncate text-xs">
                 Blocks, stock images, or a brief to build.

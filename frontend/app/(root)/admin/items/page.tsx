@@ -191,7 +191,7 @@ export default async function AdminItemsPage({
       <section className="flex flex-col gap-3">
         <div className="flex items-end justify-between gap-4">
           <h2 className="text-lg font-semibold tracking-tight">Recently deleted</h2>
-          <p className="text-muted-foreground text-xs">Latest 10 attempts</p>
+          <p className="text-muted-foreground text-xs">Latest 10 deletions</p>
         </div>
 
         {deletions.length === 0 ? (

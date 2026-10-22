@@ -18,9 +18,9 @@ export interface Judged {
  * the task page build one, and the task page is a server component: a function
  * exported from a client module cannot be called there.
  *
- * A task produces one artifact, so this takes the one there is, and a run that
- * never got as far as being judged reads as an unjudged panel rather than a
- * blank: "no scores yet" is a fact about the run.
+ * A generated task produces one artifact, so this takes the one there is, and a
+ * run that never got as far as being judged reads as an unjudged panel rather
+ * than a blank: "no scores yet" is a fact about the run.
  */
 export function judgedFrom(generation: Generation | null): Judged {
   return {

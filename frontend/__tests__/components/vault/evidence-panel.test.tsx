@@ -57,7 +57,7 @@ const FOUND: HarnessChecks = {
 };
 
 describe("EvidencePanel", () => {
-  test("prints every dimension the judge scored", () => {
+  test("prints every dimension present in the attempt", () => {
     render(<EvidencePanel kind="component" judged={JUDGED} />);
 
     for (const label of [

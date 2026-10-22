@@ -374,9 +374,9 @@ set, not a hand-rolled scroll box.
   conversation, not two dialogs. The phone button is `position: fixed`, bottom-left,
   offset by `env(safe-area-inset-bottom)`, and the mobile sheet hides its copy.
 - **Frame** — `Dialog` at `sm:max-w-3xl`, 760px tall on a laptop, full height on
-  a phone. The header is the mark, the title `Ask GenBlocks`, one line of scope,
-  a new-chat button and the close button.
-- **Welcome** — centered when there are no turns: the sparkle, `Ask about
+  a phone. The header is the product mark (`app/icon.png`), the title `Ask AI`,
+  one line of scope, a new-chat button and the close button.
+- **Welcome** — centered when there are no turns: the product mark, `Ask about
   anything in the vault`, one supporting line, and four prompt chips (overview,
   find a block, look at pictures, build). A visitor sees the same welcome and a
   sign-in footer instead of the composer.

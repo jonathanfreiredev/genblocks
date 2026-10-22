@@ -7,10 +7,10 @@ exactly the same tokens and the signature algorithms, issuer and audience stay
 pinned in one place.
 
 What neither door can check is the *audience*: Supabase does not support RFC 8707
-resource indicators, so an access token is not bound to a specific resource, and
-a token minted for the MCP server is also accepted by the API (and the reverse).
-The API compensates by accepting only first-party tokens; the MCP tools are
-constrained by their own policies. Both are documented in the README.
+resource indicators, so an access token is not bound to a specific resource. An
+agent token verifies at the API too, which is why the API rejects any token with
+a `client_id`; the MCP tools are constrained by their own policies. Both are
+documented in the README.
 """
 
 import asyncio

@@ -4,7 +4,9 @@ import type { Kind, Verdict } from "@/lib/vault/types";
  * The two rubrics, as the judge writes them.
  *
  * The keys are the contract between the judge and the panel; the labels live
- * here so no view invents its own wording for a dimension.
+ * here so no view invents its own wording for a dimension. `novelty` is kept for
+ * seeded legacy attempts: the current component rubric does not emit it, so a new
+ * attempt simply has one row fewer.
  */
 const COMPONENT_RUBRIC = [
   { key: "render", label: "Render" },

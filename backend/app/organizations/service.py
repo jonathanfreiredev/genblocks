@@ -17,8 +17,8 @@ from app.users.models import User
 class OrganizationSlugConflict(Exception):
     """Raised when the generated slug is already taken by another organization.
 
-    A domain error, not an HTTP one: the same service will be called by the MCP
-    tools, which know nothing about HTTP. ``app/main.py`` translates it.
+    A domain error, not an HTTP one. ``app/main.py`` translates it for the
+    organization endpoints.
     """
 
 

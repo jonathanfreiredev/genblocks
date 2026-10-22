@@ -1,12 +1,14 @@
-"""The application's authorization vocabulary and the check that enforces it.
+"""The template's organization authorization vocabulary and its check.
 
-Authentication answers *who is this*; this module answers *what may they do*.
-Permissions are scoped to an organization, because every domain row hangs off
-one: what grants a caller is their role in the owning organization.
+Authentication answers *who is this*; this module answers *what may they do inside
+an organization*. GenBlocks keeps these endpoints and their roles from the
+template, but the product's catalogue and tasks do not resolve access through an
+organization: a task is scoped to its owner and the operator queue is gated by
+``ADMIN_EMAILS``.
 
-``ROLE_PERMISSIONS`` is the only place an authorization decision is written down.
-Deliberately free of HTTP and of any domain module, so the API, the MCP tools and
-tests all resolve permissions the same way.
+``ROLE_PERMISSIONS`` is the only place an organization authorization decision is
+written down. Deliberately free of HTTP and of any domain module, so the API, the
+MCP tools and tests resolve organization permissions the same way.
 """
 
 from collections.abc import Mapping

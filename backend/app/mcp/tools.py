@@ -5,7 +5,7 @@ return a typed result. No business rule lives here — the rules are in the doma
 services, shared with the API, so the two doors cannot drift apart.
 
 Nor does authorization live here. The service a tool calls is the one that checks
-what the caller's role grants, exactly as it does for the API, so there is no
+ownership or the operator role, exactly as it does for the API, so there is no
 second place where a permission could be written down and then forgotten.
 
 A tool name is published the moment it ships, so these are frozen: a new tool is

@@ -1,4 +1,4 @@
-"""The public image library, and the two doors that queue a new picture."""
+"""The public image library, and the endpoints that plan or queue a picture."""
 
 import uuid
 from typing import Annotated

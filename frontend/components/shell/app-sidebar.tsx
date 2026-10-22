@@ -51,8 +51,8 @@ const SECTIONS: { section: Section; label: string; icon: typeof LayoutGrid }[] =
  *
  * On a laptop it is the full-height column: the mark, the one action, the two
  * sections and the taxonomy of whichever section is open. On a phone the same
- * component becomes a sheet that starts under the header, so the header keeps
- * the way back and the sheet keeps the list.
+ * component becomes a full-height sheet with its own header row, covering the
+ * app header while it is open.
  */
 export function AppSidebar({
   categories,

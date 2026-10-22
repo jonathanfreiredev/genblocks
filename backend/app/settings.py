@@ -24,22 +24,22 @@ class Settings(BaseSettings):
     # protected resource in the OAuth discovery document, so it must be the URL
     # clients use, not a container-internal hostname.
     mcp_base_url: str = "http://localhost:8001"
-    # Where this service reaches the MCP server as a client (the playground). It
-    # is a different address from ``mcp_base_url`` inside compose, where the
-    # service answers to its own name rather than to localhost.
+    # Where this service probes the MCP server for ``/warmup``. It is a different
+    # address from ``mcp_base_url`` inside compose, where the MCP answers to its
+    # service name rather than to localhost.
     mcp_internal_url: str = "http://localhost:8001"
     # Comma-separated list of browser origins allowed to call the API. Set the
     # real frontend domain(s) in production.
     cors_origins: str = "http://localhost:3000"
 
     # --- Generation providers ------------------------------------------------
-    # Server-only credentials for the services that build and judge components.
-    # The API and the MCP server read them; they are never handed to the
-    # sandbox or the browser. Each stays optional so the service boots without
-    # it, and the phase that uses one is the phase that requires it.
+    # Server-only credentials for the services that build and judge artifacts.
+    # The API and the MCP server read them; they are never handed to the sandbox
+    # or the browser. Each stays optional so the service boots without it, and the
+    # feature that needs one explains the missing key when it is used.
 
-    # OpenAI powers the conversational agent, the spec, the harness and the
-    # judge.
+    # OpenAI powers the conversational agent, the spec, the harness, the judge,
+    # the image-direction policy, the person detector and moderation.
     openai_api_key: str | None = None
     llm_model: str = "gpt-6-luna"
 
@@ -51,7 +51,8 @@ class Settings(BaseSettings):
     image_model: str = "flux-2-pro"
     bfl_base_url: str = "https://api.bfl.ai/v1"
 
-    # Groq powers the text moderation fallback, with a free-tier safety model.
+    # Groq is the text fallback for moderation and image-direction policy when
+    # OpenAI is not configured.
     groq_api_key: str | None = None
     moderation_model: str = "openai/gpt-oss-safeguard-20b"
     # OpenAI moderation is the primary text and image gate when its key is set.
@@ -83,9 +84,9 @@ class Settings(BaseSettings):
     # compromised provider response into an SSRF primitive.
     bfl_asset_hosts: str = "delivery.bfl.ai,api.bfl.ai"
 
-    # Who may see the report queue and take content down. A global operator role,
-    # deliberately separate from an organization role: an owner of one tenant
-    # must not be able to remove another tenant's public work.
+    # Who may see the report queue and take content down. This is a global
+    # operator list, not an organization role: the product has no tenant scope for
+    # public work, and the queue can point at any published artifact.
     admin_emails: str = ""
 
     # Resend sends one email when a report enters the queue. It is a
