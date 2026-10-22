@@ -264,6 +264,25 @@ async def run_task(task_id: uuid.UUID) -> None:
             trace.end()
 
 
+async def drain_once() -> bool:
+    """Claim and run the next queued task; ``False`` when the queue was empty.
+
+    Shared by the two things that consume the queue — the loop a development
+    process keeps running, and the run that drains and exits — so a task that
+    crashes is treated the same way by both.
+    """
+    task_id = await claim_next_task()
+    if task_id is None:
+        return False
+
+    try:
+        await run_task(task_id)
+    except Exception:  # noqa: BLE001 - one bad task must not end the worker
+        logger.exception("task crashed", task_id=str(task_id))
+
+    return True
+
+
 async def run_worker(stop: asyncio.Event, *, poll_seconds: float = POLL_SECONDS) -> None:
     """Consume queued tasks until ``stop`` is set.
 
@@ -272,15 +291,8 @@ async def run_worker(stop: asyncio.Event, *, poll_seconds: float = POLL_SECONDS)
     takes, which is why it does not need one of its own.
     """
     while not stop.is_set():
-        task_id = await claim_next_task()
-        if task_id is None:
+        if not await drain_once():
             await asyncio.sleep(poll_seconds)
-            continue
-
-        try:
-            await run_task(task_id)
-        except Exception:  # noqa: BLE001 - one bad task must not end the worker
-            logger.exception("task crashed", task_id=str(task_id))
 
 
 async def _open_checklist(

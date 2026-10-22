@@ -153,6 +153,24 @@ class Settings(BaseSettings):
     duplicate_distance: float = 0.50
     image_reuse_distance: float = 0.45
 
+    # --- The worker ----------------------------------------------------------
+    # Where the queue is drained. In development the API owns the worker (see
+    # ``app/main.py``); in production it is a Modal function, and this is its
+    # name as ``app.function``. Both doors that queue work wake it the moment
+    # the row is committed, and it drains whatever it finds.
+    #
+    # Empty means nothing is woken, which is what a local checkout and a test
+    # want: the row is still committed and the queue still moves, it just waits
+    # for whoever is looking at it.
+    worker_function: str | None = None
+    # How long a task may stay ``running`` before a run treats it as the work of
+    # a run that died. Runs overlap — the schedule fires every minute and one
+    # run can last for minutes — so age is the only thing that tells a task
+    # being worked on from one abandoned. It has to stay longer than the worker
+    # function's own timeout (see ``app/tasks/modal_app.py``), or a sweep would
+    # interrupt live work.
+    worker_stale_seconds: int = 45 * 60
+
     # --- Generation loop -----------------------------------------------------
     # How many times the harness may build the block and look at it before it has
     # to finish with what it has. The budget counts *looks*, not model turns: the

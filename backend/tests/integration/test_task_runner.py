@@ -20,7 +20,7 @@ from io import BytesIO
 
 import pytest
 from PIL import Image as PilImage
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.briefs import service as briefs
@@ -37,7 +37,7 @@ from app.judge import scoring as judging
 from app.judge.rubrics import COMPONENTS, IMAGES
 from app.judge.schemas import DimensionScore, JudgeAnswer, Judged
 from app.settings import settings
-from app.tasks import runner, spec
+from app.tasks import runner, spec, worker
 from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
 from app.tasks.service import (
     INTERRUPTED_ERROR,
@@ -1008,6 +1008,82 @@ async def test_a_restart_with_nothing_running_changes_nothing(runner_session):
     await _queued(runner_session, owner, brief="Still waiting its turn")
 
     assert await interrupt_orphaned_tasks(runner_session) == 0
+
+
+async def test_a_sweep_with_a_cutoff_leaves_a_task_that_is_still_young(runner_session):
+    """Runs overlap, so only age tells a live task from one a dead run left.
+
+    The schedule fires every minute and a run can last for minutes, which is why
+    the deployed worker cannot interrupt every running task the way a boot can.
+    """
+    owner = await _owner(runner_session)
+    running = await _queued(runner_session, owner, brief="Being worked on right now")
+    running_id = running.id
+
+    await runner.claim_next_task()
+
+    assert await interrupt_orphaned_tasks(runner_session, older_than_seconds=2700) == 0
+    runner_session.expire_all()
+
+    untouched = await get_task(runner_session, task_id=running_id)
+    assert untouched is not None
+    assert untouched.status == TaskStatus.RUNNING
+
+
+async def test_a_sweep_with_a_cutoff_closes_a_task_no_run_could_still_hold(runner_session):
+    """Older than a run is allowed to live, so nothing can be working on it."""
+    owner = await _owner(runner_session)
+    abandoned = await _queued(runner_session, owner, brief="Left by a run that died")
+    abandoned_id = abandoned.id
+
+    await runner.claim_next_task()
+    # ``updated_at`` is the clock the sweep reads, and the claim is what wrote it:
+    # backdating it is the same as the task having been claimed this long ago.
+    await runner_session.execute(
+        text("UPDATE tasks SET updated_at = now() - interval '2 hours' WHERE id = :id"),
+        {"id": abandoned_id},
+    )
+    await runner_session.commit()
+
+    assert await interrupt_orphaned_tasks(runner_session, older_than_seconds=2700) == 1
+    runner_session.expire_all()
+
+    stopped = await get_task(runner_session, task_id=abandoned_id)
+    assert stopped is not None
+    assert stopped.status == TaskStatus.INTERRUPTED
+    assert stopped.error == INTERRUPTED_ERROR
+
+
+async def test_draining_an_empty_queue_says_there_was_nothing(runner_session):
+    """The deployed run exits instead of waiting: it is billed for every second."""
+    assert await runner.drain_once() is False
+
+
+async def test_draining_runs_what_is_queued_and_then_stops(runner_session, harness, judge):
+    """One pass of the loop the deployed worker runs: work, then the way out."""
+    await create_category(runner_session, slug="hero")
+    owner = await _owner(runner_session)
+    task = await _queued(runner_session, owner)
+    task_id = task.id
+
+    assert await runner.drain_once() is True
+    runner_session.expire_all()
+
+    finished = await get_task(runner_session, task_id=task_id)
+    assert finished is not None
+    assert finished.status == TaskStatus.SUCCEEDED
+    assert await runner.drain_once() is False
+
+
+async def test_the_entrypoint_runs_one_pass_and_returns(runner_session, monkeypatch):
+    """What the deployed worker calls: reconcile, drain what is there, exit.
+
+    It is the whole contract of the deployed process — one pass, then out. A
+    process that waited for work would be a process being billed for waiting.
+    """
+    monkeypatch.setattr(worker, "async_session_maker", runner.async_session_maker)
+
+    assert await worker.main() == 0
 
 
 async def test_the_worker_drains_the_queue_and_stops(runner_session, harness, judge):

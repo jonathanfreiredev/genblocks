@@ -28,37 +28,46 @@ logger = structlog.get_logger("app.main")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-    """Own the task worker for this process: reconcile, then consume.
+    """Own the task worker in development, and only there.
 
-    The worker runs beside the API rather than in a service of its own because
-    there is one instance of this deployment and the queue is the database either
-    way. Reconcile-before-claim is what makes a restart safe: by the time this
-    process is looking for work, it is the only thing that could be running any.
+    In production the queue is drained by a Modal function (see
+    ``app/tasks/modal_app.py``): it outlives a request, which a service that
+    scales to zero cannot promise a background process, and it does not compete
+    with the API for CPU while a block is being built. This process therefore
+    claims nothing and reconciles nothing there — a boot that interrupted every
+    running task would be interrupting another process's work.
 
-    Shutting down cancels the worker mid-flight on purpose. The task it was on
-    stays ``running`` and the next boot reconciles it, which is the same path a
+    Locally it keeps the worker it has always had, so the whole loop runs with one
+    command. Reconcile-before-claim is what makes a restart safe here: by the time
+    this process is looking for work, it is the only thing that could be running
+    any. Shutting down cancels the worker mid-flight on purpose. The task it was
+    on stays ``running`` and the next boot reconciles it, which is the same path a
     crash takes — one recovery path, exercised on every deploy.
     """
-    async with async_session_maker() as session:
-        interrupted = await interrupt_orphaned_tasks(session)
-
-    if interrupted:
-        logger.info("interrupted orphaned tasks", count=interrupted)
-
     stop = asyncio.Event()
-    worker = asyncio.create_task(run_worker(stop))
+    worker: asyncio.Task[None] | None = None
+
+    if settings.debug:
+        async with async_session_maker() as session:
+            interrupted = await interrupt_orphaned_tasks(session)
+
+        if interrupted:
+            logger.info("interrupted orphaned tasks", count=interrupted)
+
+        worker = asyncio.create_task(run_worker(stop))
 
     try:
         yield
     finally:
-        stop.set()
-        worker.cancel()
-        with suppress(asyncio.CancelledError):
-            await worker
+        if worker is not None:
+            stop.set()
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
 
-        # Whatever the SDK still has buffered goes out now. The task the worker was
-        # on is already interrupted and will be reconciled next boot; its trace ends
-        # here with what was written, which is the honest half of a cut run.
+        # Whatever the SDK still has buffered goes out now. A task the worker was
+        # on is already interrupted and will be reconciled next boot; its trace
+        # ends here with what was written, which is the honest half of a cut run.
         observability.shutdown()
 
 

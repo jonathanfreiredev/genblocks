@@ -6,6 +6,7 @@ the service does not assume a public audience the way the vault does.
 
 import uuid
 from collections.abc import Sequence
+from datetime import timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,6 +73,20 @@ async def create_image_task(
     return task
 
 
+async def _wake_worker() -> None:
+    """Wake the queue's worker, when this deployment has one.
+
+    The import lives here rather than at the top of the module because the Modal
+    SDK costs a couple of hundred milliseconds to import and only these two doors
+    need it. The MCP reads the catalogue far more often than it queues work, so
+    this keeps its process free of the SDK until an agent actually asks for
+    something.
+    """
+    from app.tasks.trigger import wake_worker
+
+    await wake_worker()
+
+
 async def enqueue_image_task(
     session: AsyncSession,
     *,
@@ -97,7 +112,7 @@ async def enqueue_image_task(
         raise ImagePromptRejected(plan)
 
     await limits.reserve(session, user_id=created_by)
-    return await create_image_task(
+    task = await create_image_task(
         session,
         prompt=plan.prompt,
         width=plan.width,
@@ -105,6 +120,10 @@ async def enqueue_image_task(
         category_id=plan.category_id,
         created_by=created_by,
     )
+    # The row is committed by now, so waking a worker can only ever find work to
+    # do. Never the other way round: nothing is woken before there is a row.
+    await _wake_worker()
+    return task
 
 
 async def enqueue_task(
@@ -150,7 +169,11 @@ async def enqueue_task(
     # From here to the commit inside ``create_task`` is the atomic section: no
     # external call, no second door.
     await limits.reserve(session, user_id=created_by)
-    return await create_task(session, brief=brief, created_by=created_by)
+    task = await create_task(session, brief=brief, created_by=created_by)
+    # The row is committed by now, so waking a worker can only ever find work to
+    # do. Never the other way round: nothing is woken before there is a row.
+    await _wake_worker()
+    return task
 
 
 # What the one step of a cached task is called. The checklist is still a checklist:
@@ -196,24 +219,40 @@ async def _answered(
     return task
 
 
-async def interrupt_orphaned_tasks(session: AsyncSession) -> int:
-    """Close the tasks a previous process left running, and say how many.
+async def interrupt_orphaned_tasks(
+    session: AsyncSession, *, older_than_seconds: int | None = None
+) -> int:
+    """Close the tasks a process left running, and say how many.
 
-    Only a boot can tell "still running" from "orphaned": this is called from the
-    process that owns the worker, before it starts claiming, so a task found
-    running here belongs to a worker that no longer exists.
+    Without a cutoff, every running task is taken to be orphaned. That is what a
+    process which owns the queue on its own can assume: the API in development
+    reconciles before it claims, so a task found running there belongs to a
+    worker that no longer exists.
+
+    With ``older_than_seconds``, only tasks that have been running at least that
+    long are touched. That is what the deployed worker needs, because its runs
+    overlap: the schedule fires every minute and one run can last for minutes,
+    so a task being worked on right now looks exactly like one a dead run
+    abandoned. Age is the only thing that separates them, and the cutoff has to
+    stay longer than a run's own timeout or it would interrupt live work.
+
+    ``updated_at`` is the clock it reads. The claim writes the row and nothing
+    writes it again until the run is over, so it stands for "running since"; the
+    comparison happens in the database so both sides share one clock.
 
     The steps that were mid-flight are failed with it. Leaving one ``running``
     would have the checklist claim work is still happening on a task that has
     already stopped.
     """
-    tasks = (
-        await session.scalars(
-            select(Task)
-            .options(selectinload(Task.steps))
-            .where(Task.status == TaskStatus.RUNNING, Task.deleted_at.is_(None))
-        )
-    ).all()
+    query = (
+        select(Task)
+        .options(selectinload(Task.steps))
+        .where(Task.status == TaskStatus.RUNNING, Task.deleted_at.is_(None))
+    )
+    if older_than_seconds is not None:
+        query = query.where(Task.updated_at < func.now() - timedelta(seconds=older_than_seconds))
+
+    tasks = (await session.scalars(query)).all()
     if not tasks:
         return 0
 

@@ -124,6 +124,10 @@ celerybeat.pid
 # Environments
 .env
 .env.production
+# The Modal worker's own environment (see worker.env.example). It holds provider
+# credentials and must never be committed.
+worker.env
+mcp.env
 .venv
 env/
 venv/

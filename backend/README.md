@@ -139,6 +139,7 @@ CORS_ORIGINS=http://localhost:3000
 | `FRONTEND_URL`          | No       | `http://localhost:3000` | Base URL of the frontend, used for redirects and documentation.      |
 | `MCP_BASE_URL`          | No       | `http://localhost:8001` | Public URL of the MCP server. Published in the OAuth discovery document, so it must be the URL clients use. |
 | `MCP_INTERNAL_URL`      | No       | `http://localhost:8001` | Internal address the API probes for `/warmup`; not the public MCP URL. |
+| `WORKER_FUNCTION`       | Prod     | –                       | The Modal function that drains the queue, as `app.function`. Empty in development, where the API owns the worker. Its environment is `worker.env.example`, not this file. |
 | `CORS_ORIGINS`          | No       | `http://localhost:3000` | Comma-separated browser origins allowed to call the API.             |
 | `BFL_ASSET_HOSTS`       | No       | `delivery.bfl.ai,api.bfl.ai` | Hosts a BFL polling or sample URL may name. Anything else is refused before it is fetched. |
 | `IMAGE_MAX_BYTES`       | No       | `20971520`              | Input and output byte bound for a picture before moderation/storage. |
@@ -152,7 +153,7 @@ CORS_ORIGINS=http://localhost:3000
 | `RESEND_FROM_EMAIL`     | No       | `GenBlocks <onboarding@resend.dev>` | Verified sender for operator notifications. |
 | `REPORT_NOTIFICATION_EMAILS` | No  | `ADMIN_EMAILS`          | Comma-separated recipients; falls back to the operators.             |
 
-Settings are defined in `app/settings.py` and loaded from `backend/.env`. The generation providers, storage, retrieval, sandbox and tracing settings are listed in `backend/.env.example`; the MCP's smaller production set is in `backend/mcp.env.example`.
+Settings are defined in `app/settings.py` and loaded from `backend/.env`. The generation providers, storage, retrieval, sandbox and tracing settings are listed in `backend/.env.example`; the MCP's smaller production set is in `backend/mcp.env.example`, and the deployed worker's set is in `backend/worker.env.example`.
 
 ## Running the server
 
@@ -562,15 +563,36 @@ is the kind of thing that looks like a bug when it starts happening.
 
 ## Generation worker
 
-The API process owns the task worker. It claims a queued row with
-`FOR UPDATE SKIP LOCKED`, marks it `running`, and writes each checklist step as
-the pipeline reaches it. The four steps are retrieving references, generating the
-block, judging the attempt and publishing the block. Images use their own four:
-checking the prompt, generating, judging and filing.
+A queued row is claimed with `FOR UPDATE SKIP LOCKED`, marked `running`, and each
+checklist step is written as the pipeline reaches it. The four steps are
+retrieving references, generating the block, judging the attempt and publishing
+the block. Images use their own four: checking the prompt, generating, judging
+and filing.
 
-A restart reconciles any task left `running` to `interrupted` before the worker
-starts claiming again. Postgres is both the queue and the source of truth, so
-there is no broker to drift from the task row the UI reads.
+**Where it runs.** In development the API process owns the worker, so the whole
+loop starts with one command. In production it runs as a Modal function
+(`app/tasks/modal_app.py`), because a block takes minutes to build — longer than
+a service that scales to zero can promise a background process — and because a
+run should not be competing with the API for CPU while somebody is browsing.
+
+The deployed worker is one pass: reconcile, claim until the queue is empty, exit
+(`python -m app.tasks.worker`). It is billed per second, so a loop that waited
+for work would be a loop paying to wait; the queue is Postgres and the next run
+picks up whatever arrived in the meantime. Two things start it: the API wakes it
+the moment a row is committed (`app/tasks/trigger.py`, which never lets a failed
+wake-up fail the request), and a one-minute schedule catches anything a failed
+wake-up left behind.
+
+**Reconciliation.** Runs overlap, so "a task is running and no process could be
+working on it" is not something a boot can decide in production. Age decides it:
+`interrupt_orphaned_tasks` closes a running task only once it has been running
+longer than `WORKER_STALE_SECONDS` (45 minutes by default), which stays above the
+worker function's own 30-minute timeout so a sweep can never interrupt live work.
+In development, where the API is the only owner, the boot still interrupts every
+running task.
+
+Postgres is both the queue and the source of truth, so there is no broker to
+drift from the task row the UI reads.
 
 ## Conventions
 
