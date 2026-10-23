@@ -26,6 +26,7 @@ import { Input } from "../ui/input";
 import Link from "next/link";
 import { signupFormSchema } from "@/server/auth/auth.schemas";
 import { signupAction } from "@/server/auth/auth.actions";
+import { AuthDivider } from "./auth-divider";
 import { GoogleSignInButton } from "./google-sign-in-button";
 
 export function SignupForm({
@@ -35,6 +36,12 @@ export function SignupForm({
   const router = useRouter();
   const emailEnabled = isProviderEnabled("email");
   const googleEnabled = isProviderEnabled("google");
+  const description =
+    emailEnabled && googleEnabled
+      ? "Create your account with Google or your email."
+      : emailEnabled
+        ? "Enter your email below to create your account."
+        : "Continue with Google to create your account.";
 
   const form = useForm({
     resolver: zodResolver(signupFormSchema),
@@ -98,13 +105,13 @@ export function SignupForm({
       <Card>
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Create your account</CardTitle>
-          <CardDescription>
-            {emailEnabled
-              ? "Enter your email below to create your account"
-              : "Continue with one of the options below."}
-          </CardDescription>
+          <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
+          {googleEnabled ? <GoogleSignInButton className="w-full" /> : null}
+
+          {googleEnabled && emailEnabled ? <AuthDivider /> : null}
+
           {emailEnabled ? (
             <form id="form-signup" onSubmit={form.handleSubmit(onSubmit)}>
               <FieldSet className="mb-5 w-full">
@@ -218,8 +225,6 @@ export function SignupForm({
               </FieldSet>
             </form>
           ) : null}
-
-          {googleEnabled ? <GoogleSignInButton className="w-full" /> : null}
 
           <p className="text-muted-foreground text-center text-xs leading-relaxed">
             By creating an account, you confirm that you are at least 16 years

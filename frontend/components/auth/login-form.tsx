@@ -27,6 +27,7 @@ import {
 import { Input } from "../ui/input";
 import { loginFormSchema } from "@/server/auth/auth.schemas";
 import { loginAction } from "@/server/auth/auth.actions";
+import { AuthDivider } from "./auth-divider";
 import { GoogleSignInButton } from "./google-sign-in-button";
 
 export const LoginForm = ({
@@ -40,6 +41,12 @@ export const LoginForm = ({
   const router = useRouter();
   const emailEnabled = isProviderEnabled("email");
   const googleEnabled = isProviderEnabled("google");
+  const description =
+    emailEnabled && googleEnabled
+      ? "Use Google or your email and password."
+      : emailEnabled
+        ? "Enter your email and password to log in to your account."
+        : "Continue with Google to log in.";
 
   const form = useForm<z.infer<typeof loginFormSchema>>({
     resolver: zodResolver(loginFormSchema),
@@ -98,13 +105,15 @@ export const LoginForm = ({
       <Card>
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Log in</CardTitle>
-          <CardDescription>
-            {emailEnabled
-              ? "Enter your email and password to log in to your account."
-              : "Continue with one of the options below."}
-          </CardDescription>
+          <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
+          {googleEnabled ? (
+            <GoogleSignInButton className="w-full" next={next} />
+          ) : null}
+
+          {googleEnabled && emailEnabled ? <AuthDivider /> : null}
+
           {emailEnabled ? (
             <form id="form-login" onSubmit={form.handleSubmit(onSubmit)}>
               <FieldSet className="mb-5 w-full">
@@ -178,10 +187,6 @@ export const LoginForm = ({
                 </Button>
               </Field>
             </form>
-          ) : null}
-
-          {googleEnabled ? (
-            <GoogleSignInButton className="w-full" next={next} />
           ) : null}
 
           <FieldDescription className="text-center">

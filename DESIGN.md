@@ -496,7 +496,7 @@ The panel narrows rather than widening the page: never give the evidence more th
 
 - **Tasks list**: the visible heading is gone; an `sr-only` h1 keeps the page named. The brief, status badge and timestamp form a rule-separated list. The empty state offers the generator.
 - **Task detail**: unchanged in structure. The brief is the heading; status, queue time, finish time and trace sit in a bordered definition row; the checklist is a bordered table; the result is the render plus the evidence panel with its verdict and model.
-- **Profile and auth**: shadcn cards and fields on the same neutral tokens. Auth pages have no shell chrome; they are centred on the canvas.
+- **Profile and auth**: shadcn cards and fields on the same neutral tokens. Auth pages have no shell chrome; they are centred on the canvas. When both providers are enabled, Google is the first action (outline, with its mark), an `or` rule separates it from the email form, and the email submit stays the one filled primary action.
 - **Connect an agent**: a short guide, not a settings form. An endpoint card states the mode (`Local` or `Production`) and carries the URL with a copy button; three numbered parts follow — add the server (one tab per client), approve the first call, ask for something. The endpoint comes from the request host locally and from `MCP_URL` on a deployment, so no command ever points at the wrong server.
 
 ## Components
