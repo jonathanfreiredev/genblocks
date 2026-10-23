@@ -39,7 +39,11 @@ describe("the preview route", () => {
     expect(policy).not.toContain("allow-same-origin");
     expect(policy).toContain("connect-src 'none'");
     expect(policy).toContain("form-action 'none'");
-    expect(policy).toContain("https://res.cloudinary.com/test-cloud");
+    expect(policy).toContain("https://res.cloudinary.com/test-cloud/");
+    // The path has to end in a slash: a CSP source with a path matches that path
+    // exactly, so without it every picture under `/test-cloud/image/upload/...`
+    // was blocked and the block rendered with three empty boxes.
+    expect(policy).not.toContain("https://res.cloudinary.com/test-cloud data:");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("cache-control")).toBe("no-store");
   });

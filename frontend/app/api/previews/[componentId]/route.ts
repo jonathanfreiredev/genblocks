@@ -45,10 +45,13 @@ export async function GET(
 
   // A block may only reach our own Cloudinary account, not every customer's:
   // the static check makes that claim about the source, and this makes it true
-  // for a URL the page builds at runtime.
+  // for a URL the page builds at runtime. The trailing slash is the whole
+  // difference between allowing the account and allowing one path: a source with
+  // a path matches that path exactly, so `/cloud` blocked every picture under
+  // `/cloud/image/upload/...`.
   const cloud = env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
   const pictures = cloud
-    ? `https://res.cloudinary.com/${cloud}`
+    ? `https://res.cloudinary.com/${cloud}/`
     : "https://res.cloudinary.com";
   const policy = PREVIEW_CSP.replace("https://res.cloudinary.com", pictures);
 
