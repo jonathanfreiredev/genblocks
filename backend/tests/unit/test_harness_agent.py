@@ -401,6 +401,62 @@ async def test_a_picture_asked_for_twice_is_refused(sandbox, pictures):
     assert "say what is different about this one" in said_by_tools(model)
 
 
+async def test_a_picture_the_library_already_had_can_be_asked_for_twice(sandbox, pictures):
+    """A library hit has no bytes behind it, and the duplicate check still reads it.
+
+    The first ask is answered by the library, so the run holds a picture with no
+    ``Generated``; the second ask used to read that missing object and end the whole
+    run with an AttributeError after the model had already built the block.
+    """
+    same = "a wide photograph of an empty road at dawn"
+    kept = agent.Reused(
+        id=uuid.uuid4(),
+        url="https://cdn.test/kept.jpg",
+        width=800,
+        height=600,
+        prompt=same,
+    )
+
+    async def library(prompt: str, _category: str) -> agent.Reused | None:
+        return kept if prompt == same else None
+
+    model = scripted(
+        calls("write_file", path=agent.ENTRY, content=FIRST),
+        calls("look"),
+        calls(
+            "generate_image",
+            slot="hero",
+            prompt=same,
+            category="photography",
+            width=800,
+            height=600,
+        ),
+        calls(
+            "generate_image",
+            slot="card",
+            prompt=same,
+            category="photography",
+            width=800,
+            height=600,
+        ),
+        says("One picture, then."),
+    )
+
+    built = await agent.build(
+        brief=BRIEF,
+        category="hero",
+        image_categories=["photography"],
+        library=library,
+        model=model,
+    )
+
+    assert [one.slot for one in built.images] == ["hero"]
+    assert built.images[0].image is None
+    assert built.images[0].library_id == kept.id
+    assert pictures == []
+    assert "say what is different about this one" in said_by_tools(model)
+
+
 async def test_a_block_asks_for_no_more_pictures_than_it_is_allowed(sandbox, pictures, monkeypatch):
     monkeypatch.setattr(settings, "images_per_block", 1)
     model = scripted(

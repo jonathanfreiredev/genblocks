@@ -95,6 +95,11 @@ class Placed:
     as an address and its proportions, and only the first has bytes behind it. The
     library id is what lets the runner link the block to the picture that already
     exists instead of filing a second copy of it.
+
+    ``prompt`` is kept here rather than read off ``image``, because a picture the
+    library already had has no ``image`` at all: the duplicate check reads every
+    picture in the run, and reading the bytes of a reused one was how a second
+    request used to end the run with an AttributeError.
     """
 
     slot: str
@@ -102,6 +107,7 @@ class Placed:
     url: str
     width: int
     height: int
+    prompt: str
     image: images.Generated | None = None
     library_id: uuid.UUID | None = None
 
@@ -374,7 +380,7 @@ def _tools(draft: _Draft) -> list[Any]:
             )
         if any(one.slot == slot for one in draft.pictures):
             return f"There is already a picture in slot {slot!r}: it has its own address."
-        asked_for = [one.image.prompt.strip().lower() for one in draft.pictures]
+        asked_for = [one.prompt.strip().lower() for one in draft.pictures]
         if prompt.strip().lower() in asked_for:
             # The library answers a prompt with the picture it describes, so the
             # same prompt twice is the same photograph twice — which is how a band
@@ -421,6 +427,7 @@ def _tools(draft: _Draft) -> list[Any]:
                     url=kept.url,
                     width=kept.width,
                     height=kept.height,
+                    prompt=prompt,
                     library_id=kept.id,
                 )
             )
@@ -445,6 +452,7 @@ def _tools(draft: _Draft) -> list[Any]:
                 url=made.url,
                 width=made.width,
                 height=made.height,
+                prompt=made.prompt,
                 image=made,
             )
         )

@@ -154,6 +154,7 @@ def picture(slot: str = "hero", category: str = CATEGORY) -> Placed:
         url="https://cdn.test/genblocks/images/abc123",
         width=1024,
         height=768,
+        prompt="A wide photograph of an empty road at dawn",
         image=Generated(
             prompt="A wide photograph of an empty road at dawn",
             path="genblocks/images/abc123",
