@@ -1264,6 +1264,15 @@ sustituto. Si aparece abuso, la primera palanca es una regla en Vercel,
 Cloudflare o Cloud Armor. Si se abre un chat anónimo, entran Turnstile y un
 límite en el borde antes que un middleware propio.
 
+**Cupo de los operadores**
+
+Los emails de `ADMIN_EMAILS` no tienen cupo mensual. Sembrar el catálogo es
+trabajo del registro, no la décima generación de una persona, y el borde sigue
+siendo el tope de gasto de cada proveedor. La comprobación vive en
+`limits.admitted`, así que vale para las tres puertas —API, chat y MCP— sin que
+ninguna tenga que acordarse de aplicarla, y el resto de las cuentas conserva sus
+diez generaciones. Hay test de que un email ajeno a la lista sigue topando.
+
 **Verificación**
 
 - Backend: **606 tests**, Ruff limpio.

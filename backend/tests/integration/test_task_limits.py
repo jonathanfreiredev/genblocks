@@ -176,3 +176,45 @@ async def test_two_requests_cannot_spend_the_same_last_block(db_session, monkeyp
         )
         == 1
     )
+
+
+async def test_an_operator_is_not_held_by_the_month(db_session, monkeypatch):
+    """Filling the catalogue is the registry's work, not a person's tenth block."""
+    monkeypatch.setattr(settings, "admin_emails", "maker@example.com")
+    monkeypatch.setattr(settings, "tasks_per_month", 1)
+    operator = await _owner(db_session)
+    await _queued(db_session, operator, when=OCTOBER)
+
+    assert await limits.admitted(db_session, user_id=operator.id, now=OCTOBER) is None
+
+
+async def test_the_operator_list_ignores_case_and_spaces(db_session, monkeypatch):
+    monkeypatch.setattr(settings, "admin_emails", " Maker@Example.com ")
+    monkeypatch.setattr(settings, "tasks_per_month", 1)
+    operator = await _owner(db_session)
+    await _queued(db_session, operator, when=OCTOBER)
+
+    assert await limits.admitted(db_session, user_id=operator.id, now=OCTOBER) is None
+
+
+async def test_enqueue_lets_an_operator_past_the_month(db_session, monkeypatch):
+    """The exemption holds at the door, not only at the bare check."""
+    monkeypatch.setattr(settings, "admin_emails", "maker@example.com")
+    monkeypatch.setattr(settings, "tasks_per_month", 1)
+    operator = await _owner(db_session)
+    await _queued(db_session, operator)
+
+    task = await service.enqueue_task(db_session, brief="A pricing page", created_by=operator.id)
+
+    assert task.status == TaskStatus.PENDING
+
+
+async def test_somebody_outside_the_operator_list_still_has_a_month(db_session, monkeypatch):
+    """Naming somebody else an operator must not open the door for everyone."""
+    monkeypatch.setattr(settings, "admin_emails", "someone@example.com")
+    monkeypatch.setattr(settings, "tasks_per_month", 1)
+    owner = await _owner(db_session)
+    await _queued(db_session, owner, when=OCTOBER)
+
+    with pytest.raises(limits.MonthlyQuotaReached):
+        await limits.admitted(db_session, user_id=owner.id, now=OCTOBER)

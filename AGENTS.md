@@ -193,9 +193,10 @@ same services.
   (`WORKER_STALE_SECONDS`), because runs overlap: never make a boot interrupt
   every running task, which is only safe where the API is the sole owner.
 - There is **no application-level rate limiter** by decision. The monthly task
-  quota, provider spend caps and authenticated or verified accounts are the
-  current boundary; an edge rule is the next lever if abuse appears. Revisit the
-  decision only if an anonymous AI endpoint is introduced.
+  quota (with the `ADMIN_EMAILS` operators exempt, since they seed the catalogue),
+  provider spend caps and authenticated or verified accounts are the current
+  boundary; an edge rule is the next lever if abuse appears. Revisit the decision
+  only if an anonymous AI endpoint is introduced.
 - `docker-compose.yml` is a development stack. Do not treat it as the production
   deployment.
 - API docs are disabled unless `ENV=development`.

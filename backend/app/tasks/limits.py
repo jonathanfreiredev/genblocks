@@ -11,6 +11,14 @@ would be a number nobody could keep true, sitting next to the real one and
 pretending to be it. What this module guarantees is the one thing the dashboards
 cannot: that no single person can queue more than their month allows, even when
 two requests arrive at the same time.
+
+The operators named in ``ADMIN_EMAILS`` are the exception, because the person the
+quota protects the bill from is not the person who fills the catalogue: seeding
+thirty blocks is the registry's own work, and it should not take three months.
+They are the same list that already decides who may take content down, so the
+exemption inherits a decision that exists rather than inventing one. For an
+operator the boundary is the provider spend caps, exactly as it is for everybody
+else past their tenth generation.
 """
 
 import uuid
@@ -19,6 +27,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.admin import service as admin_service
 from app.db.models import utcnow
 from app.settings import settings
 from app.tasks.models import Task
@@ -51,9 +60,15 @@ async def admitted(
     slot. Use it for a cheap early refusal, then call :func:`reserve` for the
     check that actually decides.
 
+    An operator is let through unconditionally: the month's allowance is a guard
+    on a person's spend, not on the catalogue's own seeding.
+
     ``now`` is how a test asks about December without waiting for it; production
     passes nothing and gets the clock.
     """
+    if await _is_operator(session, user_id=user_id):
+        return
+
     moment = now or utcnow()
     used = await _queued_this_month(session, user_id=user_id, since=month_start(moment))
 
@@ -99,6 +114,18 @@ def next_month(moment: datetime) -> datetime:
         return datetime(moment.year + 1, 1, 1, tzinfo=UTC)
 
     return datetime(moment.year, moment.month + 1, 1, tzinfo=UTC)
+
+
+async def _is_operator(session: AsyncSession, *, user_id: uuid.UUID) -> bool:
+    """Whether this person is one of the configured operators.
+
+    The role is decided by email, and the email lives on the row, so it is read
+    here rather than trusted from the caller: a router or a tool that forgot to
+    pass the flag would be a router or a tool that hands out free generations.
+    """
+    user = await session.get(User, user_id)
+
+    return user is not None and admin_service.is_admin(user)
 
 
 async def _queued_this_month(session: AsyncSession, *, user_id: uuid.UUID, since: datetime) -> int:

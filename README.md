@@ -17,7 +17,7 @@ brief
 
 The assistant, the HTTP API and an MCP client all enter through the same services. Each entry point adds its own transport and identity, then calls the same enqueue function, the same moderation and the same quota check.
 
-Before a task exists, the brief is checked for an exact cache hit, the month's allowance, unsafe text and the image policy. A cached brief returns a finished task marked `Found in the registry` and spends no quota. Ten generations per calendar month are allowed per person, blocks and images together. The product does not generate pictures with people, so a brief that asks for them either gets a no-person rewrite or is refused before anything is queued.
+Before a task exists, the brief is checked for an exact cache hit, the month's allowance, unsafe text and the image policy. A cached brief returns a finished task marked `Found in the registry` and spends no quota. Ten generations per calendar month are allowed per person, blocks and images together — except for the operators named in `ADMIN_EMAILS`, who seed the catalogue. The product does not generate pictures with people, so a brief that asks for them either gets a no-person rewrite or is refused before anything is queued.
 
 ### The spec
 
