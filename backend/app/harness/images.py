@@ -110,6 +110,7 @@ async def _generate(
         polling_url = checked_provider_url(
             queued.get("polling_url"),
             hosts=settings.bfl_polling_hosts,
+            domains=settings.bfl_allowed_domain_list,
             what="polling",
         )
     except UnsafeProviderUrl as refused:
@@ -120,6 +121,7 @@ async def _generate(
         sample = checked_provider_url(
             sample,
             hosts=settings.bfl_asset_host_list,
+            domains=settings.bfl_allowed_domain_list,
             what="sample",
         )
     except UnsafeProviderUrl as refused:

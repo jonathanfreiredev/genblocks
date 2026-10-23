@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     # BFL answers with URLs; treating any URL it returns as trusted would turn a
     # compromised provider response into an SSRF primitive.
     bfl_asset_hosts: str = "delivery.bfl.ai,api.bfl.ai"
+    # The domains a provider may name, subdomains included. BFL answers from a
+    # regional host it does not document in advance (``api.us7.bfl.ai``), so a
+    # list of exact names refuses a URL for a picture that was already paid for.
+    # The domain is still BFL's own infrastructure; anything outside it, including
+    # a name that merely ends in the same letters, stays refused.
+    bfl_allowed_domains: str = "bfl.ai"
 
     # Who may see the report queue and take content down. This is a global
     # operator list, not an organization role: the product has no tenant scope for
@@ -246,6 +252,15 @@ class Settings(BaseSettings):
         return tuple(
             one.strip().lower().rstrip(".")
             for one in self.bfl_asset_hosts.split(",")
+            if one.strip()
+        )
+
+    @property
+    def bfl_allowed_domain_list(self) -> tuple[str, ...]:
+        """The BFL domains a polling or sample URL may name, subdomains included."""
+        return tuple(
+            one.strip().lower().lstrip(".").rstrip(".")
+            for one in self.bfl_allowed_domains.split(",")
             if one.strip()
         )
 

@@ -55,7 +55,12 @@ def stored(monkeypatch) -> list[dict]:
     return kept
 
 
-def client_for(sent: dict, *, statuses: list[str] | None = None) -> httpx.AsyncClient:
+def client_for(
+    sent: dict,
+    *,
+    statuses: list[str] | None = None,
+    polling_url: str = "https://api.bfl.ai/v1/get_result?id=req-1",
+) -> httpx.AsyncClient:
     """A client that queues a request, answers the poll, and serves the picture."""
     left = list(statuses or ["Ready"])
 
@@ -66,7 +71,7 @@ def client_for(sent: dict, *, statuses: list[str] | None = None) -> httpx.AsyncC
 
             return httpx.Response(
                 200,
-                json={"id": "req-1", "polling_url": "https://api.bfl.ai/v1/get_result?id=req-1"},
+                json={"id": "req-1", "polling_url": polling_url},
             )
 
         if "get_result" in str(request.url):
@@ -108,6 +113,26 @@ async def test_a_picture_is_queued_with_the_prompt_and_the_size(key, stored):
     assert made.data.startswith(b"\xff\xd8")
     assert (made.width, made.height) == (32, 24)
     assert made.media_type == "image/jpeg"
+
+
+async def test_a_regional_polling_host_is_still_bfl(key, stored):
+    """BFL answers from a host it never documented, and the picture still arrives.
+
+    Its polling URLs name a regional host (``api.us7.bfl.ai``). An allowlist of
+    exact names turned that into a task that failed after the picture had already
+    been paid for; the domain is what the list admits now.
+    """
+    sent: dict = {}
+
+    made = await images.generate(
+        prompt=PROMPT,
+        width=512,
+        height=512,
+        client=client_for(sent, polling_url="https://api.us7.bfl.ai/v1/get_result?id=req-1"),
+    )
+
+    assert sent["downloaded"] == SAMPLE
+    assert made.path.startswith("genblocks/images/")
 
 
 async def test_the_picture_is_stored_only_after_the_safety_gate(key, stored):
