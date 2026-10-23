@@ -27,7 +27,6 @@ export function TaskResult({
             alt={`The block this task produced: ${brief}`}
             sizes="(min-width: 1024px) 900px, 100vw"
             caption={generation.model ?? "Model not recorded"}
-            fit="contain"
             className="aspect-[16/10] w-full rounded-lg"
           />
         </div>

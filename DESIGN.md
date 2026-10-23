@@ -436,7 +436,7 @@ The gallery is a wall of pictures, not a list of records.
 
 - **Full width** minus 12–16px of padding. No max-width, no centred column.
 - **Grid**: 2 columns on a phone, 3 on a small tablet, 4 on a laptop, 5 on a wide screen; 12px gap.
-- **Cell**: a square (`aspect-square`) `rounded-xl` frame with a 1px border and 8px of padding. The thumbnail fills its box and is cropped to it (`object-cover`), so the wall reads as one surface. It is a separate render at phone width (390px), not the judge's desktop screenshot: at card width a block is compact and nearly square, so the crop does not cut the composition. The item page shows the uncropped desktop artifact.
+- **Cell**: a square (`aspect-square`) `rounded-xl` frame with a 1px border and 8px of padding. The whole specimen sits inside it, contained and never cropped — a block's render keeps its proportions and a stock picture keeps its own — so the wall reads as a contact sheet of whole works rather than one continuous surface. It is a separate render at phone width (390px), not the judge's desktop screenshot. The item page shows the same artifact, larger.
 - **Nothing on the tile** except the picture. On hover the picture lifts 2px, the frame takes a faint muted wash, and the maker's name (`author`, or `GenBlocks` when nobody claimed it) fades in centred at the bottom.
 - **No title, slug, date or category** on the wall. The accessible name is the item's title; the visual text is only the author on hover.
 - **Above the grid**: a compact heading (20px, semibold) and one sentence of orientation, then the count (`7 blocks`) and, when searching, `for “query”` plus a `Clear search` link. The heading and sentence are a landing-page label, not a hero: no large display type, no card, no second call to action.
@@ -513,7 +513,7 @@ The panel narrows rather than widening the page: never give the evidence more th
 - **Empty / Alert** — the shadcn primitives, not bespoke markup.
 - **Chat** — `MessageScroller` + `Message` + `Bubble` + `Marker` + `Trace`; the assistant surface is a composition of these, not a new widget.
 - **ScoreReadout** — the product's one custom data component: 18px semibold tabular number over a 56px track. No donuts, rings or gauges.
-- **AssetPlate** — the product's one media component: a Cloudinary id, a transform width, `object-cover` in the gallery, `object-contain` on the item page, and an honest muted fallback.
+- **AssetPlate** — the product's one media component: a Cloudinary id, a transform width, `object-contain` everywhere and an honest muted fallback. The artifact is never cropped; the frame around it supplies the padding.
 
 ## Do's and Don'ts
 

@@ -60,7 +60,6 @@ export async function BlockItem({
               alt={`The rendered block: ${component.title}`}
               sizes="(min-width: 1280px) 1100px, 100vw"
               caption={generation?.model ?? "Model not recorded"}
-              fit="contain"
               priority
               className="size-full rounded-lg"
             />

@@ -41,7 +41,6 @@ export function ImageItem({
             alt={image.prompt}
             sizes="(min-width: 1280px) 1000px, 100vw"
             caption={`${image.width} × ${image.height}`}
-            fit="contain"
             priority
             className="size-full rounded-lg"
           />

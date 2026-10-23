@@ -8,12 +8,12 @@ import type { ComponentSummary, Image } from "@/lib/vault/types";
 /**
  * The gallery is a wall of pictures, not a list of records.
  *
- * Each cell is a square frame the specimen fills: a block's render or a stock
- * image, cropped to the frame rather than letterboxed inside it, so the wall
- * reads as one surface instead of a set of mismatched proportions. The item
- * page shows the uncropped picture. There is no text on the wall. On hover the
- * specimen lifts a hair and the maker's name arrives under it — the only label
- * a thumbnail needs.
+ * Each cell is a square frame and the specimen sits inside it whole: a block's
+ * render or a stock image, contained rather than cropped, because the picture is
+ * the artifact and a thumbnail that cuts it is showing something the judge never
+ * scored. The wall therefore reads as a contact sheet of whole works, not as one
+ * continuous surface. There is no text on the wall. On hover the specimen lifts a
+ * hair and the maker's name arrives under it — the only label a thumbnail needs.
  */
 export function ItemGrid({ children }: { children: ReactNode }) {
   return (
@@ -80,7 +80,6 @@ export function ComponentCell({
           alt={`The rendered block: ${component.title}`}
           sizes="(min-width: 1280px) 320px, (min-width: 1024px) 30vw, (min-width: 640px) 40vw, 45vw"
           caption={component.title}
-          fit="cover"
           priority={priority}
           className="size-full bg-transparent"
         />
@@ -109,7 +108,6 @@ export function ImageCell({
         alt={image.prompt}
         sizes="(min-width: 1280px) 320px, (min-width: 1024px) 30vw, (min-width: 640px) 40vw, 45vw"
         caption={dimensions(image.width, image.height)}
-        fit="cover"
         priority={priority}
         className="size-full bg-transparent"
       />

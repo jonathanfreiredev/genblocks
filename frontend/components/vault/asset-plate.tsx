@@ -9,17 +9,16 @@ import { assetUrl } from "@/lib/vault/asset";
 /**
  * The picture an artifact points at, or an honest frame when there is none.
  *
- * `cover` is for the gallery: a thumbnail is a crop, and the wall should read
- * as one surface. `contain` is for the item view, where a block's render has
- * its own proportions and cropping it would hide the composition the judge
- * scored.
+ * The whole artifact is always shown: a block's render has its own proportions
+ * and a stock picture has its own crop, and framing either one by cutting it
+ * hides the composition the judge scored. The plate therefore contains, and the
+ * caller's frame supplies the breathing room.
  */
 export function AssetPlate({
   path,
   alt,
   sizes,
   caption,
-  fit = "cover",
   priority = false,
   className,
 }: {
@@ -28,7 +27,6 @@ export function AssetPlate({
   sizes: string;
   /** What is known about a missing asset: the model and the dimensions. */
   caption: string;
-  fit?: "cover" | "contain";
   /** Set on the one image that is the page's LCP, never on a grid. */
   priority?: boolean;
   className?: string;
@@ -48,10 +46,7 @@ export function AssetPlate({
           fetchPriority={priority ? "high" : undefined}
           decoding={priority ? "sync" : "async"}
           onError={() => setUnavailable(true)}
-          className={cn(
-            "object-cover",
-            fit === "contain" && "object-contain p-2 sm:p-3",
-          )}
+          className="object-contain"
         />
       ) : (
         <div className="absolute inset-0 flex flex-col justify-end gap-1 p-3">

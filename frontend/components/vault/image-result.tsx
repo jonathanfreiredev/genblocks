@@ -18,7 +18,6 @@ export function ImageResult({ image }: { image: Image }) {
             alt={image.prompt}
             sizes="(min-width: 1280px) 760px, 100vw"
             caption={`${image.width} × ${image.height}`}
-            fit="contain"
             className="size-full rounded-lg"
           />
         </div>
