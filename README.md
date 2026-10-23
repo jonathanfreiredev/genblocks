@@ -132,7 +132,7 @@ docker compose exec backend python -m app.seed.screenshots
 docker compose exec backend python -m app.seed.stock
 ```
 
-`backend/.env.example` lists every setting. `backend/mcp.env.example` lists the smaller set an MCP deployment needs.
+`backend/.env.example` lists every setting. `backend/mcp.env.example` lists the smaller set an MCP deployment needs. `backend/worker.env.example` lists the set the deployed task worker needs.
 
 ## Tests
 

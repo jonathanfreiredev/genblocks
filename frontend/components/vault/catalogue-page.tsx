@@ -272,18 +272,20 @@ export async function CataloguePage({
           {items.length > 0 ? (
             <ItemGrid>
               {section === "images"
-                ? (items as Image[]).map((image) => (
+                ? (items as Image[]).map((image, index) => (
                     <ImageCell
                       key={image.id}
                       image={image}
                       href={itemHref(section, image.slug ?? image.id)}
+                      priority={index < 5}
                     />
                   ))
-                : (items as ComponentSummary[]).map((component) => (
+                : (items as ComponentSummary[]).map((component, index) => (
                     <ComponentCell
                       key={component.id}
                       component={component}
                       href={itemHref(section, component.slug)}
+                      priority={index < 5}
                     />
                   ))}
             </ItemGrid>

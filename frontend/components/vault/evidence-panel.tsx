@@ -133,7 +133,7 @@ export function EvidencePanel({
                 href={traceUrl}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="Open the trace in Langfuse"
+                aria-label={`Open trace ${judged.traceId} in Langfuse`}
                 className="text-muted-foreground hover:text-foreground truncate text-xs underline-offset-4 hover:underline"
               >
                 {judged.traceId}
@@ -160,7 +160,7 @@ export function EvidencePanel({
                   <>
                     {row.label}
                     {row.detail && !row.ok ? (
-                      <span className="text-muted-foreground/80 mt-1 block max-w-[40ch] text-xs">
+                      <span className="text-muted-foreground mt-1 block max-w-[40ch] text-xs">
                         {row.detail}
                       </span>
                     ) : null}

@@ -10,7 +10,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh }),
 }));
 
-import { AgentChat } from "@/components/vault/agent-chat";
+import { AgentChat } from "@/components/vault/agent-chat-context";
 import type { Task, TaskDetail } from "@/lib/vault/types";
 
 const MESSAGE = "A pricing page for a developer tool.";

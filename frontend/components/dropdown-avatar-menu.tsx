@@ -10,7 +10,7 @@ import {
 } from "./ui/dropdown-menu";
 import Link from "next/link";
 import { Button } from "./ui/button";
-import { logoutAction } from "@/server/auth/auth.actions";
+import { logoutAction } from "@/server/auth/session.actions";
 import { useRouter } from "next/navigation";
 
 interface DropdownAvatarMenuProps {

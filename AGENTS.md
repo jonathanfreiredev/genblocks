@@ -186,6 +186,12 @@ same services.
   `backend/mcp.env.example`, not the API's `.env`; production must not grant the
   agent-facing process the Cloudinary, Modal, BFL, Voyage, Chroma or Langfuse
   credentials it does not need.
+- The task worker gets its own environment too, in `backend/worker.env.example`,
+  and it is a **Modal function** in production (`app/tasks/modal_app.py`), not
+  the API process. The API wakes it when a task is queued and a one-minute
+  schedule is the safety net. Reconciliation there is by age
+  (`WORKER_STALE_SECONDS`), because runs overlap: never make a boot interrupt
+  every running task, which is only safe where the API is the sole owner.
 - There is **no application-level rate limiter** by decision. The monthly task
   quota, provider spend caps and authenticated or verified accounts are the
   current boundary; an edge rule is the next lever if abuse appears. Revisit the

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { Button } from "../ui/button";
-import { resendVerificationAction } from "@/server/auth/auth.actions";
+import { resendVerificationEmail } from "@/server/auth/session.actions";
 
 export const VerificationBanner = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -16,13 +16,13 @@ export const VerificationBanner = () => {
         disabled={isSubmitting}
         onClick={async () => {
           setIsSubmitting(true);
-          const res = await resendVerificationAction();
+          const res = await resendVerificationEmail();
           setIsSubmitting(false);
 
-          if (res?.serverError) {
+          if (!res.success) {
             toast.add({
               title: "Could not resend",
-              description: res.serverError.message,
+              description: res.message,
               type: "error",
             });
             return;

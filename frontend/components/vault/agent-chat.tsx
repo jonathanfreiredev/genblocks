@@ -14,14 +14,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  createContext,
-  useContext,
   useEffect,
   useRef,
   useState,
   type FormEvent,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
 
 import logo from "@/app/icon.png";
@@ -65,11 +62,10 @@ import {
 } from "@/components/ui/trace";
 import { readTurn } from "@/lib/agent/stream";
 import { Markdown } from "@/components/vault/markdown";
-import { cn } from "@/lib/utils";
 import { elapsed } from "@/lib/vault/format";
 import { TASK_STATUS_LABELS } from "@/lib/vault/task-status";
 import type { Suggestion, Task, TaskDetail } from "@/lib/vault/types";
-import { MESSAGE_MAX_LENGTH } from "@/server/agent/agent.schemas";
+import { MESSAGE_MAX_LENGTH } from "@/lib/agent/limits";
 import { SuggestionRail } from "@/components/vault/suggestion-rail";
 import { StatusWord } from "@/components/vault/status-word";
 
@@ -249,9 +245,7 @@ function addSuggestions(
 function addProposal(turns: Turn[], id: number, proposal: Proposal): Turn[] {
   return turns.map((turn) =>
     turn.id === id &&
-    !turn.proposals.some(
-      (one) => proposalKey(one) === proposalKey(proposal),
-    )
+    !turn.proposals.some((one) => proposalKey(one) === proposalKey(proposal))
       ? { ...turn, proposals: [...turn.proposals, proposal] }
       : turn,
   );
@@ -649,8 +643,8 @@ function Welcome({
           Ask about anything in the vault
         </h3>
         <p className="text-muted-foreground text-sm">
-          Find a block, look through the pictures, describe a block to build,
-          or ask for a new image.
+          Find a block, look through the pictures, describe a block to build, or
+          ask for a new image.
         </p>
         <p className="text-muted-foreground text-xs">
           This is an AI assistant. It can be wrong.
@@ -677,43 +671,25 @@ function Welcome({
   );
 }
 
-type AgentChatContextValue = {
-  openChat: () => void;
-};
-
-const AgentChatContext = createContext<AgentChatContextValue | null>(null);
-
-function useAgentChat(): AgentChatContextValue {
-  const context = useContext(AgentChatContext);
-
-  if (!context) {
-    throw new Error("AgentChatTrigger must be used within AgentChatProvider.");
-  }
-
-  return context;
-}
-
 /**
- * The vault's one conversation.
+ * The heavy half of the assistant: transcript, stream, proposals and the dialog.
  *
- * The provider owns the transcript and the dialog; triggers only ask it to open.
- * That is what lets the sidebar have a button on a laptop and the floating
- * mobile button have the same conversation, instead of two dialogs with two
- * different transcripts. It answers questions about the registry, prepares a
- * brief when asked, and lets the person decide whether to queue it. The thread id
- * is the only thing kept between visits: the memory is on the other end.
+ * It is loaded dynamically by `agent-chat-context` on the first click, so a
+ * catalogue visit does not download Streamdown and Shiki for a surface the
+ * visitor may never open.
  */
-export function AgentChatProvider({
+export function AgentChatDialog({
+  open,
+  onOpenChange,
   signedIn = true,
   userName = null,
-  children,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   signedIn?: boolean;
   userName?: string | null;
-  children: ReactNode;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [tasks, setTasks] = useState<Record<string, Task>>({});
   const [draft, setDraft] = useState("");
@@ -1049,202 +1025,158 @@ export function AgentChatProvider({
   }
 
   return (
-    <AgentChatContext.Provider value={{ openChat: () => setOpen(true) }}>
-      {children}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:h-[min(88svh,760px)] sm:max-h-[min(88svh,760px)] sm:max-w-3xl">
+        <DialogHeader className="flex shrink-0 flex-row items-center gap-3 border-b px-4 py-3 pr-12">
+          <Image
+            src={logo}
+            alt=""
+            width={32}
+            height={32}
+            className="size-8 shrink-0 rounded-lg"
+          />
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:h-[min(88svh,760px)] sm:max-h-[min(88svh,760px)] sm:max-w-3xl">
-          <DialogHeader className="flex shrink-0 flex-row items-center gap-3 border-b px-4 py-3 pr-12">
-            <Image
-              src={logo}
-              alt=""
-              width={32}
-              height={32}
-              className="size-8 shrink-0 rounded-lg"
-            />
-
-            <div className="flex min-w-0 flex-1 flex-col">
-              <DialogTitle className="truncate text-sm font-semibold">
-                Ask AI
-              </DialogTitle>
-              <DialogDescription className="truncate text-xs">
-                Blocks, stock images, or a brief to build.
-              </DialogDescription>
-            </div>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={startNew}
-              aria-label="Start a new conversation"
-              className="shrink-0"
-            >
-              <SquarePenIcon data-icon="inline-start" />
-              New chat
-            </Button>
-          </DialogHeader>
-
-          <div className="min-h-0 flex-1">
-            {turns.length === 0 ? (
-              <Welcome
-                signedIn={signedIn}
-                onPrompt={(prompt) => void say(prompt)}
-              />
-            ) : (
-              <MessageScrollerProvider autoScroll>
-                <MessageScroller>
-                  <MessageScrollerViewport>
-                    <MessageScrollerContent className="p-4">
-                      {turns.map((turn) => (
-                        <MessageScrollerItem
-                          key={turn.id}
-                          messageId={String(turn.id)}
-                          scrollAnchor={turn.from === "you"}
-                        >
-                          <TurnView
-                            turn={turn}
-                            tasks={tasks}
-                            userName={userName}
-                            onOpenItem={() => setOpen(false)}
-                            onQueue={(proposal) =>
-                              confirmProposal(turn.id, proposal)
-                            }
-                          />
-                        </MessageScrollerItem>
-                      ))}
-
-                      {trouble ? (
-                        <MessageScrollerItem>
-                          <Marker role="alert" className="text-destructive">
-                            <MarkerIcon>
-                              <CircleAlertIcon />
-                            </MarkerIcon>
-                            <MarkerContent>{trouble}</MarkerContent>
-                          </Marker>
-                        </MessageScrollerItem>
-                      ) : null}
-                    </MessageScrollerContent>
-                  </MessageScrollerViewport>
-
-                  <MessageScrollerButton />
-                </MessageScroller>
-              </MessageScrollerProvider>
-            )}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <DialogTitle className="truncate text-sm font-semibold">
+              Ask AI
+            </DialogTitle>
+            <DialogDescription className="truncate text-xs">
+              Blocks, stock images, or a brief to build.
+            </DialogDescription>
           </div>
 
-          {turns.length === 0 && trouble ? (
-            <div className="px-4 pb-2">
-              <Marker role="alert" className="text-destructive">
-                <MarkerIcon>
-                  <CircleAlertIcon />
-                </MarkerIcon>
-                <MarkerContent>{trouble}</MarkerContent>
-              </Marker>
-            </div>
-          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={startNew}
+            aria-label="Start a new conversation"
+            className="shrink-0"
+          >
+            <SquarePenIcon data-icon="inline-start" />
+            New chat
+          </Button>
+        </DialogHeader>
 
-          {signedIn ? (
-            <form onSubmit={onSubmit} className="shrink-0 border-t p-3">
-              <InputGroup className="h-auto rounded-xl">
-                <InputGroupTextarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={onKeyDown}
-                  rows={2}
-                  maxLength={MESSAGE_MAX_LENGTH}
-                  disabled={thinking}
-                  aria-label="Message"
-                  placeholder="Ask about a block or image, or what to build…"
-                  className="max-h-40 min-h-14 py-3"
-                />
-                <InputGroupAddon align="block-end" className="p-2">
-                  <span className="text-muted-foreground me-auto hidden text-xs sm:block">
-                    Enter to send · Shift+Enter for a new line
-                  </span>
-
-                  {thinking ? (
-                    <InputGroupButton
-                      type="button"
-                      size="icon-sm"
-                      onClick={stop}
-                      aria-label="Stop answering"
-                    >
-                      <SquareIcon />
-                    </InputGroupButton>
-                  ) : (
-                    <InputGroupButton
-                      type="submit"
-                      size="icon-sm"
-                      disabled={!ready}
-                      aria-label="Send"
-                    >
-                      <ArrowUpIcon />
-                    </InputGroupButton>
-                  )}
-                </InputGroupAddon>
-              </InputGroup>
-            </form>
+        <div className="min-h-0 flex-1">
+          {turns.length === 0 ? (
+            <Welcome
+              signedIn={signedIn}
+              onPrompt={(prompt) => void say(prompt)}
+            />
           ) : (
-            <div className="shrink-0 border-t p-3">
-              <div className="bg-muted/30 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-muted-foreground text-sm">
-                  The assistant needs an account: the conversation belongs to
-                  whoever asks. Sign in to ask about blocks and images, build
-                  one, or generate an image.
-                </p>
-                <Link
-                  href="/auth/login?next=%2Fblocks"
-                  prefetch={false}
-                  className={buttonVariants({ variant: "default", size: "sm" })}
-                >
-                  Sign in
-                </Link>
-              </div>
-            </div>
+            <MessageScrollerProvider autoScroll>
+              <MessageScroller>
+                <MessageScrollerViewport>
+                  <MessageScrollerContent className="p-4">
+                    {turns.map((turn) => (
+                      <MessageScrollerItem
+                        key={turn.id}
+                        messageId={String(turn.id)}
+                        scrollAnchor={turn.from === "you"}
+                      >
+                        <TurnView
+                          turn={turn}
+                          tasks={tasks}
+                          userName={userName}
+                          onOpenItem={() => onOpenChange(false)}
+                          onQueue={(proposal) =>
+                            confirmProposal(turn.id, proposal)
+                          }
+                        />
+                      </MessageScrollerItem>
+                    ))}
+
+                    {trouble ? (
+                      <MessageScrollerItem>
+                        <Marker role="alert" className="text-destructive">
+                          <MarkerIcon>
+                            <CircleAlertIcon />
+                          </MarkerIcon>
+                          <MarkerContent>{trouble}</MarkerContent>
+                        </Marker>
+                      </MessageScrollerItem>
+                    ) : null}
+                  </MessageScrollerContent>
+                </MessageScrollerViewport>
+
+                <MessageScrollerButton />
+              </MessageScroller>
+            </MessageScrollerProvider>
           )}
-        </DialogContent>
-      </Dialog>
-    </AgentChatContext.Provider>
-  );
-}
+        </div>
 
-/** The one control that opens the conversation. */
-export function AgentChatTrigger({ className }: { className?: string }) {
-  const { openChat } = useAgentChat();
+        {turns.length === 0 && trouble ? (
+          <div className="px-4 pb-2">
+            <Marker role="alert" className="text-destructive">
+              <MarkerIcon>
+                <CircleAlertIcon />
+              </MarkerIcon>
+              <MarkerContent>{trouble}</MarkerContent>
+            </Marker>
+          </div>
+        ) : null}
 
-  return (
-    <Button
-      type="button"
-      className={cn(className, "cursor-pointer")}
-      aria-label="Ask AI"
-      onClick={openChat}
-    >
-      <SparklesIcon data-icon="inline-start" />
-      <span className="group-data-[collapsible=icon]:hidden">Ask AI</span>
-    </Button>
-  );
-}
+        {signedIn ? (
+          <form onSubmit={onSubmit} className="shrink-0 border-t p-3">
+            <InputGroup className="h-auto rounded-xl">
+              <InputGroupTextarea
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={onKeyDown}
+                rows={2}
+                maxLength={MESSAGE_MAX_LENGTH}
+                disabled={thinking}
+                aria-label="Message"
+                placeholder="Ask about a block or image, or what to build…"
+                className="max-h-40 min-h-14 py-3"
+              />
+              <InputGroupAddon align="block-end" className="p-2">
+                <span className="text-muted-foreground me-auto hidden text-xs sm:block">
+                  Enter to send · Shift+Enter for a new line
+                </span>
 
-/**
- * A conversation with its own trigger.
- *
- * For a surface outside the shell (and for the tests): the product renders the
- * provider once in `AppShell` and places triggers in the sidebar and the floating
- * mobile control.
- */
-export function AgentChat({
-  signedIn = true,
-  userName = null,
-  className,
-}: {
-  signedIn?: boolean;
-  userName?: string | null;
-  className?: string;
-}) {
-  return (
-    <AgentChatProvider signedIn={signedIn} userName={userName}>
-      <AgentChatTrigger className={className} />
-    </AgentChatProvider>
+                {thinking ? (
+                  <InputGroupButton
+                    type="button"
+                    size="icon-sm"
+                    onClick={stop}
+                    aria-label="Stop answering"
+                  >
+                    <SquareIcon />
+                  </InputGroupButton>
+                ) : (
+                  <InputGroupButton
+                    type="submit"
+                    size="icon-sm"
+                    disabled={!ready}
+                    aria-label="Send"
+                  >
+                    <ArrowUpIcon />
+                  </InputGroupButton>
+                )}
+              </InputGroupAddon>
+            </InputGroup>
+          </form>
+        ) : (
+          <div className="shrink-0 border-t p-3">
+            <div className="bg-muted/30 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-muted-foreground text-sm">
+                The assistant needs an account: the conversation belongs to
+                whoever asks. Sign in to ask about blocks and images, build one,
+                or generate an image.
+              </p>
+              <Link
+                href="/auth/login?next=%2Fblocks"
+                prefetch={false}
+                className={buttonVariants({ variant: "default", size: "sm" })}
+              >
+                Sign in
+              </Link>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

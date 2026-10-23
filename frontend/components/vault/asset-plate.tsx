@@ -45,6 +45,8 @@ export function AssetPlate({
           fill
           sizes={sizes}
           priority={priority}
+          fetchPriority={priority ? "high" : undefined}
+          decoding={priority ? "sync" : "async"}
           onError={() => setUnavailable(true)}
           className={cn(
             "object-cover",
@@ -56,7 +58,7 @@ export function AssetPlate({
           <span className="text-muted-foreground text-xs font-medium">
             Awaiting asset
           </span>
-          <span className="text-muted-foreground/70 text-xs">{caption}</span>
+          <span className="text-muted-foreground text-xs">{caption}</span>
         </div>
       )}
     </div>

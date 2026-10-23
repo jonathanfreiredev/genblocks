@@ -102,7 +102,9 @@ describe("EvidencePanel", () => {
     );
 
     expect(
-      screen.getByRole("link", { name: "Open the trace in Langfuse" }),
+      screen.getByRole("link", {
+        name: "Open trace abc123def456 in Langfuse",
+      }),
     ).toHaveAttribute("href", "https://cloud.langfuse.com/trace/abc123def456");
 
     vi.unstubAllEnvs();

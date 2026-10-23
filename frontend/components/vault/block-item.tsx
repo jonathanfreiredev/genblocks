@@ -4,6 +4,8 @@ import { CodeTabs } from "@/components/vault/code-tabs";
 import { EvidencePanel } from "@/components/vault/evidence-panel";
 import { ItemDetails } from "@/components/vault/item-details";
 import { LivePreview } from "@/components/vault/live-preview";
+import { highlightCodeTokens } from "@/lib/highlighter";
+import { languageFor } from "@/lib/vault/code-language";
 import { judgedFrom } from "@/lib/vault/judged";
 import type { Component, Generation } from "@/lib/vault/types";
 
@@ -15,7 +17,7 @@ import type { Component, Generation } from "@/lib/vault/types";
  * deliberately narrower than half. The title belongs with the facts, not above
  * the picture — the prompt tab already carries the words that made it.
  */
-export function BlockItem({
+export async function BlockItem({
   component,
   generations,
   categoryName,
@@ -30,6 +32,19 @@ export function BlockItem({
     generations.find((one) => one.id === component.winning_generation_id) ??
     generations.at(-1) ??
     null;
+
+  // Highlighting on the server keeps Shiki out of the item page's client
+  // bundle and off its main thread. The client only renders the tokens.
+  const highlighted = Object.fromEntries(
+    await Promise.all(
+      Object.keys(component.files)
+        .sort()
+        .map(async (path) => [
+          path,
+          await highlightCodeTokens(component.files[path], languageFor(path)),
+        ]),
+    ),
+  );
 
   return (
     <div className="flex flex-1 flex-col px-3 py-4 md:px-4">
@@ -65,6 +80,7 @@ export function BlockItem({
             entry={component.entry}
             prompt={component.delivery_prompt}
             dependencies={component.dependencies}
+            highlighted={highlighted}
           />
         </div>
 

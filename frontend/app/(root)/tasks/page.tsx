@@ -10,7 +10,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { AgentChatTrigger } from "@/components/vault/agent-chat";
+import { AgentChatTrigger } from "@/components/vault/agent-chat-context";
 import { StatusWord } from "@/components/vault/status-word";
 import { getSession } from "@/server/auth/auth.lib";
 import { VaultUnreadable, listTasks } from "@/lib/vault/api";

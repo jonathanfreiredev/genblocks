@@ -24,6 +24,9 @@ const geist = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
+  // Code and figures are below the fold on a catalogue page. Preloading the
+  // mono face made the first load compete with the one font the LCP text needs.
+  preload: false,
 });
 
 export const metadata: Metadata = {

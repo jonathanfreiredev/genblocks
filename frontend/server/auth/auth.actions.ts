@@ -1,11 +1,11 @@
 "use server";
 
-import type { AuthError } from "@supabase/supabase-js";
 import { returnServerError } from "next-safe-action";
 
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/safe-next-path";
 import { protectedProcedure, publicProcedure } from "@/lib/safe-action";
+import { sendVerificationEmail } from "./auth.email";
 import {
   forgotPasswordSchema,
   googleSignInSchema,
@@ -17,22 +17,6 @@ import {
 import { siteUrl } from "./site-url";
 
 const LOGIN_ERROR = "Incorrect email or password.";
-
-/**
- * Ask Supabase to (re)send the signup confirmation email. Shared by the
- * authenticated banner flow and the public pre-auth flow.
- */
-async function sendVerificationEmail(email: string): Promise<AuthError | null> {
-  const supabase = await createClient();
-
-  const { error } = await supabase.auth.resend({
-    type: "signup",
-    email,
-    options: { emailRedirectTo: `${await siteUrl()}/auth/confirm?next=/` },
-  });
-
-  return error;
-}
 
 export const signupAction = publicProcedure
   .inputSchema(signupFormSchema.omit({ confirmPassword: true }))
@@ -94,13 +78,6 @@ export const loginAction = publicProcedure
 
     return { success: true };
   });
-
-export const logoutAction = publicProcedure.action(async () => {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-
-  return { success: true };
-});
 
 export const signInWithGoogleAction = publicProcedure
   .inputSchema(googleSignInSchema)
@@ -203,21 +180,6 @@ export const resetPasswordAction = publicProcedure
 
     return { success: true };
   });
-
-export const resendVerificationAction = protectedProcedure.action(
-  async ({ ctx }) => {
-    const error = await sendVerificationEmail(ctx.user.email);
-
-    if (error) {
-      returnServerError({
-        code: error.status ?? 400,
-        message: "Could not resend the verification email. Please try again.",
-      });
-    }
-
-    return { success: true };
-  },
-);
 
 /**
  * Public resend used by the pre-auth flows (right after signup and from the

@@ -30,7 +30,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { AgentChatTrigger } from "@/components/vault/agent-chat";
+import { AgentChatTrigger } from "@/components/vault/agent-chat-context";
 import { cn } from "@/lib/utils";
 import {
   SECTION_KIND,
@@ -236,7 +236,7 @@ export function AppSidebar({
                   size="sm"
                   className="pl-7"
                 >
-                  <span className="text-muted-foreground text-xs">All</span>
+                  <span className="text-foreground/80 text-xs">All</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 

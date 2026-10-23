@@ -7,7 +7,7 @@ import { SiteFooter } from "@/components/shell/site-footer";
 import {
   AgentChatProvider,
   AgentChatTrigger,
-} from "@/components/vault/agent-chat";
+} from "@/components/vault/agent-chat-context";
 import { VerificationBanner } from "@/components/auth/verification-banner";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import type { Session } from "@/server/auth/auth.lib";

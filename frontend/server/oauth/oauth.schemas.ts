@@ -1,3 +1,5 @@
+import "@/lib/zod-config";
+
 import { z } from "zod";
 
 export const revokeAppSchema = z.object({

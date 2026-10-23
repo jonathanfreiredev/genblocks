@@ -3,7 +3,7 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { Markdown } from "@/components/vault/markdown";
+import { LegalMarkdown } from "@/components/legal/legal-markdown";
 
 type LegalDocument = "imprint" | "privacy" | "terms";
 
@@ -47,7 +47,7 @@ export async function LegalPage({ document }: { document: LegalDocument }) {
   return (
     <main className="mx-auto w-full max-w-[68ch] px-3 py-10 md:px-4 md:py-14">
       <article className="legal-prose">
-        <Markdown>{source}</Markdown>
+        <LegalMarkdown source={source} />
       </article>
     </main>
   );

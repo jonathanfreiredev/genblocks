@@ -1,4 +1,12 @@
+import "@/lib/zod-config";
+
 import { z } from "zod";
+
+import {
+  MESSAGE_MAX_LENGTH,
+  THREAD_MAX_LENGTH,
+  THREAD_MIN_LENGTH,
+} from "@/lib/agent/limits";
 
 /**
  * What the browser may say to the conversation endpoint, restated from the
@@ -9,9 +17,6 @@ import { z } from "zod";
  * own bounds in the backend; the composer sends messages, not briefs, because
  * writing the brief is the agent's job.
  */
-export const MESSAGE_MAX_LENGTH = 4000;
-export const THREAD_MIN_LENGTH = 8;
-export const THREAD_MAX_LENGTH = 100;
 
 export const chatRequestSchema = z.object({
   message: z

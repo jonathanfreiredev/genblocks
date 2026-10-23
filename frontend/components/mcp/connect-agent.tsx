@@ -23,7 +23,7 @@ function Step({
   return (
     <section aria-labelledby={id} className="flex flex-col gap-3">
       <h2 id={id} className="flex items-baseline gap-3">
-        <span className="text-muted-foreground/60 font-mono text-xs tabular-nums">
+        <span className="text-muted-foreground font-mono text-xs tabular-nums">
           {number}
         </span>
         <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">

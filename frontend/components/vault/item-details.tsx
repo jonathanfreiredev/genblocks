@@ -68,7 +68,7 @@ export function ItemDetails({
               href={traceUrl}
               target="_blank"
               rel="noreferrer"
-              aria-label="Open the trace in Langfuse"
+              aria-label={`Open trace ${traceId} in Langfuse`}
               className="underline-offset-4 hover:underline"
             >
               {traceId}

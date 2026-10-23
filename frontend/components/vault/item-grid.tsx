@@ -59,9 +59,11 @@ function Cell({
 export function ComponentCell({
   component,
   href,
+  priority = false,
 }: {
   component: ComponentSummary;
   href: string;
+  priority?: boolean;
 }) {
   // The card crop is the tighter picture; the render is what older blocks have.
   const picture = component.thumbnail_path ?? component.screenshot_path;
@@ -79,6 +81,7 @@ export function ComponentCell({
           sizes="(min-width: 1280px) 320px, (min-width: 1024px) 30vw, (min-width: 640px) 40vw, 45vw"
           caption={component.title}
           fit="cover"
+          priority={priority}
           className="size-full bg-transparent"
         />
       ) : (
@@ -90,7 +93,15 @@ export function ComponentCell({
   );
 }
 
-export function ImageCell({ image, href }: { image: Image; href: string }) {
+export function ImageCell({
+  image,
+  href,
+  priority = false,
+}: {
+  image: Image;
+  href: string;
+  priority?: boolean;
+}) {
   return (
     <Cell href={href} author={image.author ?? "GenBlocks"} label={image.prompt}>
       <AssetPlate
@@ -99,6 +110,7 @@ export function ImageCell({ image, href }: { image: Image; href: string }) {
         sizes="(min-width: 1280px) 320px, (min-width: 1024px) 30vw, (min-width: 640px) 40vw, 45vw"
         caption={dimensions(image.width, image.height)}
         fit="cover"
+        priority={priority}
         className="size-full bg-transparent"
       />
     </Cell>
