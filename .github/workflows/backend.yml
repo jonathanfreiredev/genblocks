@@ -62,3 +62,36 @@ jobs:
 
       - name: Run tests
         run: uv run pytest
+
+  # The scaffold is the ruler every block is measured with: it builds, typechecks
+  # and lints the generated project inside the sandbox. Nothing in the backend job
+  # runs its tooling, so a change there could break every run without a red PR —
+  # which is exactly what happened to its lint.
+  scaffold:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/app/harness/scaffold
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The same major as the sandbox image (node:22-bookworm-slim): a build
+          # that passes here should be the build Modal runs.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/app/harness/scaffold/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

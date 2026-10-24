@@ -21,4 +21,14 @@ export default tseslint.config(
       globals: { ...globals.browser },
     },
   },
+  // The scaffold's own scripts run on Node, not in the page: one folds a build
+  // into a document, the other parses a project. Without these globals the
+  // recommended set reports `process`, `Buffer` and `console` on every run, so the
+  // lint check fails for every block and stops meaning anything.
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
 );

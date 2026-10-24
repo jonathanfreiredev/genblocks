@@ -13,14 +13,17 @@ style suggestion.
   copying the block could not install it.
 - **Generic Tailwind utilities only.** No classes and no design tokens from
   another application. A `<style>` block inside your component is fine for
-  keyframes you need, because it travels with the block.
+  keyframes you need, because it travels with the block. A typeface is not a
+  token: it is a package on the shelf, imported per weight in the block's own
+  files as `fonts` describes.
 - **It carries its chrome and borrows its pictures.** Icons and primitives are
   packages; photographs are assets of our library, handed to you as URLs. A URL to
   anything else is a picture that will not arrive. Cloudinary answers a transform
   in the path (`/upload/w_1200/...`) if you need a size. This is checked before the
   block is built: every `src`, `srcset`, `poster`, stylesheet link, CSS `url()` and
-  `@import` must be relative, a `data:` URL, or one of our hosts. A font imported
-  from Google is a stylesheet that does not travel.
+  `@import` must be relative, a `data:` URL, or one of our hosts. A font is a
+  package on the shelf, not a stylesheet: a Google Fonts URL does not travel, and
+  the checker refuses it before the build.
 - **No network, no strings run as code.** A block is markup: it does not `fetch`,
   open sockets, `eval`, build functions from strings, `document.write` or inject
   HTML. The page you are inside owns its data, and those are the ways a block stops

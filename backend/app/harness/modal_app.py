@@ -384,7 +384,11 @@ IMAGE = (
         copy=True,
         ignore=["node_modules", "dist"],
     )
-    .run_commands(f"cd {REMOTE_SCAFFOLD} && npm install --no-audit --no-fund")
+    # `npm ci`, not `npm install`: the lockfile is the shelf's pin. A font that
+    # resolved to a newer version between deploys would change the render without
+    # a commit, and `ci` also refuses to install when the lock has drifted from
+    # package.json instead of quietly agreeing with it.
+    .run_commands(f"cd {REMOTE_SCAFFOLD} && npm ci --no-audit --no-fund")
 )
 
 app = modal.App(APP_NAME)

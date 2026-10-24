@@ -55,6 +55,20 @@ async def get_component(session: AsyncSession, *, component_id: uuid.UUID) -> Co
     )
 
 
+async def recent_in_category(
+    session: AsyncSession, *, category_id: uuid.UUID, limit: int
+) -> Sequence[Component]:
+    """The newest published blocks of one type, for deciding what not to repeat."""
+    blocks = await session.scalars(
+        select(Component)
+        .where(Component.deleted_at.is_(None), Component.category_id == category_id)
+        .order_by(Component.created_at.desc())
+        .limit(limit)
+    )
+
+    return blocks.all()
+
+
 async def get_component_by_slug(session: AsyncSession, *, slug: str) -> Component | None:
     return await session.scalar(
         select(Component).where(Component.slug == slug, Component.deleted_at.is_(None))

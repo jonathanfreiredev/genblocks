@@ -15,6 +15,7 @@ for.
 
 import base64
 
+from app.design import plan as design_plan
 from app.harness.schemas import SandboxResult
 from app.judge.rubrics import Rubric
 
@@ -42,6 +43,7 @@ apology, no restating the numbers.
 # rubric's: a judge reading "what the sandbox found" knows which dimension it is
 # evidence for.
 BRIEF_HEADING = "The brief this block was written from:"
+DESIGN_HEADING = "The design plan it was asked to follow:"
 FILES_HEADING = "The block, as it was written:"
 FOUND_HEADING = "What the sandbox found when it built it:"
 RENDER_ATTACHED = (
@@ -72,6 +74,7 @@ def about_component(
     brief: str,
     files: dict[str, str],
     found: SandboxResult,
+    design: dict | None = None,
 ) -> list[dict]:
     """One block, as the message the judge reads it in.
 
@@ -80,8 +83,12 @@ def about_component(
     twice — the same block on a light page and on a dark one — because a palette
     that only holds on one of them is half a design, and a judge that never saw the
     other ground could not say so.
+
+    The plan is sent with the brief, under a heading of its own: it is a standard the
+    block was asked to meet, not a description of what the block does.
     """
-    said = [BRIEF_HEADING, "", brief, "", FILES_HEADING, ""]
+    said = [BRIEF_HEADING, "", brief, "", DESIGN_HEADING, "", design_plan.render(design), ""]
+    said += [FILES_HEADING, ""]
     for path in sorted(files):
         said += [path, f"```{LANGUAGES.get(_suffix(path), '')}", files[path], "```", ""]
 

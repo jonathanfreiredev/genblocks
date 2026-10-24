@@ -548,3 +548,36 @@ def test_a_project_is_bounded_before_it_reaches_the_sandbox():
         path="src/one-more.tsx",
         content="x",
     )
+
+
+def test_the_plan_travels_into_the_ask():
+    draft = agent._Draft(image_categories=[])
+    draft.design = {
+        "direction": "editorial",
+        "composition": "asymmetric",
+        "hierarchy": ["headline", "price"],
+        "typography": {
+            "display": {"family": "Instrument Serif"},
+            "body": {"family": "Geist"},
+            "mono": None,
+        },
+        "accent": "orange",
+        "accent_reason": "fired clay",
+        "surfaces": "divided",
+        "density": "sparse",
+        "signature": "prices set at display size",
+        "avoid": ["identical cards"],
+        "rationale": "editorial suits a craft product",
+    }
+
+    ask = agent._ask(brief=BRIEF, category="hero", draft=draft)
+
+    assert "Direction: editorial" in ask
+    assert "Instrument Serif" in ask
+    assert "not a cage" in ask
+
+
+def test_a_block_with_no_plan_is_asked_without_one():
+    ask = agent._ask(brief=BRIEF, category="hero", draft=agent._Draft(image_categories=[]))
+
+    assert "No design plan was filed" in ask

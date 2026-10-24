@@ -242,6 +242,7 @@ async def run_task(task_id: uuid.UUID) -> None:
                     attempt=made.attempt,
                     found=made.found,
                     brief=task.brief,
+                    design=_design_of(spec),
                     trace=trace,
                 )
                 published = await _publish(
@@ -496,9 +497,11 @@ async def _build(
         input={"brief": task.brief, "category": spec.category_slug, "model": settings.llm_model},
     ) as span:
         picture_types = await _picture_categories(session)
+        design = _design_of(spec)
         built = await harness.build(
             brief=task.brief,
             category=spec.category_slug,
+            design=design,
             image_categories=list(picture_types),
             library=_picture_library(session, types=picture_types),
         )
@@ -515,7 +518,8 @@ async def _build(
             [
                 SandboxFile(path=path, content=content)
                 for path, content in sorted(built.files.items())
-            ]
+            ],
+            design=design,
         )
         found = _sanitized_renders(found)
 
@@ -862,15 +866,16 @@ async def _judge(
     attempt: Generation,
     found: SandboxResult,
     brief: str,
+    design: dict | None = None,
     trace: observability.Trace,
 ) -> Judged:
     """Score the attempt once, and stop the run if it does not clear every bar.
 
-    The judge reads the artifacts the harness left — the brief, the whole project,
-    what the sandbox found, and the render — and never the attempt's own row: a
-    judge reading a verdict it wrote earlier is not a second opinion (PLAN.md,
-    decision 7). What it is *not* told is the thresholds: a judge that knows where
-    the bar is scores to the bar.
+    The judge reads the artifacts the harness left — the brief, the plan it was
+    built against, the whole project, what the sandbox found, and the render — and
+    never the attempt's own row: a judge reading a verdict it wrote earlier is not
+    a second opinion (PLAN.md, decision 7). What it is *not* told is the
+    thresholds: a judge that knows where the bar is scores to the bar.
     """
     await _begin(session, step)
 
@@ -879,6 +884,7 @@ async def _judge(
             brief=brief,
             files=attempt.files,
             found=found,
+            design=design,
         )
 
         attempt.scores = judged.scores
@@ -914,6 +920,13 @@ async def _judge(
             raise JudgeRejected(judged)
 
         return judged
+
+
+def _design_of(spec: block_spec.BlockSpec) -> dict | None:
+    """The plan the spec stored, or nothing when an older spec wrote this one."""
+    plan = (spec.spec or {}).get("design")
+
+    return plan if isinstance(plan, dict) else None
 
 
 def _weakest(judged: Judged) -> str:

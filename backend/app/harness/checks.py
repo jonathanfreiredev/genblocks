@@ -1,7 +1,7 @@
 """What a project may not do, read before it is built.
 
 The sandbox answers what a browser *sees* — it compiles, renders and photographs.
-These two questions are about the text, and answering them there instead has two
+These questions are about the text, and answering them there instead has two
 consequences worth the module:
 
 - They cost nothing. A block that points at somebody else's host is refused before
@@ -10,10 +10,11 @@ consequences worth the module:
   it wrote and is told what is wrong with it while it can still fix it; a check
   that only ran at the end would fail a run whose author never got to hear why.
 
-The bar is not "is this good" — that is the judge's. It is "may this travel": a
-block is copied into somebody else's page, so it either brings what it shows or it
-stops showing it. Both checks are fatal (``FATAL_CHECKS``): a project that loads
-from elsewhere or reaches the network is not an attempt.
+Two of these are gates and the rest are advice. ``ASSETS`` and ``SAFETY`` decide
+whether a block may travel at all; the design checks below compare the project
+with the plan it was asked to follow and report what drifted, without refusing a
+run. A block can be good and disagree with its plan, and that is a judgement — the
+judge's, not this module's.
 """
 
 import re
@@ -33,6 +34,29 @@ from app.settings import settings
 # How many findings one check reports before it says "and more". A reader fixes
 # them one at a time; the rest of the list arrives on the next look.
 MAX_FINDINGS = 5
+
+# The advisory checks: what the project says about following its own plan.
+DESIGN_TYPE = "design:type"
+DESIGN_RADIUS = "design:radius"
+DESIGN_ACCENT = "design:accent"
+
+# A font is imported from the shelf one weight at a time. The package names the
+# family, and it is the same string the plan stored.
+FONT_IMPORT = re.compile(r"""@fontsource/([a-z0-9-]+)/latin-""")
+
+# Every rounded surface a Tailwind file can name, including an arbitrary value.
+ROUNDED = re.compile(r"\brounded(?:-(?:[a-z0-9]+|\[[^\]]+\]))?\b")
+
+# A colour utility, as the family it spends: `text-emerald-700`, `bg-stone-50`.
+COLOUR = re.compile(
+    r"\b(?:text|bg|border|ring|from|via|to|decoration|outline|fill|stroke)-([a-z]+)-\d{2,3}\b"
+)
+
+# Families that are not a palette decision.
+COLOURLESS = frozenset({"white", "black", "transparent", "current", "inherit"})
+
+# One radius used often enough that it is the shape of everything.
+RADIUS_REPEATS = 5
 
 # What a browser goes and gets, in the four ways a block can ask for it: an
 # attribute that carries a file (a literal string, or a literal inside braces when
@@ -168,13 +192,17 @@ def inspect(files: list[SandboxFile]) -> list[SandboxCheck]:
     ]
 
 
-async def check(files: list[SandboxFile]) -> SandboxResult:
+async def check(files: list[SandboxFile], *, design: dict | None = None) -> SandboxResult:
     """Check the text first, and the sandbox only when the text lets it through.
 
     Same answer as :func:`app.harness.sandbox.check`, with the static checks in
     front, so every reader — the builder fixing from it, the runner gating on it,
     the judge scoring from it — sees one list. A project that fails the text never
-    reaches Modal: an empty result with the two findings is a refusal, not a run.
+    reaches Modal: an empty result with the findings is a refusal, not a run.
+
+    The design checks are added only to a project that got as far as a page: there
+    is nothing to compare a plan with before the block exists, and a run refused
+    for loading a stranger's stylesheet has a more urgent thing to fix.
     """
     static = inspect(files)
     if any(not one.ok for one in static):
@@ -188,8 +216,106 @@ async def check(files: list[SandboxFile]) -> SandboxResult:
     # Every run that got as far as the checks is held to it.
     if not found.blocked:
         checks.append(_preview(found))
+        checks.extend(inspect_design(files, design=design))
 
     return found.model_copy(update={"checks": checks})
+
+
+def inspect_design(files: list[SandboxFile], *, design: dict | None) -> list[SandboxCheck]:
+    """What the project says about following the plan it was given.
+
+    Three questions with an answer in the text, chosen because a person can check
+    them by looking: are the planned families imported, is there more than one
+    radius in play, and does the accent exist (and stop there). None is fatal.
+    """
+    if not design:
+        return []
+
+    return [
+        _type_deviation(files, design),
+        _one_radius(files),
+        _accent_spend(files, design),
+    ]
+
+
+def _type_deviation(files: list[SandboxFile], design: dict) -> SandboxCheck:
+    """Whether the families the plan named are the ones the project imports."""
+    packages = {
+        one.get("package")
+        for one in (design.get("typography") or {}).values()
+        if isinstance(one, dict) and one.get("package")
+    }
+    planned = {one.split("/")[-1] for one in packages}
+    imported = set()
+    for file in files:
+        imported.update(FONT_IMPORT.findall(file.content))
+
+    missing = sorted(planned - imported)
+    if not missing:
+        return SandboxCheck(name=DESIGN_TYPE, ok=True)
+
+    return SandboxCheck(
+        name=DESIGN_TYPE,
+        ok=False,
+        detail=(
+            "the plan named "
+            + ", ".join(sorted(planned))
+            + ", and the project imports "
+            + (", ".join(sorted(imported)) or "no family")
+            + f" (missing: {', '.join(missing)})"
+        ),
+    )
+
+
+def _one_radius(files: list[SandboxFile]) -> SandboxCheck:
+    """Whether every rounded surface shares one radius, which is one decision lost."""
+    counts: dict[str, int] = {}
+    for file in files:
+        for value in ROUNDED.findall(file.content):
+            if value == "rounded-none":
+                continue
+            counts[value] = counts.get(value, 0) + 1
+
+    if len(counts) != 1:
+        return SandboxCheck(name=DESIGN_RADIUS, ok=True)
+
+    value, times = next(iter(counts.items()))
+    if times < RADIUS_REPEATS:
+        return SandboxCheck(name=DESIGN_RADIUS, ok=True)
+
+    return SandboxCheck(
+        name=DESIGN_RADIUS,
+        ok=False,
+        detail=(
+            f"every surface uses `{value}` ({times} times): buttons, containers and "
+            "pictures share one radius, so none of them is saying anything"
+        ),
+    )
+
+
+def _accent_spend(files: list[SandboxFile], design: dict) -> SandboxCheck:
+    """Whether the planned accent is in the project, and whether it is alone."""
+    accent = design.get("accent")
+    hues: dict[str, int] = {}
+    for file in files:
+        for hue in COLOUR.findall(file.content):
+            if hue not in COLOURLESS:
+                hues[hue] = hues.get(hue, 0) + 1
+
+    findings: list[str] = []
+    if accent and accent != "neutral" and accent not in hues:
+        findings.append(f"the plan's accent `{accent}` never appears in the project")
+    if len(hues) > 4:
+        findings.append(
+            "colour families in play: "
+            + ", ".join(sorted(hues))
+            + " (four is already a lot for one block)"
+        )
+
+    if not findings:
+        return SandboxCheck(name=DESIGN_ACCENT, ok=True)
+
+    return SandboxCheck(name=DESIGN_ACCENT, ok=False, detail="; ".join(findings))
 
 
 def _preview(found: SandboxResult) -> SandboxCheck:

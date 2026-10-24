@@ -70,6 +70,7 @@ async def score_component(
     brief: str,
     files: dict[str, str],
     found: SandboxResult,
+    design: dict | None = None,
     model: Runnable | None = None,
 ) -> Judged:
     """Score one block from the artifacts the sandbox left behind.
@@ -80,7 +81,7 @@ async def score_component(
     answer: JudgeAnswer = await (model or as_judge()).ainvoke(
         [
             SystemMessage(system_prompt(COMPONENTS)),
-            HumanMessage(about_component(brief=brief, files=files, found=found)),
+            HumanMessage(about_component(brief=brief, files=files, found=found, design=design)),
         ]
     )
 

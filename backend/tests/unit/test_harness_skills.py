@@ -13,7 +13,7 @@ from app.harness.skills import ALL, BadSkill, NotASkill
 
 # The shelf by name, in the order the index lists it. Written out here rather than
 # read from the module: a shelf that changed shape should have to change a test.
-SHELF = ("blocks", "dependencies", "accessibility", "composition", "motion", "cliches")
+SHELF = ("blocks", "dependencies", "fonts", "accessibility", "composition", "motion", "cliches")
 
 
 def test_the_shelf_is_the_one_the_index_lists():
@@ -32,6 +32,9 @@ def test_a_skill_reads_as_the_document_it_is():
     assert skills.read("motion").startswith("# Motion")
     assert "useReducedMotion" in skills.read("motion")
     assert "reduced motion" in skills.read("accessibility")
+    # Composition carries numbers a builder can check, not adjectives.
+    assert "60-75 characters" in skills.read("composition")
+    assert "Three distances" in skills.read("composition")
 
 
 def test_reading_something_that_is_not_there_names_what_is():

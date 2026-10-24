@@ -25,6 +25,11 @@ problem; a block that needs nothing installs anywhere, and that is worth a lot.
 - **`class-variance-authority`** — when the block really has variants (a button
   that is primary, secondary or ghost). For two variants, a record of class
   strings is quieter than a factory.
+- **`@fontsource/*`** — the typefaces on the shelf. One import per weight, latin
+  subset only: `import "@fontsource/geist/latin-400.css"`. The `fonts` skill has
+  the families, what each one is for, and the rule for combining them. Never the
+  bare package, `index.css`, a `@fontsource-variable/*` package or a font CDN URL:
+  those ship every script, and the preview is one document.
 
 What not to import: `react-dom`, a router, a state manager, a form library, a CSS
 framework, a charting library, an icon set other than Lucide, or anything that

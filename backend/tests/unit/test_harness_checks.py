@@ -354,3 +354,126 @@ async def test_an_interactive_build_over_the_bar_is_refused(monkeypatch):
     preview = next(one for one in found.checks if one.name == PREVIEW)
     assert preview.ok is False
     assert str(PREVIEW_MAX_BYTES) in said(preview)
+
+
+def a_design(**overrides) -> dict:
+    """The stored shape of a plan, which is what the checks read."""
+    plan = {
+        "direction": "editorial",
+        "composition": "asymmetric",
+        "hierarchy": ["headline", "price", "details"],
+        "typography": {
+            "display": {"family": "Instrument Serif", "package": "@fontsource/instrument-serif"},
+            "body": {"family": "Geist", "package": "@fontsource/geist"},
+            "mono": None,
+        },
+        "accent": "orange",
+        "accent_reason": "fired clay",
+        "surfaces": "divided",
+        "density": "sparse",
+        "signature": "prices set at display size",
+        "avoid": [],
+        "rationale": "editorial suits a craft product",
+    }
+
+    return {**plan, **overrides}
+
+
+def a_block(*, fonts: str, classes: str) -> list[SandboxFile]:
+    return project(
+        f'import "@fontsource/{fonts}/latin-400.css";\n'
+        f"export default function Block() {{\n"
+        f'  return <section className="{classes}">Hi</section>;\n'
+        f"}}"
+    )
+
+
+def test_a_block_that_imports_the_planned_families_passes_the_type_check():
+    files = a_block(fonts="geist", classes="rounded-lg text-stone-900")
+
+    found = checks.inspect_design(files, design=a_design())
+    by_name = {one.name: one for one in found}
+
+    assert by_name[checks.DESIGN_TYPE].ok is False  # Instrument Serif was never imported
+    files = project(
+        'import "@fontsource/instrument-serif/latin-400.css";\n'
+        'import "@fontsource/geist/latin-400.css";\n'
+        "export default function Block() { return <section>Hi</section>; }"
+    )
+    by_name = {one.name: one for one in checks.inspect_design(files, design=a_design())}
+
+    assert by_name[checks.DESIGN_TYPE].ok is True
+
+
+def test_one_radius_on_every_surface_is_reported_once():
+    files = a_block(
+        fonts="geist",
+        classes="rounded-lg rounded-lg rounded-lg rounded-lg rounded-lg rounded-lg",
+    )
+
+    found = {one.name: one for one in checks.inspect_design(files, design=a_design())}
+
+    assert found[checks.DESIGN_RADIUS].ok is False
+    assert "rounded-lg" in said(found[checks.DESIGN_RADIUS])
+
+
+def test_two_radii_are_a_decision_not_a_defect():
+    files = a_block(fonts="geist", classes="rounded-full rounded-lg rounded-lg rounded-lg")
+
+    found = {one.name: one for one in checks.inspect_design(files, design=a_design())}
+
+    assert found[checks.DESIGN_RADIUS].ok is True
+
+
+def test_an_accent_the_plan_named_but_the_block_never_uses_is_reported():
+    files = a_block(fonts="geist", classes="text-stone-900 bg-stone-50")
+
+    found = {one.name: one for one in checks.inspect_design(files, design=a_design())}
+
+    assert found[checks.DESIGN_ACCENT].ok is False
+    assert "orange" in said(found[checks.DESIGN_ACCENT])
+
+
+def test_an_accent_used_everywhere_is_not_the_same_as_used_once():
+    files = a_block(
+        fonts="geist",
+        classes="text-orange-700 bg-orange-50 border-orange-200",
+    )
+
+    found = {one.name: one for one in checks.inspect_design(files, design=a_design())}
+
+    assert found[checks.DESIGN_ACCENT].ok is True
+
+
+def test_a_neutral_plan_is_not_asked_for_a_colour():
+    files = a_block(fonts="geist", classes="text-stone-900 bg-stone-50")
+
+    found = {
+        one.name: one for one in checks.inspect_design(files, design=a_design(accent="neutral"))
+    }
+
+    assert found[checks.DESIGN_ACCENT].ok is True
+
+
+def test_no_plan_means_no_design_findings():
+    assert checks.inspect_design(project("<section />"), design=None) == []
+
+
+async def test_design_findings_are_reported_and_never_block_a_run(monkeypatch):
+    async def asked(files):
+        return SandboxResult(
+            checks=[SandboxCheck(name="typecheck", ok=True)],
+            preview="<html></html>",
+        )
+
+    monkeypatch.setattr(sandbox, "check", asked)
+
+    found = await checks.check(
+        a_block(fonts="geist", classes="rounded-lg rounded-lg rounded-lg rounded-lg rounded-lg"),
+        design=a_design(),
+    )
+
+    named = {one.name: one for one in found.checks}
+    assert named[checks.DESIGN_RADIUS].ok is False
+    # Advice, not a gate: the attempt still exists and the judge gets to read it.
+    assert found.blocked is False

@@ -58,6 +58,24 @@ CATEGORY = "photography"
 CODE = "export default function Block() {\n  return <section>Pricing</section>;\n}\n"
 PART = "export default function Rule() { return <hr />; }\n"
 ENTRY = "src/Block.tsx"
+DESIGN = {
+    "direction": "editorial",
+    "composition": "asymmetric",
+    "hierarchy": ["headline", "price"],
+    "typography": {
+        "display": {"family": "Instrument Serif", "package": "@fontsource/instrument-serif"},
+        "body": {"family": "Geist", "package": "@fontsource/geist"},
+        "mono": None,
+    },
+    "accent": "orange",
+    "accent_reason": "fired clay",
+    "surfaces": "divided",
+    "density": "sparse",
+    "signature": "prices set at display size",
+    "avoid": [],
+    "rationale": "editorial suits a craft product",
+}
+
 PROJECT = {ENTRY: CODE, "src/parts/Rule.tsx": PART}
 
 # What the sandbox finds on a run that went well. One entry per check it makes,
@@ -221,6 +239,7 @@ class Judge:
 
     def __init__(self) -> None:
         self.shown: list[tuple[str, dict[str, str]]] = []
+        self.plans: list[dict | None] = []
         self.pictures: list[str] = []
         self.script: list[dict[str, int]] = [GOOD]
 
@@ -234,9 +253,15 @@ class Judge:
         )
 
     async def score_component(
-        self, *, brief: str, files: dict[str, str], found: SandboxResult
+        self,
+        *,
+        brief: str,
+        files: dict[str, str],
+        found: SandboxResult,
+        design: dict | None = None,
     ) -> Judged:
         self.shown.append((brief, files))
+        self.plans.append(design)
         said = self.script[min(len(self.shown) - 1, len(self.script) - 1)]
 
         return judging.read(self._answer(said), COMPONENTS)
@@ -269,7 +294,12 @@ def filed_under(monkeypatch):
             category_slug=category.slug,
             title=spec.title_for(brief),
             description=spec.description_for(brief),
-            spec={"version": spec.VERSION, "source": "rag", "category": category.slug},
+            spec={
+                "version": spec.VERSION,
+                "source": "rag",
+                "category": category.slug,
+                "design": DESIGN,
+            },
         )
 
     monkeypatch.setattr(spec, "build_spec", build_spec)
@@ -284,12 +314,18 @@ def harness(monkeypatch) -> Harness:
         *,
         brief: str,
         category: str,
+        design: dict | None = None,
         image_categories: list[str] | None = None,
         library=None,
         model=None,
     ) -> Built:
         harness.asked.append(
-            {"brief": brief, "category": category, "image_categories": image_categories}
+            {
+                "brief": brief,
+                "category": category,
+                "design": design,
+                "image_categories": image_categories,
+            }
         )
         harness.library = library
 
@@ -432,7 +468,7 @@ async def test_a_queued_task_runs_towards_a_published_block(
     assert [step.status for step in ran.steps] == [StepStatus.SUCCEEDED] * len(runner.STEP_NAMES)
     assert ran.steps[0].detail == {"category": "hero"}
     assert ran.steps[1].detail == {
-        "checks": "12/12",
+        "checks": "13/15",
         "files": 2,
         "iterations": 3,
         "skills": "1a2b3c4d",
@@ -444,7 +480,12 @@ async def test_a_queued_task_runs_towards_a_published_block(
 
     # The harness was asked for this brief and this type, the project went to the
     # sandbox file by file, and the judge was shown the whole of it.
-    assert harness.asked == [{"brief": BRIEF, "category": "hero", "image_categories": []}]
+    assert harness.asked == [
+        {"brief": BRIEF, "category": "hero", "design": DESIGN, "image_categories": []}
+    ]
+    # The same plan reaches the judge: a direction the judge cannot see is one it
+    # cannot score.
+    assert judge.plans == [DESIGN]
     assert sorted(one.path for one in harness.checked[0]) == ["src/Block.tsx", "src/parts/Rule.tsx"]
     assert judge.shown == [(BRIEF, PROJECT)]
 
@@ -471,7 +512,7 @@ async def test_a_queued_task_runs_towards_a_published_block(
     ]
     assert attempt.checks is not None
     assert attempt.checks["blocked"] is False
-    assert (attempt.checks["passed"], attempt.checks["total"]) == (12, 12)
+    assert (attempt.checks["passed"], attempt.checks["total"]) == (13, 15)
 
     component = await runner_session.get(Component, ran.component_id)
     assert component is not None
@@ -785,12 +826,16 @@ async def test_a_lint_finding_is_evidence_and_not_a_gate(runner_session, harness
     done = await get_task(runner_session, task_id=task_id)
     assert done is not None
     assert done.status == TaskStatus.SUCCEEDED
-    assert done.steps[1].detail["checks"] == "11/12"
+    assert done.steps[1].detail["checks"] == "12/15"
 
     attempt = (await _attempts(runner_session, task_id))[0]
     assert attempt.checks is not None
     assert attempt.checks["blocked"] is False
-    assert [check["name"] for check in attempt.checks["checks"] if not check["ok"]] == ["lint"]
+    assert [check["name"] for check in attempt.checks["checks"] if not check["ok"]] == [
+        "lint",
+        "design:type",
+        "design:accent",
+    ]
 
 
 async def test_an_interface_check_that_fails_refuses_the_block(runner_session, harness, judge):
@@ -848,7 +893,13 @@ async def test_a_run_with_no_page_is_refused_before_it_is_judged(runner_session,
 
 async def test_a_harness_that_writes_nothing_fails_the_task(runner_session, harness, monkeypatch):
     async def wrote_nothing(
-        *, brief: str, category: str, image_categories=None, library=None, model=None
+        *,
+        brief: str,
+        category: str,
+        design: dict | None = None,
+        image_categories=None,
+        library=None,
+        model=None,
     ) -> Built:
         raise agent.NothingWritten(
             "The harness finished without writing anything into the project."

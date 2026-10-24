@@ -594,6 +594,55 @@ running task.
 Postgres is both the queue and the source of truth, so there is no broker to
 drift from the task row the UI reads.
 
+## The type shelf
+
+A block ships its own typeface, so the families are dependencies of the scaffold
+rather than a stylesheet from a CDN: `@fontsource/*` packages in
+`app/harness/scaffold/package.json`, imported one latin weight at a time by the
+block itself.
+
+- **The catalog** is `app/harness/fonts.py`: package, family, group, weights,
+  italic and one line of character. It is the only place a family is declared.
+- **The document** the agent reads is `app/harness/skills/fonts.md`. Its table is
+  generated from the catalog by `uv run python -m app.harness.fonts`, and a unit
+  test fails when the two disagree — so the shelf the model is told about is the
+  one the image installs.
+- **Adding a family** is four steps: `npm install @fontsource/<family>` in the
+  scaffold, a `Family` entry, regenerate the document, and
+  `modal deploy app/harness/modal_app.py` — the image installs the scaffold's
+  dependencies at build time, so an undeployed package does not exist for a run.
+- **The build** keeps the one-document promise: a small Vite plugin drops the
+  `woff` fallback Fontsource ships beside every `woff2`, and `assetsInlineLimit`
+  inlines the remaining file as a data URL. The preview policy already allows
+  `font-src data:`, so no font is ever a sibling request.
+
+The families are all OFL or equivalent, which is what makes them redistributable:
+the block's install line is the package name, and the visitor gets the same file
+the render was photographed with.
+
+## The design plan
+
+The visual half of a brief is decided before the artifact exists, by a second spec
+call whose answer is a closed vocabulary rather than prose: `app/design/plan.py`.
+
+- **What it decides**: direction, composition, hierarchy, display and body family
+  (resolved to a package from the shelf), one accent with the reason it belongs to
+  the subject, surface treatment, density, one signature detail, and what this
+  block in particular should avoid.
+- **Where it is stored**: `components.spec["design"]`, with the packages it
+  resolved to. A family that is not on the shelf is refused at the spec, before a
+  container or a picture is paid for.
+- **Who reads it**: the builder (in the ask), the judge (with the brief), and the
+  three advisory checks in `app/harness/checks.py`, which compare the project with
+  the plan and report drift without blocking a run.
+- **How it stays varied**: the planner sees the newest blocks of the same type and
+  is asked to differ on at least one axis, or to defend the repetition in its
+  rationale. Variety is a property of the catalogue, so it is decided upstream: a
+  judge that sees one block at a time cannot measure it.
+- **Extending it**: a new direction, composition or accent is an enum and a line in
+  the notes of `plan.py`; the prompt is generated from them, so the schema and the
+  text cannot disagree.
+
 ## Conventions
 
 - Imports are **absolute** and rooted at the `app` package (`from app.users.service import ...`). Avoid relative imports so the dependency direction stays easy to read.

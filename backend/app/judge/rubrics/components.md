@@ -67,6 +67,22 @@ and where the clichés cost — a centred everything, four equal cards, a headli
 that is large because nothing else was decided, decoration standing in for
 hierarchy.
 
+The type is part of that decision. Two families, or three when one of them is a
+mono doing a job of its own: a display face with character, chosen for the brief's
+tone and carried by a quiet partner, is a decision and earns its place; the same
+face on a paragraph, or two loud faces competing for one headline, is decoration
+and costs here. Type that was never meant for its size is the same mistake from
+the other side — a display serif at 14px, a script in a button, a mono set as
+body copy.
+
+The plan is part of the evidence. Where it named a direction, an accent, a pair of
+families or a hierarchy, ask whether the render carries them — and whether they
+serve this brief. A deviation the render earns is a decision and can score above a
+timid, literal application; a plan followed by rote, with the accent spent once
+and the hierarchy flattened, is not. Defects you can point at cost here: one radius
+on every surface, an accent everywhere or nowhere, icons standing in for content,
+uniform spacing, a second family that never appears.
+
 Motion is part of it, both ways. An entrance that explains what arrived, or a
 transition that shows two things are the same thing, is worth its lines. A page
 where everything fades in because it looked empty is decoration, and it costs

@@ -9,7 +9,7 @@ The builder never controls that check. A generator that stops when the model say
 ```
 brief
   -> exact cache, quota, moderation, image policy
-  -> spec: taxonomy and nearest blocks
+  -> spec: taxonomy, nearest blocks, design plan
   -> harness agent: write, build, look, fix
   -> judge: score the artifact
   -> publish, or fail with the reason
@@ -21,7 +21,9 @@ Before a task exists, the brief is checked for an exact cache hit, the month's a
 
 ### The spec
 
-The spec is the first model call in the generation pipeline, and it answers one question: which type of block is this? The model sees the level-2 taxonomy and the five published blocks nearest to the brief. It returns a slug from that list, or the run fails. Titles and descriptions stay deterministic, built from the brief.
+The spec is the first pair of model calls in the generation pipeline. The first answers one question: which type of block is this? The model sees the level-2 taxonomy and the five published blocks nearest to the brief. It returns a slug from that list, or the run fails. Titles and descriptions stay deterministic, built from the brief.
+
+The second call is the art direction, and it answers how the block should look before any code exists: one of five directions, a composition, a hierarchy, a display and body family from the type shelf, one named accent with a reason, a surface treatment, a density, a signature detail and what this particular block should avoid. It also sees the newest blocks of the same type, and is asked to differ from them on at least one axis or defend the repetition. The plan is stored with the block, sent to the builder and read by the judge — a direction the judge cannot see is one it cannot score.
 
 The same retrieval powers the duplicate guard. A brief close enough to an existing block is answered with that block instead of a new run. The distance is measured, not guessed. A person who has seen the match can still ask for their own version.
 
@@ -32,6 +34,10 @@ The builder is a LangGraph agent with a small set of tools: write and read files
 `look` is the part that changes the loop. It builds the project in a Modal sandbox and returns the checker's report with two images: the block on a light page and on the dark one the registry switches to. The agent reads both, fixes what it sees and looks again. The budget counts looks, not model turns, and stops at six by default.
 
 Two static checks run before the sandbox: one refuses external assets outside the allowed hosts, the other refuses network calls, script injection and browser escapes. Both are fatal, and both run inside the loop so the agent can fix the problem while it still can.
+
+Three advisory checks compare the project with its plan and report what drifted: families the plan named that are never imported, one radius on every surface, an accent that is missing or that spilled into four other colours. They never block a run — a block can be good and disagree with its plan — and they reach the judge as evidence, not as a verdict.
+
+Before it stops, the builder is asked to look at its final render against the plan and fix what came out weaker rather than adding something new.
 
 A block is a project, not a file. A form can be split into fields and error components. Dependencies are read from the imports and compared with the packages preinstalled in the sandbox. The item page shows the install line the reader needs.
 
@@ -45,7 +51,7 @@ The sandbox folds the built page into one HTML document, capped at 2 MB. The blo
 
 ### The judge
 
-The judge is a separate model call with no tools and no memory of the conversation. It receives the brief, every file, the sandbox report and both renders. It scores five dimensions for a block: render, accessibility, visual, copy and compliance. Images use a shorter rubric: visual, prompt fit and compliance.
+The judge is a separate model call with no tools and no memory of the conversation. It receives the brief, the design plan, every file, the sandbox report and both renders. It scores five dimensions for a block: render, accessibility, visual, copy and compliance. Images use a shorter rubric: visual, prompt fit and compliance.
 
 Each dimension has its own threshold. A high average does not carry a weak dimension past the gate. The judge is not told the thresholds, so its reading stays independent of the bar the product applies.
 

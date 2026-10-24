@@ -116,3 +116,38 @@ def test_an_image_can_arrive_in_the_format_it_came_in():
     parts = about_image(prompt="p", image=PNG, width=1, height=1, media_type="image/webp")
 
     assert parts[1]["image_url"]["url"].startswith("data:image/webp;base64,")
+
+
+PLAN = {
+    "direction": "editorial",
+    "composition": "asymmetric",
+    "hierarchy": ["headline", "price", "details"],
+    "typography": {
+        "display": {"family": "Instrument Serif", "package": "@fontsource/instrument-serif"},
+        "body": {"family": "Geist", "package": "@fontsource/geist"},
+        "mono": None,
+    },
+    "accent": "orange",
+    "accent_reason": "fired clay",
+    "surfaces": "divided",
+    "density": "sparse",
+    "signature": "prices set at display size",
+    "avoid": ["identical cards"],
+    "rationale": "editorial suits a craft product",
+}
+
+
+def test_the_judge_reads_the_plan_the_block_was_asked_to_follow():
+    parts = about_component(brief="b", files={ENTRY: CODE}, found=found(), design=PLAN)
+
+    said = text_of(parts)
+    assert "design plan it was asked to follow" in said
+    assert "Direction: editorial" in said
+    assert "Instrument Serif" in said
+    assert "accent orange" in said
+
+
+def test_a_block_with_no_plan_is_judged_without_one_invented():
+    parts = about_component(brief="b", files={ENTRY: CODE}, found=found())
+
+    assert "No design plan was filed" in text_of(parts)

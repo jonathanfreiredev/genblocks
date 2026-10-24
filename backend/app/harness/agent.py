@@ -39,6 +39,7 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.errors import GraphRecursionError
 
+from app.design import plan as design
 from app.harness import checks, images, skills
 from app.harness.prompts import ASK, HARNESS_PROMPT
 from app.harness.schemas import SandboxFile, SandboxResult
@@ -172,6 +173,9 @@ class _Draft:
     image_categories: list[str]
     files: dict[str, str] = field(default_factory=dict)
     pictures: list[Placed] = field(default_factory=list)
+    # The visual decisions this block is measured against. Handed in by the
+    # caller, like the picture library, because the harness holds no session.
+    design: dict | None = None
     looks: int = 0
     shown: SandboxResult | None = None
     digest: str | None = None
@@ -196,20 +200,26 @@ async def build(
     *,
     brief: str,
     category: str,
+    design: dict | None = None,
     image_categories: list[str] | None = None,
     library: Callable[[str, str], Awaitable[Reused | None]] | None = None,
     model: BaseChatModel | None = None,
 ) -> Built:
     """Build one block for a brief, looking at it until it is worth keeping.
 
-    ``model`` is how a test drives the loop without paying for it; production
-    passes nothing and gets the configured one. ``image_categories`` is the image
-    taxonomy the pictures may be filed under, read by the caller from the database
-    — the harness is handed the list rather than reaching for it. ``library``
-    answers with a picture the registry already has, so a run asks for what is
-    missing instead of generating everything again.
+    ``design`` is the plan the spec decided: the visual decisions the block is
+    asked to follow. ``model`` is how a test drives the loop without paying for
+    it; production passes nothing and gets the configured one.
+    ``image_categories`` is the image taxonomy the pictures may be filed under,
+    read by the caller from the database — the harness is handed the list rather
+    than reaching for it. ``library`` answers with a picture the registry already
+    has, so a run asks for what is missing instead of generating everything again.
     """
-    draft = _Draft(image_categories=list(image_categories or []), library=library)
+    draft = _Draft(
+        image_categories=list(image_categories or []),
+        library=library,
+        design=design,
+    )
     agent = create_agent(
         model or harness_model(),
         tools=_tools(draft),
@@ -322,7 +332,7 @@ def _tools(draft: _Draft) -> list[Any]:
         if digest == draft.digest and draft.shown is not None:
             return _seen(draft.shown, note=UNCHANGED)
 
-        draft.shown = await checks.check(draft.project)
+        draft.shown = await checks.check(draft.project, design=draft.design)
         draft.digest = digest
         draft.rounds.append(
             {
@@ -466,13 +476,13 @@ def _tools(draft: _Draft) -> list[Any]:
 
 
 def _ask(*, brief: str, category: str, draft: _Draft) -> str:
-    """The brief, and the two things about this project it cannot guess.
+    """The brief, the plan, and the two things about this project it cannot guess.
 
-    What the registry called it, and — when there is a library to file pictures
-    under — the types it may ask for, so the agent does not have to guess a name
-    and be told it was wrong.
+    What the registry called it, what it should look like, and — when there is a
+    library to file pictures under — the types it may ask for, so the agent does
+    not have to guess a name and be told it was wrong.
     """
-    ask = ASK.format(category=category, brief=brief)
+    ask = ASK.format(category=category, brief=brief, design=design.render(draft.design))
     if draft.image_categories:
         ask += f"\nThe library files pictures under: {', '.join(draft.image_categories)}.\n"
 
