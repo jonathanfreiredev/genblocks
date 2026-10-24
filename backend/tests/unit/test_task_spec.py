@@ -147,3 +147,11 @@ def test_the_planner_learns_from_a_worked_example():
 
     assert "A plan that decides nothing" in frame
     assert "What goes wrong with the second" in frame
+
+
+def test_the_filing_prompt_closes_the_list():
+    """A familiar word that is not a type is the failure this sentence prevents."""
+    frame = spec._frame([])
+
+    assert "The list is closed" in frame
+    assert "Never answer with a word that is not on the list" in frame

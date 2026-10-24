@@ -14,27 +14,40 @@ pytestmark = pytest.mark.anyio
 
 
 class ScriptedSpec:
-    """A model that answers with a type, and remembers what it was shown."""
+    """A model that answers with a type, and remembers every call it was shown.
 
-    def __init__(self, category: str, reason: str = "the brief is a pricing section") -> None:
-        self.answer = spec.CategoryAnswer(category=category, reason=reason)
+    It answers in the order it was scripted, and keeps answering with the last one:
+    a model that keeps inventing a type is the case the second refusal is for.
+    """
+
+    def __init__(self, *categories: str, reason: str = "the brief is a pricing section") -> None:
+        self.answers = [spec.CategoryAnswer(category=one, reason=reason) for one in categories]
+        self.calls: list[list] = []
         self.shown: list = []
 
     async def ainvoke(self, messages):
+        self.calls.append(messages)
         self.shown = messages
+        said = self.answers[min(len(self.calls) - 1, len(self.answers) - 1)]
 
-        return self.answer
+        return said
 
 
 class ScriptedDesign:
-    """A model that answers with a plan, and remembers what it was shown."""
+    """A model that answers with a plan, and can be made to fail once."""
 
-    def __init__(self, planned: design.DesignPlan | None = None) -> None:
+    def __init__(self, planned: design.DesignPlan | None = None, *, off_shelf_once=False) -> None:
         self.answer = planned or a_plan()
+        self.off_shelf_once = off_shelf_once
+        self.calls: list[list] = []
         self.shown: list = []
 
     async def ainvoke(self, messages):
+        self.calls.append(messages)
         self.shown = messages
+        if self.off_shelf_once and len(self.calls) == 1:
+            # Exactly what the real structured output raises: pydantic refuses it.
+            return a_plan(display_font="Comic Sans")
 
         return self.answer
 
@@ -101,7 +114,7 @@ async def test_an_answer_outside_the_taxonomy_is_refused(db_session):
     await create_category(db_session, slug="hero")
     await create_category(db_session, slug="pricing")
 
-    with pytest.raises(spec.UnreadableCategory, match="not a type of block"):
+    with pytest.raises(spec.UnreadableCategory, match="twice"):
         await spec.build_spec(
             db_session,
             brief="A pricing table",
@@ -154,3 +167,42 @@ async def test_a_plan_off_the_shelf_fails_before_anything_is_built(db_session):
             model=ScriptedSpec("pricing"),
             design_model=OffShelf(),
         )
+
+
+async def test_an_invented_type_is_asked_again_instead_of_failing_the_task(db_session):
+    """A design studio's project list is a portfolio to a model, and not to us."""
+    await create_category(db_session, slug="gallery")
+    await create_category(db_session, slug="blog")
+    model = ScriptedSpec("portfolio", "gallery")
+
+    decided = await spec.build_spec(
+        db_session,
+        brief="A design studio's recent projects, with client and year",
+        model=model,
+        design_model=ScriptedDesign(),
+    )
+
+    assert decided.category_slug == "gallery"
+    # Two calls: the wrong answer is not a run, and the correction is cheaper than
+    # the person's month.
+    assert len(model.calls) == 2
+    correction = model.calls[1][-1].content
+    assert "'portfolio'" in correction
+    assert "blog, gallery" in correction
+    assert "Never invent a type" in correction
+
+
+async def test_a_plan_off_the_shelf_is_asked_again_once(db_session):
+    await create_category(db_session, slug="pricing")
+    planner = ScriptedDesign(off_shelf_once=True)
+
+    decided = await spec.build_spec(
+        db_session,
+        brief="A pricing table",
+        model=ScriptedSpec("pricing"),
+        design_model=planner,
+    )
+
+    assert decided.spec["design"]["typography"]["display"]["family"] == "Geist"
+    assert len(planner.calls) == 2
+    assert "not one this registry can build" in planner.calls[1][-1].content

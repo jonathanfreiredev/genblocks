@@ -581,3 +581,7 @@ def test_a_block_with_no_plan_is_asked_without_one():
     ask = agent._ask(brief=BRIEF, category="hero", draft=agent._Draft(image_categories=[]))
 
     assert "No design plan was filed" in ask
+
+
+def test_the_builder_is_sent_to_the_copy_standard_before_writing():
+    assert "Read `copy` before you write" in agent.HARNESS_PROMPT

@@ -3,7 +3,7 @@
 A skill is a document in this package — the standard a block is held to, written
 for this medium (one project, generic Tailwind, the packages on the shelf). The
 agent gets the **index** in its system prompt and pulls a body with its
-``read_skill`` tool, which is how seven documents fit in a prompt that is paid for
+``read_skill`` tool, which is how eight documents fit in a prompt that is paid for
 on every turn: the index is stable and cached, and a body is read when it is
 needed.
 
@@ -61,6 +61,7 @@ SHELF = (
     ("fonts", "the type shelf: every family, what each one is for, and how to ship it"),
     ("accessibility", "contrast, structure, controls, names, focus, and reduced motion"),
     ("composition", "hierarchy, spacing rhythm, alignment, restraint and responsive behaviour"),
+    ("copy", "the words: one voice, real nouns, and the shapes that read as machine-written"),
     ("motion", "when movement earns its place, and how to make it optional"),
     ("cliches", "the shapes this registry does not publish, and what to do instead"),
 )

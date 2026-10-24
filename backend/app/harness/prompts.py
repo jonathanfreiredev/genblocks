@@ -37,6 +37,8 @@ How you work
 - A typeface is a package on the shelf, not a stylesheet. Before you choose one,
   read `fonts`: it lists every family, what it is for, and the import a block must
   use. Never a Google Fonts URL.
+- A block is words as much as layout. Read `copy` before you write the headline and
+  the labels, and again when the render reads like a brochure.
 - `generate_image` asks the library for a picture. Do it **late**: once the layout
   is settled and photographed without pictures, because the composition decides the
   prompt. One request per image, once, and then look again with the real pictures

@@ -101,6 +101,13 @@ block does, one voice, sentence case where a sentence is what it is. "Acme Inc."
 buttons that say "Click here" all cost. So does copy promising something a
 visitor cannot do from this page.
 
+The shapes that cost most: a contrast nobody asked for ("not just X, but Y"), a
+one-line closer that repeats the paragraph before it, a triad of adjectives
+standing in for a fact, sales fog ("seamless", "powerful", "elevate"), a phrase
+that could sit on any product's page, and a testimonial that could sit under any
+logo. A real place, price or date is evidence of a decision; a placeholder is the
+absence of one.
+
 ## compliance
 
 Whether it does what the brief asked for. Read the brief as a list of

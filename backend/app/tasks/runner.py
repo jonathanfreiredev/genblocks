@@ -67,6 +67,7 @@ from app.settings import settings
 from app.tasks import service
 from app.tasks import spec as block_spec
 from app.tasks.models import StepStatus, Task, TaskKind, TaskStatus, TaskStep
+from app.tasks.steps import IMAGE_STEP_NAMES, STEP_NAMES
 from app.users.models import User
 from app.users.service import display_names
 from app.vectors import service as vectors
@@ -77,20 +78,6 @@ logger = structlog.get_logger("app.tasks.runner")
 # trace can be found by the thing it describes.
 TRACE_NAME = "generate_component"
 IMAGE_TRACE_NAME = "generate_image"
-
-STEP_NAMES = (
-    "Retrieving references",
-    "Generating the block",
-    "Judging the attempt",
-    "Publishing the block",
-)
-
-IMAGE_STEP_NAMES = (
-    "Checking the prompt",
-    "Generating the image",
-    "Judging the image",
-    "Filing it in the library",
-)
 
 # The image taxonomy's kind. Pictures are filed under their own half of the
 # taxonomy, which is why the harness is handed the types rather than inventing one.

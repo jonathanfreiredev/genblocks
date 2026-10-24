@@ -24,13 +24,14 @@ else past their tenth generation.
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin import service as admin_service
 from app.db.models import utcnow
 from app.settings import settings
-from app.tasks.models import Task
+from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
+from app.tasks.steps import GENERATING_STEPS
 from app.users.models import User
 
 
@@ -129,7 +130,29 @@ async def _is_operator(session: AsyncSession, *, user_id: uuid.UUID) -> bool:
 
 
 async def _queued_this_month(session: AsyncSession, *, user_id: uuid.UUID, since: datetime) -> int:
-    """How many tasks this person queued since ``since``."""
+    """How many of this person's tasks spent a generation since ``since``.
+
+    Work that reached the expensive step counts and work that died before it does
+    not. The line is the generating step: before it, a run has made one or two
+    model calls of cents, and charging a person a tenth of their month for our own
+    taxonomy or validation error is a bill for a product defect. After it, the
+    sandbox, the model turns and the pictures have been paid for whether or not the
+    block was published, so a failure there is still a generation.
+
+    The test is on the step, not on the task's status, because a task can also be
+    pending, running or interrupted — work somebody queued and may still get. Only a
+    failure that left the generating step untouched is refunded.
+    """
+    never_generated = (
+        select(TaskStep.id)
+        .where(
+            TaskStep.task_id == Task.id,
+            TaskStep.name.in_(GENERATING_STEPS),
+            TaskStep.status == StepStatus.PENDING,
+        )
+        .exists()
+    )
+
     return await session.scalar(
         select(func.count())
         .select_from(Task)
@@ -140,5 +163,7 @@ async def _queued_this_month(session: AsyncSession, *, user_id: uuid.UUID, since
             # A cached brief queued no work: it costs nothing, so it spends no
             # quota (PLAN.md, decision 44).
             Task.cached.is_(False),
+            # A failed run that never generated gives the slot back.
+            or_(Task.status != TaskStatus.FAILED, ~never_generated),
         )
     )

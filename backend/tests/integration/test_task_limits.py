@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.moderation import service as moderation
 from app.settings import settings
 from app.tasks import limits, service
-from app.tasks.models import Task, TaskStatus
+from app.tasks.models import StepStatus, Task, TaskStatus, TaskStep
+from app.tasks.steps import IMAGE_STEP_NAMES, STEP_NAMES
 from app.users.models import User
 
 pytestmark = pytest.mark.anyio
@@ -39,6 +40,21 @@ async def _queued(session, owner: User, *, when: datetime | None = None) -> Task
         await session.commit()
 
     return task
+
+
+async def _failed_at(session, task, *, index: int, names=STEP_NAMES) -> None:
+    """The checklist the runner leaves when the step at ``index`` failed."""
+    for position, name in enumerate(names):
+        status = StepStatus.PENDING
+        if position < index:
+            status = StepStatus.SUCCEEDED
+        elif position == index:
+            status = StepStatus.FAILED
+        session.add(TaskStep(task_id=task.id, index=position, name=name, status=status))
+
+    task.status = TaskStatus.FAILED
+    task.error = "The step that failed says why."
+    await session.commit()
 
 
 async def test_a_month_is_a_window_and_its_edges_are_utc():
@@ -212,6 +228,56 @@ async def test_enqueue_lets_an_operator_past_the_month(db_session, monkeypatch):
 async def test_somebody_outside_the_operator_list_still_has_a_month(db_session, monkeypatch):
     """Naming somebody else an operator must not open the door for everyone."""
     monkeypatch.setattr(settings, "admin_emails", "someone@example.com")
+    monkeypatch.setattr(settings, "tasks_per_month", 1)
+    owner = await _owner(db_session)
+    await _queued(db_session, owner, when=OCTOBER)
+
+    with pytest.raises(limits.MonthlyQuotaReached):
+        await limits.admitted(db_session, user_id=owner.id, now=OCTOBER)
+
+
+async def test_a_failure_before_the_block_is_generated_gives_the_slot_back(db_session, monkeypatch):
+    """A brief refused at the spec never hired a sandbox: it is a defect, not a run."""
+    monkeypatch.setattr(settings, "tasks_per_month", 1)
+    owner = await _owner(db_session)
+    task = await _queued(db_session, owner, when=OCTOBER)
+    await _failed_at(db_session, task, index=0)
+
+    assert await limits.admitted(db_session, user_id=owner.id, now=OCTOBER) is None
+
+
+async def test_an_image_that_never_generated_gives_the_slot_back(db_session, monkeypatch):
+    monkeypatch.setattr(settings, "tasks_per_month", 1)
+    owner = await _owner(db_session)
+    task = await _queued(db_session, owner, when=OCTOBER)
+    await _failed_at(db_session, task, index=0, names=IMAGE_STEP_NAMES)
+
+    assert await limits.admitted(db_session, user_id=owner.id, now=OCTOBER) is None
+
+
+async def test_a_failure_during_generation_still_spends_the_month(db_session, monkeypatch):
+    """The sandbox and the model turns were paid for, whatever came out."""
+    monkeypatch.setattr(settings, "tasks_per_month", 1)
+    owner = await _owner(db_session)
+    task = await _queued(db_session, owner, when=OCTOBER)
+    await _failed_at(db_session, task, index=1)
+
+    with pytest.raises(limits.MonthlyQuotaReached):
+        await limits.admitted(db_session, user_id=owner.id, now=OCTOBER)
+
+
+async def test_a_block_the_judge_rejected_still_spends_the_month(db_session, monkeypatch):
+    monkeypatch.setattr(settings, "tasks_per_month", 1)
+    owner = await _owner(db_session)
+    task = await _queued(db_session, owner, when=OCTOBER)
+    await _failed_at(db_session, task, index=2)
+
+    with pytest.raises(limits.MonthlyQuotaReached):
+        await limits.admitted(db_session, user_id=owner.id, now=OCTOBER)
+
+
+async def test_work_still_in_the_queue_counts(db_session, monkeypatch):
+    """Counting only what already ran would let a stopped worker be free storage."""
     monkeypatch.setattr(settings, "tasks_per_month", 1)
     owner = await _owner(db_session)
     await _queued(db_session, owner, when=OCTOBER)
