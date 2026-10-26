@@ -441,6 +441,20 @@ producto las conserva en el esquema, pero no las usa en ningún flujo público.
     tools MCP devolvían la tarjeta sin render ni autor: las dos puertas arman la
     forma en el servicio (`components_service.summaries/read`,
     `images_service.reads/read`), no en el router.
+51. **La respuesta puede llevar la foto, y la lleva cuando se pide.** Un chat
+    como ChatGPT no pinta una URL del texto: pinta un bloque `image` de MCP. Las
+    tools de lectura devuelven por eso un `ToolResult` con el JSON de siempre
+    **más** la imagen, descargada del mismo host de entrega (`app/mcp/assets.py`,
+    con timeout, tope de tamaño y tipo de imagen) y sin transformación alguna.
+    Se pide, no se impone: `get_image` la lleva siempre —es la tool de la
+    imagen—, `get_component` solo con `include_image=true` porque el uso
+    principal de esa tool es leer código y una captura en cada lectura la paga
+    todo el que construye, y las dos búsquedas con `include_images=true`, que
+    traen como mucho **tres**: los componentes como miniatura (una lista es una
+    fila de tarjetas) y las imágenes como son. La firma sigue diciendo el modelo
+    de lectura aunque el retorno sea el sobre: de ahí sale el output schema, así
+    que no puede desviarse de lo que la tool devuelve. Bajar una foto que falla
+    no falla la tool: el JSON y las URLs salen igual y el aviso queda en el log.
 
 ---
 
