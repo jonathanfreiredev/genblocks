@@ -7,7 +7,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.images.models import Image
+from app.images.schemas import ImageRead
 from app.pagination import ListParams
+from app.users.service import display_names
 
 
 async def list_images(
@@ -61,3 +63,27 @@ async def by_ids(session: AsyncSession, *, ids: Sequence[uuid.UUID]) -> list[Ima
     by_id = {image.id: image for image in found}
 
     return [by_id[one] for one in ids if one in by_id]
+
+
+async def reads(session: AsyncSession, images: Sequence[Image]) -> list[ImageRead]:
+    """The read shape of a page of pictures, with each maker resolved.
+
+    The author is a profile, not a column on the picture, so it is joined here
+    once for the page rather than read per card. One door builds these shapes, so
+    the API and the MCP server cannot disagree about what a picture carries.
+    """
+    names = await display_names(session, ids=[one.created_by for one in images])
+
+    return [
+        ImageRead.model_validate(image).model_copy(
+            update={"author": names.get(image.created_by) if image.created_by else None}
+        )
+        for image in images
+    ]
+
+
+async def read(session: AsyncSession, image: Image) -> ImageRead:
+    """One picture, in the same shape a list returns."""
+    (found,) = await reads(session, [image])
+
+    return found

@@ -17,9 +17,12 @@ from sqlalchemy import select
 
 from app.categories.schemas import CategoryRead
 from app.components.schemas import ComponentSummary
+from app.generations.models import Generation
+from app.harness.agent import ENTRY
 from app.images.schemas import ImageRead
 from app.mcp import tools
 from app.mcp.server import mcp
+from app.settings import settings
 from app.tasks.models import Task, TaskStep
 from app.users.models import User
 from tests.helpers import create_category, create_component, create_image
@@ -136,7 +139,8 @@ async def test_get_component_reports_an_unknown_identifier(tool_session):
         await tools.get_component(component_id=uuid.uuid4())
 
 
-async def test_search_images_returns_the_stock_library(tool_session):
+async def test_search_images_returns_the_stock_library(tool_session, monkeypatch):
+    monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
     scenes = await create_category(tool_session, slug="photography", kind="image")
     image = await create_image(
         tool_session,
@@ -152,6 +156,64 @@ async def test_search_images_returns_the_stock_library(tool_session):
     assert isinstance(page.items[0], ImageRead)
     assert page.items[0].path == image.path
     assert one.slug == image.slug
+    # An agent can open the picture without being told where the account lives.
+    assert one.url == "https://assets.example.test/upload/genblocks/images/harbour"
+    assert page.items[0].url == one.url
+    assert one.page_url.endswith(f"/images/{image.slug}")
+
+
+async def test_search_components_carries_the_render_and_its_url(tool_session, monkeypatch):
+    """The render lives on the winning attempt, and an agent gets it addressed.
+
+    A card without a picture is a title, so the tool reads the block through the
+    same shape the web app does rather than from the row alone.
+    """
+    monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
+    category = await create_category(tool_session, slug="hero")
+    component = await create_component(tool_session, category_id=category.id, slug="alpha")
+    generation = Generation(
+        component_id=component.id,
+        attempt_no=1,
+        files={ENTRY: "x"},
+        entry=ENTRY,
+        verdict="published",
+        screenshot_path="genblocks/screenshots/alpha",
+        thumbnail_path="genblocks/screenshots/alpha-thumb",
+    )
+    tool_session.add(generation)
+    await tool_session.commit()
+    await tool_session.refresh(generation)
+
+    component.winning_generation_id = generation.id
+    await tool_session.commit()
+
+    card = (await tools.search_components(query="alpha")).items[0]
+    full = await tools.get_component(slug="alpha")
+
+    assert card.screenshot_path == "genblocks/screenshots/alpha"
+    assert card.screenshot_url == "https://assets.example.test/upload/genblocks/screenshots/alpha"
+    assert card.thumbnail_url == (
+        "https://assets.example.test/upload/genblocks/screenshots/alpha-thumb"
+    )
+    assert card.page_url.endswith("/blocks/alpha")
+    assert full.screenshot_url == card.screenshot_url
+
+
+async def test_a_deployment_with_no_asset_base_publishes_no_url(tool_session, monkeypatch):
+    monkeypatch.setattr(settings, "asset_base_url", None)
+    scenes = await create_category(tool_session, slug="photography", kind="image")
+    image = await create_image(
+        tool_session,
+        category_id=scenes.id,
+        path="genblocks/images/harbour",
+        prompt="A quiet harbour at dawn",
+    )
+
+    one = await tools.get_image(image_id=image.id)
+
+    # The id still travels; only the address is missing.
+    assert one.path == image.path
+    assert one.url is None
 
 
 async def test_list_tasks_returns_only_the_callers_tasks(tool_session, monkeypatch):
@@ -193,6 +255,8 @@ async def test_get_task_reads_one_of_the_callers_tasks(tool_session, monkeypatch
 
     assert found.brief == "mine"
     assert found.status == "pending"
+    # The page exists from the moment it is queued, before there is a render.
+    assert found.task_url.endswith(f"/tasks/{task.id}")
 
 
 async def test_get_task_hides_someone_elses_task(tool_session, monkeypatch):

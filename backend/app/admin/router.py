@@ -19,12 +19,14 @@ from app.admin.schemas import (
     AdminUserRead,
 )
 from app.admin.service import is_admin
+from app.components import service as components_service
 from app.components.models import Component
-from app.components.service import list_components, renders
+from app.components.service import list_components
 from app.db.session import get_async_db_session
 from app.deletion import service as deletion
 from app.deletion.models import DeletionAudit
-from app.images.models import Image
+from app.images import service as images_service
+from app.images.schemas import ImageRead
 from app.images.service import list_images
 from app.pagination import OffsetPage
 from app.users.models import User
@@ -36,27 +38,15 @@ admin_items_router = APIRouter(prefix="/admin", tags=["admin"])
 async def _component_summaries(
     session: AsyncSession, components: Sequence[Component]
 ) -> list[AdminComponentSummary]:
-    names = await display_names(session, ids=[one.created_by for one in components])
-    shots = await renders(session, ids=[one.id for one in components])
+    """The operator's card, read through the same door the public list uses."""
+    shapes = await components_service.summaries(session, components)
 
-    return [
-        AdminComponentSummary.model_validate(component).model_copy(
-            update={
-                "author": names.get(component.created_by) if component.created_by else None,
-                "screenshot_path": (
-                    shots[component.id].screenshot if component.id in shots else None
-                ),
-                "thumbnail_path": (
-                    shots[component.id].thumbnail if component.id in shots else None
-                ),
-            }
-        )
-        for component in components
-    ]
+    return [AdminComponentSummary.model_validate(shape) for shape in shapes]
 
 
-def _image_read(image: Image, author: str | None) -> AdminImageRead:
-    return AdminImageRead.model_validate(image).model_copy(update={"author": author})
+def _admin_image_reads(shapes: Sequence[ImageRead]) -> list[AdminImageRead]:
+    """The operator's picture, read through the same door the public list uses."""
+    return [AdminImageRead.model_validate(shape) for shape in shapes]
 
 
 @admin_items_router.get("/components", response_model=OffsetPage[AdminComponentSummary])
@@ -94,13 +84,9 @@ async def read_admin_images(
         category_id=params.category_id,
         search=params.search,
     )
-    names = await display_names(session, ids=[image.created_by for image in images])
 
     return OffsetPage(
-        items=[
-            _image_read(image, names.get(image.created_by) if image.created_by else None)
-            for image in images
-        ],
+        items=_admin_image_reads(await images_service.reads(session, images)),
         total=total,
         limit=params.limit,
         offset=params.offset,

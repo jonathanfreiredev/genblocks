@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app import urls
 from app.pagination import ListParams
 
 
@@ -38,6 +39,28 @@ class ComponentSummary(BaseModel):
     thumbnail_path: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    # The two links a client can actually use. They are derived from the fields
+    # above rather than stored, so a consumer never has to know the delivery host
+    # or the site's shape — and a row that moved still answers with the current
+    # address. Both stay null when the deployment publishes no assets.
+    @computed_field
+    @property
+    def screenshot_url(self) -> str | None:
+        """The full render, ready to open."""
+        return urls.asset_url(self.screenshot_path)
+
+    @computed_field
+    @property
+    def thumbnail_url(self) -> str | None:
+        """The card crop, ready to open."""
+        return urls.asset_url(self.thumbnail_path)
+
+    @computed_field
+    @property
+    def page_url(self) -> str:
+        """The block's item page."""
+        return urls.component_page_url(self.slug)
 
 
 class ComponentRead(ComponentSummary):

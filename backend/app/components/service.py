@@ -8,9 +8,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.components.models import Component, ComponentPreview
+from app.components.schemas import ComponentRead, ComponentSummary
 from app.generations.models import Generation
 from app.pagination import ListParams
 from app.settings import settings
+from app.users.service import display_names
 from app.vectors import service as vectors
 
 
@@ -158,6 +160,54 @@ async def renders(session: AsyncSession, *, ids: Sequence[uuid.UUID]) -> dict[uu
         component_id: Render(screenshot=screenshot, thumbnail=thumbnail)
         for component_id, screenshot, thumbnail in found.all()
     }
+
+
+async def summaries(
+    session: AsyncSession, components: Sequence[Component]
+) -> list[ComponentSummary]:
+    """The list shape, with the two facts that live outside the block's row.
+
+    A card is a picture and a name, and the render lives on the winning attempt
+    while the name lives on a user. The API, the operator screens and the MCP
+    server all read blocks through here, so none of them can ship a card with a
+    null render that the others fill in.
+    """
+    names = await display_names(session, ids=[one.created_by for one in components])
+    shots = await renders(session, ids=[one.id for one in components])
+
+    return [
+        ComponentSummary.model_validate(component).model_copy(
+            update={
+                "author": names.get(component.created_by) if component.created_by else None,
+                "screenshot_path": (
+                    shots[component.id].screenshot if component.id in shots else None
+                ),
+                "thumbnail_path": (
+                    shots[component.id].thumbnail if component.id in shots else None
+                ),
+            }
+        )
+        for component in components
+    ]
+
+
+async def read(session: AsyncSession, component: Component) -> ComponentRead:
+    """A whole block: its own row, plus the card's two facts and its preview flag.
+
+    ``has_preview`` is four columns rather than the document, and it is read from
+    the preview table rather than derived from the files, so an item page knows
+    whether there is something to run without loading it.
+    """
+    (summary,) = await summaries(session, [component])
+
+    return ComponentRead.model_validate(component).model_copy(
+        update={
+            "author": summary.author,
+            "screenshot_path": summary.screenshot_path,
+            "thumbnail_path": summary.thumbnail_path,
+            "has_preview": await has_preview(session, component_id=component.id),
+        }
+    )
 
 
 async def already_built(session: AsyncSession, *, brief: str) -> tuple[Component, float] | None:

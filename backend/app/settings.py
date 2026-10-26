@@ -113,6 +113,12 @@ class Settings(BaseSettings):
     cloudinary_cloud_name: str | None = None
     cloudinary_api_key: str | None = None
     cloudinary_api_secret: str | None = None
+    # The delivery base an asset's public id is appended to. It is public and
+    # signs nothing, so a process that only reads the vault (the MCP server) can
+    # hand out image addresses without holding credentials. It ships with the
+    # account's own base so nothing has to be configured to publish a URL; set
+    # ASSET_BASE_URL to point a deployment somewhere else, or empty for none.
+    asset_base_url: str = "https://res.cloudinary.com/ddjovluur/image/upload"
 
     # Modal runs the code sandbox that builds and renders generated components.
     # It holds no secret: the agent loop lives in the backend (pattern B), so

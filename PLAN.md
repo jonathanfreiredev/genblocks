@@ -425,6 +425,22 @@ producto las conserva en el esquema, pero no las usa en ningún flujo público.
     backfill la genera para los ya publicados; si un bloque viejo no pasa las
     puertas nuevas, se guarda igual porque es cosmética y el bloque ya está
     publicado.
+50. **El id se guarda, la dirección se deriva.** Un cliente que no es esta web
+    —un agente externo, un cliente MCP, un `curl`— no puede adivinar dónde vive
+    una captura: el `public_id` viaja sin host y el nombre del cloud no está en
+    ninguna respuesta. Las formas de lectura publican por eso `screenshot_url`,
+    `thumbnail_url`, `url` y `page_url` (más `task_url` en una tarea, que existe
+    desde que se encola, cuando todavía no hay nada que enseñar). Son campos
+    **calculados al serializar** desde el `public_id` y el slug, no columnas: un
+    asset que se mueva sigue contestando la dirección de hoy, y la base no
+    cambia. La base es `ASSET_BASE_URL`, que **no firma nada** y por eso llega
+    puesta por defecto en `settings.py`: el proceso del MCP publica direcciones
+    sin recibir las credenciales de Cloudinary, y nadie tiene que configurar
+    nada para ver una URL. Sigue siendo una variable, para apuntar un despliegue
+    a otro host o vaciarla y publicar solo los ids. Se arregla de paso que las
+    tools MCP devolvían la tarjeta sin render ni autor: las dos puertas arman la
+    forma en el servicio (`components_service.summaries/read`,
+    `images_service.reads/read`), no en el router.
 
 ---
 
@@ -1135,6 +1151,7 @@ como `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`.
 | `CLOUDINARY_CLOUD_NAME` | storage (y `NEXT_PUBLIC_...` en el frontend, para leer) |
 | `CLOUDINARY_API_KEY` | storage |
 | `CLOUDINARY_API_SECRET` | storage |
+| `ASSET_BASE_URL` | base pública de entrega para las URLs que publican la API y el MCP; viene puesta con la del cloud y solo se cambia para apuntar a otro host (no lleva credenciales) |
 | `NEXT_PUBLIC_LANGFUSE_HOST` | frontend: enlace al trace en el panel (opcional) |
 | `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` | invocar el sandbox |
 | `CHROMA_HOST` / `CHROMA_API_KEY` / `CHROMA_TENANT` / `CHROMA_DATABASE` | vectores (Chroma Cloud en prod) |

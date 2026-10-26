@@ -2,8 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field
 
+from app import urls
 from app.generations.schemas import GenerationRead
 from app.pagination import ListParams
 from app.tasks.models import TaskStatus
@@ -75,6 +76,15 @@ class TaskRead(BaseModel):
     steps: list[TaskStepRead] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
+
+    # Where the owner follows it. Present from the moment it is queued, when
+    # there is no render yet: the page shows the checklist, and the result once
+    # there is one.
+    @computed_field
+    @property
+    def task_url(self) -> str:
+        """The task's own page on the site."""
+        return urls.task_page_url(self.id)
 
 
 class TaskDetailRead(TaskRead):

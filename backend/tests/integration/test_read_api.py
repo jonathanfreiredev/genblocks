@@ -12,6 +12,7 @@ from app.components.models import ComponentPreview
 from app.deletion import service as deletion
 from app.generations.models import Generation
 from app.harness.agent import ENTRY
+from app.settings import settings
 from app.users.models import User
 from tests.helpers import create_category, create_component, create_image
 
@@ -34,7 +35,8 @@ async def test_the_vault_reads_are_public(client, db_session):
         assert (await client.get(url)).status_code == 200, url
 
 
-async def test_the_image_library_is_public_again(client, db_session):
+async def test_the_image_library_is_public_again(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
     scenes = await create_category(db_session, slug="photography", kind="image")
     image = await create_image(
         db_session,
@@ -51,6 +53,11 @@ async def test_the_image_library_is_public_again(client, db_session):
     assert page["items"][0]["prompt"] == "A quiet harbour at dawn"
     assert by_slug.status_code == 200
     assert by_id.status_code == 200
+
+    # The picture is addressable without the client knowing the account.
+    assert page["items"][0]["url"] == "https://assets.example.test/upload/genblocks/images/dawn"
+    assert by_id.json()["url"] == page["items"][0]["url"]
+    assert by_slug.json()["page_url"].endswith(f"/images/{image.slug}")
 
 
 async def test_categories_come_back_as_a_tree(client, db_session):
@@ -92,7 +99,8 @@ async def test_components_come_back_as_a_page_of_cards(client, db_session):
     assert "code" not in body["items"][0]
 
 
-async def test_a_card_carries_the_maker_and_the_render(client, db_session):
+async def test_a_card_carries_the_maker_and_the_render(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
     category = await create_category(db_session, slug="hero")
     user = User(supabase_user_id=uuid.uuid4(), full_name="Marisol Vega")
     db_session.add(user)
@@ -128,8 +136,21 @@ async def test_a_card_carries_the_maker_and_the_render(client, db_session):
     assert full["screenshot_path"] == "genblocks/screenshots/alpha"
     assert full["thumbnail_path"] == "genblocks/screenshots/alpha-thumb"
 
+    # The two pictures also travel as addresses, so a client that is not this web
+    # app can show them without knowing where the account is.
+    assert card["screenshot_url"] == (
+        "https://assets.example.test/upload/genblocks/screenshots/alpha"
+    )
+    assert card["thumbnail_url"] == (
+        "https://assets.example.test/upload/genblocks/screenshots/alpha-thumb"
+    )
+    assert full["screenshot_url"] == card["screenshot_url"]
+    assert full["page_url"].endswith("/blocks/alpha")
+    assert card["page_url"] == full["page_url"]
 
-async def test_an_unclaimed_card_has_no_author(client, db_session):
+
+async def test_an_unclaimed_card_has_no_author(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
     category = await create_category(db_session, slug="hero")
     await create_component(db_session, category_id=category.id, slug="alpha")
 
@@ -138,6 +159,10 @@ async def test_an_unclaimed_card_has_no_author(client, db_session):
     assert card["author"] is None
     assert card["screenshot_path"] is None
     assert card["thumbnail_path"] is None
+    # No render means no address: the field is absent by being null, not a link
+    # to nothing.
+    assert card["screenshot_url"] is None
+    assert card["thumbnail_url"] is None
 
 
 async def test_components_can_be_filtered_by_category_and_searched(client, db_session):

@@ -19,14 +19,21 @@ from app.images.schemas import (
     ImagePlanRequest,
     ImageRead,
 )
-from app.images.service import get_image, get_image_by_slug, list_images
+from app.images.service import (
+    get_image,
+    get_image_by_slug,
+    list_images,
+    reads,
+)
+from app.images.service import (
+    read as read_row,
+)
 from app.notifications import email as notifications
 from app.pagination import OffsetPage
 from app.tasks.limits import MonthlyQuotaReached
 from app.tasks.schemas import TaskRead
 from app.tasks.service import enqueue_image_task
 from app.users.models import User
-from app.users.service import display_names
 
 images_router = APIRouter(prefix="/images", tags=["images"])
 
@@ -53,15 +60,8 @@ async def read_images(
         session, params=params, category_id=params.category_id, search=params.search
     )
 
-    names = await display_names(session, ids=[image.created_by for image in images])
-
     return OffsetPage(
-        items=[
-            ImageRead.model_validate(image).model_copy(
-                update={"author": names.get(image.created_by) if image.created_by else None}
-            )
-            for image in images
-        ],
+        items=await reads(session, images),
         total=total,
         limit=params.limit,
         offset=params.offset,
@@ -158,11 +158,7 @@ async def read_image_by_slug(
     if image is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
 
-    names = await display_names(session, ids=[image.created_by])
-
-    return ImageRead.model_validate(image).model_copy(
-        update={"author": names.get(image.created_by) if image.created_by else None}
-    )
+    return await read_row(session, image)
 
 
 @images_router.get("/{image_id}", response_model=ImageRead)
@@ -175,8 +171,4 @@ async def read_image(
     if image is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found.")
 
-    names = await display_names(session, ids=[image.created_by])
-
-    return ImageRead.model_validate(image).model_copy(
-        update={"author": names.get(image.created_by) if image.created_by else None}
-    )
+    return await read_row(session, image)

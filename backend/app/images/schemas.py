@@ -2,8 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field
 
+from app import urls
 from app.pagination import ListParams
 
 IMAGE_PROMPT_MIN_LENGTH = 10
@@ -56,7 +57,8 @@ class ImageRead(BaseModel):
     """A stock image and its generation panel.
 
     ``path`` is the Cloudinary public id, not a full URL: the delivery host and
-    the transform are the client's to choose. ``scores``, ``rubric_version`` and
+    the transform are the client's to choose — and ``url`` is that choice already
+    made, for a client that does not want to. ``scores``, ``rubric_version`` and
     ``langfuse_trace_id`` are the same fields a component exposes, so one view
     renders the panel for both.
     """
@@ -80,3 +82,15 @@ class ImageRead(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def url(self) -> str | None:
+        """The picture itself, ready to open. Null when no asset base is published."""
+        return urls.asset_url(self.path)
+
+    @computed_field
+    @property
+    def page_url(self) -> str:
+        """The picture's item page."""
+        return urls.image_page_url(self.slug)
