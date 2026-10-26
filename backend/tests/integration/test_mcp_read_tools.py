@@ -12,8 +12,6 @@ from collections.abc import AsyncIterator
 
 import pytest
 from fastmcp.server.auth import AccessToken
-from fastmcp.tools import ToolResult
-from mcp.types import ImageContent, TextContent
 from pydantic import ValidationError
 from sqlalchemy import select
 
@@ -21,7 +19,6 @@ from app.categories.schemas import CategoryRead
 from app.components.models import Component
 from app.generations.models import Generation
 from app.harness.agent import ENTRY
-from app.mcp import assets as mcp_assets
 from app.mcp import tools
 from app.mcp.server import mcp
 from app.settings import settings
@@ -43,29 +40,6 @@ PUBLISHED_READ_TOOLS = {
     "get_task",
 }
 
-# What the tools hand over when they show a picture. The bytes are never the
-# point of a test here; that a content block exists is.
-PNG = b"\x89PNG\r\n\x1a\n"
-
-
-@pytest.fixture(autouse=True)
-def no_cloudinary(monkeypatch) -> list[str | None]:
-    """Keep the suite off the delivery account, and remember what was asked for.
-
-    A tool that shows a picture gets these bytes instead of a download; the list
-    it returns is how a test checks which ids were worth fetching.
-    """
-    asked: list[str | None] = []
-
-    async def fetch(public_id: str | None, *, client=None) -> mcp_assets.Picture | None:
-        asked.append(public_id)
-        if not public_id or not settings.asset_base_url:
-            return None
-        return mcp_assets.Picture(data=PNG, format="png")
-
-    monkeypatch.setattr(tools.assets, "fetch", fetch)
-    return asked
-
 
 @pytest.fixture
 def tool_session(monkeypatch, db_session):
@@ -77,22 +51,6 @@ def tool_session(monkeypatch, db_session):
 
     monkeypatch.setattr(tools, "async_session_maker", session_factory)
     return db_session
-
-
-def payload(result: ToolResult) -> dict:
-    """The structured half of a tool result, which is what a client deserializes."""
-    assert isinstance(result, ToolResult)
-    return result.structured_content or {}
-
-
-def pictures(result: ToolResult) -> list[ImageContent]:
-    """The image blocks in a tool result, in the order they were sent."""
-    return [block for block in result.content if isinstance(block, ImageContent)]
-
-
-def text_of(result: ToolResult) -> str:
-    """The text the model reads, joined across its blocks."""
-    return "\n".join(block.text for block in result.content if isinstance(block, TextContent))
 
 
 def sign_in(monkeypatch, *, subject: uuid.UUID, email: str = "jane@example.com") -> None:
@@ -134,24 +92,12 @@ async def test_search_components_pages_and_returns_the_total(tool_session):
     for slug in ("alpha", "bravo"):
         await create_component(tool_session, category_id=category.id, slug=slug)
 
-    page = payload(await tools.search_components(limit=1, offset=1))
-    by_text = payload(await tools.search_components(query="bravo"))
+    page = await tools.search_components(limit=1, offset=1)
+    by_text = await tools.search_components(query="bravo")
 
-    assert page["total"] == 2
-    assert len(page["items"]) == 1
-    assert [item["slug"] for item in by_text["items"]] == ["bravo"]
-
-
-async def test_a_search_can_be_asked_for_the_list_alone(tool_session, no_cloudinary):
-    """The flag is an opt-out: an agent choosing between candidates pays for no pixels."""
-    category = await create_category(tool_session, slug="hero")
-    await create_component(tool_session, category_id=category.id, slug="alpha")
-
-    found = await tools.search_components(include_images=False)
-
-    assert pictures(found) == []
-    assert payload(found)["items"][0]["page_url"].endswith("/blocks/alpha")
-    assert no_cloudinary == []
+    assert page.total == 2
+    assert len(page.items) == 1
+    assert [item.slug for item in by_text.items] == ["bravo"]
 
 
 async def test_search_components_respects_the_page_size_cap(tool_session):
@@ -164,13 +110,13 @@ async def test_get_component_takes_either_identifier(tool_session):
     category = await create_category(tool_session, slug="hero")
     component = await create_component(tool_session, category_id=category.id, slug="alpha")
 
-    by_id = payload(await tools.get_component(component_id=component.id))
-    by_slug = payload(await tools.get_component(slug="alpha"))
+    by_id = await tools.get_component(component_id=component.id)
+    by_slug = await tools.get_component(slug="alpha")
 
-    assert by_id["id"] == str(component.id)
-    assert by_slug["id"] == str(component.id)
-    assert by_id["entry"] == component.entry
-    assert by_id["files"] == component.files
+    assert by_id.id == component.id
+    assert by_slug.id == component.id
+    assert by_id.entry == component.entry
+    assert by_id.files == component.files
 
 
 def test_get_component_warns_that_its_files_are_untrusted():
@@ -222,56 +168,16 @@ async def test_search_images_returns_the_stock_library(tool_session, monkeypatch
         prompt="A quiet harbour at dawn",
     )
 
-    page = payload(await tools.search_images(query="harbour"))
-    one = payload(await tools.get_image(image_id=image.id))
+    page = await tools.search_images(query="harbour")
+    one = await tools.get_image(image_id=image.id)
 
-    assert page["total"] == 1
-    assert page["items"][0]["path"] == image.path
-    assert one["slug"] == image.slug
+    assert page.total == 1
+    assert page.items[0].path == image.path
+    assert one.slug == image.slug
     # An agent can open the picture without being told where the account lives.
-    assert one["url"] == "https://assets.example.test/upload/genblocks/images/harbour"
-    assert page["items"][0]["url"] == one["url"]
-    assert one["page_url"].endswith(f"/images/{image.slug}")
-
-
-async def test_get_image_hands_over_the_picture_itself(tool_session, monkeypatch):
-    """The block a chat client renders, and the text the model reads beside it."""
-    monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
-    scenes = await create_category(tool_session, slug="photography", kind="image")
-    image = await create_image(
-        tool_session,
-        category_id=scenes.id,
-        path="genblocks/images/harbour",
-        prompt="A quiet harbour at dawn",
-    )
-
-    found = await tools.get_image(image_id=image.id)
-
-    assert isinstance(found, ToolResult)
-    assert len(pictures(found)) == 1
-    assert pictures(found)[0].mime_type == "image/png"
-    assert image.slug in text_of(found)
-
-
-async def test_search_images_shows_the_first_pictures_by_default(
-    tool_session, monkeypatch, no_cloudinary
-):
-    """Show me landscapes is a request to see them, so the pictures come along."""
-    monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
-    scenes = await create_category(tool_session, slug="photography", kind="image")
-    image = await create_image(
-        tool_session,
-        category_id=scenes.id,
-        path="genblocks/images/harbour",
-        prompt="A quiet harbour at dawn",
-    )
-
-    shown = await tools.search_images(query="harbour")
-    quiet = await tools.search_images(query="harbour", include_images=False)
-
-    assert len(pictures(shown)) == 1
-    assert pictures(quiet) == []
-    assert no_cloudinary == [image.path]
+    assert one.url == "https://assets.example.test/upload/genblocks/images/harbour"
+    assert page.items[0].url == one.url
+    assert one.page_url.endswith(f"/images/{image.slug}")
 
 
 async def test_search_components_carries_the_render_and_its_url(tool_session, monkeypatch):
@@ -284,65 +190,16 @@ async def test_search_components_carries_the_render_and_its_url(tool_session, mo
     category = await create_category(tool_session, slug="hero")
     await with_render(tool_session, category_id=category.id, slug="alpha")
 
-    card = payload(await tools.search_components(query="alpha"))["items"][0]
-    full = payload(await tools.get_component(slug="alpha"))
+    card = (await tools.search_components(query="alpha")).items[0]
+    full = await tools.get_component(slug="alpha")
 
-    assert card["screenshot_path"] == "genblocks/screenshots/alpha"
-    assert card["screenshot_url"] == (
-        "https://assets.example.test/upload/genblocks/screenshots/alpha"
-    )
-    assert card["thumbnail_url"] == (
+    assert card.screenshot_path == "genblocks/screenshots/alpha"
+    assert card.screenshot_url == ("https://assets.example.test/upload/genblocks/screenshots/alpha")
+    assert card.thumbnail_url == (
         "https://assets.example.test/upload/genblocks/screenshots/alpha-thumb"
     )
-    assert card["page_url"].endswith("/blocks/alpha")
-    assert full["screenshot_url"] == card["screenshot_url"]
-
-
-async def test_get_component_shows_the_render_only_when_asked(
-    tool_session, monkeypatch, no_cloudinary
-):
-    """Reading code is the main use of this tool; a picture on every read is a tax."""
-    monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
-    category = await create_category(tool_session, slug="hero")
-    await with_render(tool_session, category_id=category.id, slug="alpha")
-
-    quiet = await tools.get_component(slug="alpha")
-    loud = await tools.get_component(slug="alpha", include_image=True)
-
-    assert pictures(quiet) == []
-    assert len(pictures(loud)) == 1
-    # The wide render, not the card crop: this is the whole block.
-    assert no_cloudinary == ["genblocks/screenshots/alpha"]
-
-
-async def test_search_components_shows_at_most_three_renders(
-    tool_session, monkeypatch, no_cloudinary
-):
-    monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
-    category = await create_category(tool_session, slug="hero")
-    for slug in ("alpha", "bravo", "charlie", "delta"):
-        await with_render(tool_session, category_id=category.id, slug=slug)
-
-    found = await tools.search_components()
-
-    assert len(pictures(found)) == tools.INLINE_LIMIT
-    # The render, not the card crop: the layout is what was asked for. And no
-    # more than the limit is fetched, so the fourth block costs nothing.
-    assert len(no_cloudinary) == tools.INLINE_LIMIT
-    assert all(path and not path.endswith("-thumb") for path in no_cloudinary)
-
-
-async def test_get_component_keeps_the_schema_its_annotation_promises():
-    """The tool returns a ``ToolResult``; the schema still describes the block.
-
-    Losing it would be silent — a client that validates structured output would
-    simply stop knowing what is in the answer.
-    """
-    described = {tool.name: tool for tool in await mcp.list_tools()}
-
-    properties = (described["get_component"].output_schema or {}).get("properties", {})
-
-    assert {"slug", "files", "screenshot_url", "page_url"} <= set(properties)
+    assert card.page_url.endswith("/blocks/alpha")
+    assert full.screenshot_url == card.screenshot_url
 
 
 async def test_a_deployment_with_no_asset_base_publishes_no_url(tool_session, monkeypatch):
@@ -355,13 +212,11 @@ async def test_a_deployment_with_no_asset_base_publishes_no_url(tool_session, mo
         prompt="A quiet harbour at dawn",
     )
 
-    found = await tools.get_image(image_id=image.id)
-    one = payload(found)
+    one = await tools.get_image(image_id=image.id)
 
-    # The id still travels; only the address is missing, and so is the picture.
-    assert one["path"] == image.path
-    assert one["url"] is None
-    assert pictures(found) == []
+    # The id still travels; only the address is missing.
+    assert one.path == image.path
+    assert one.url is None
 
 
 async def test_list_tasks_returns_only_the_callers_tasks(tool_session, monkeypatch):

@@ -458,6 +458,26 @@ producto las conserva en el esquema, pero no las usa en ningún flujo público.
     el retorno sea el sobre: de ahí sale el output schema, así que no puede
     desviarse de lo que la tool devuelve. Bajar una foto que falla no falla la
     tool: el JSON y las URLs salen igual y el aviso queda en el log.
+    → *Sustituida por la 52: ChatGPT no pinta el bloque `image` de una tool, así
+    que los bytes eran coste sin respuesta. Se retiran; la imagen la enseña una
+    página.*
+52. **Lo que se enseña es una página, no un adjunto.** El cliente que soporta
+    **MCP Apps** abre un `ui://` en un iframe con arena y le empuja el resultado
+    de la tool; eso es lo que convierte "seis resultados con URLs" en una rejilla
+    de fotos dentro de la conversación. El recurso vive en `app/mcp/apps.py` y el
+    HTML en `app/mcp/ui/gallery.html` — sin framework, sin paso de build, con los
+    tokens del diseño y `prefers-color-scheme` para el tema del host. La política
+    del iframe se **calcula** desde `ASSET_BASE_URL` (origen, no constante): si
+    cambia la cuenta, cambia el allowlist, y un asset de otro host no se carga en
+    silencio. El segundo dominio permitido es **unpkg**, de donde baja el helper
+    que habla con el host (`@modelcontextprotocol/ext-apps`): es entrega de un
+    fichero, no una dependencia del servidor. Se cuelga de las dos **búsquedas**
+    (`_meta.ui.resourceUri`), que es donde alguien dice "muéstrame"; `get_image` y
+    `get_component` no, porque un solo elemento es texto y dos URLs. Nada de esto
+    toca el contrato: el texto y el `structuredContent` siguen saliendo igual, así
+    que un cliente que no dibuja la página no pierde nada, y por eso los flags de
+    imagen de la decisión anterior desaparecen en vez de quedarse como código
+    muerto.
 
 ---
 

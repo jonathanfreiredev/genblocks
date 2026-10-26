@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>GenBlocks</title>
+    <style>
+      /* The host draws this inside its own frame, so the palette follows the
+         reader's scheme and nothing here depends on a font being loaded. One
+         accent, no gradients, no shadows for depth: the pictures are the page. */
+      :root {
+        --ink: #111111;
+        --muted: #6b6b6b;
+        --line: #e4e4e4;
+        --paper: #ffffff;
+        --accent: #1f5eff;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #f2f2f2;
+          --muted: #a0a0a0;
+          --line: #2a2a2a;
+          --paper: #111111;
+          --accent: #7aa2ff;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 12px;
+        background: var(--paper);
+        color: var(--ink);
+        font-family:
+          ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+        font-size: 13px;
+        line-height: 1.4;
+        max-height: 460px;
+        overflow-y: auto;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 12px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--paper);
+      }
+
+      .shot {
+        display: block;
+        width: 100%;
+        /* A block's render is 1440×900, which is exactly 16:10 — the crop that
+           keeps a headline whole. A picture is 3:2 and loses only the edge. */
+        aspect-ratio: 16 / 10;
+        object-fit: cover;
+        object-position: top center;
+        background: var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .caption {
+        display: block;
+        padding: 8px 10px;
+        color: var(--ink);
+        text-decoration: none;
+      }
+
+      .title {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        font-weight: 600;
+      }
+
+      .meta {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .caption:hover .title {
+        color: var(--accent);
+      }
+
+      .note {
+        margin: 0;
+        padding: 8px 2px;
+        color: var(--muted);
+      }
+
+      .note a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <ul class="grid" id="grid"></ul>
+    <p class="note" id="note" hidden></p>
+
+    <script type="module">
+      // The helper implements the host protocol: it hands over the tool result and
+      // keeps the frame alive. Everything visual is below, and everything it reads
+      // is the answer the search already returns.
+      import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@0.4.0/app-with-deps";
+
+      const grid = document.getElementById("grid");
+      const note = document.getElementById("note");
+
+      /** The items of a search answer, whichever half of the result carries them. */
+      function itemsOf(result) {
+        if (!result) return [];
+
+        const structured = result.structuredContent;
+        if (structured && Array.isArray(structured.items)) return structured.items;
+
+        // Older hosts surface only the text block, which is the same JSON.
+        const text = (result.content || []).find((block) => block.type === "text");
+        if (!text) return [];
+
+        try {
+          const parsed = JSON.parse(text.text);
+          return Array.isArray(parsed.items) ? parsed.items : [];
+        } catch {
+          return [];
+        }
+      }
+
+      /** A picture and where it points, for either kind of result. */
+      function card(item) {
+        const picture = item.url || item.screenshot_url || item.thumbnail_url;
+        const page = item.page_url;
+        const title = item.title || item.prompt || item.slug || "Untitled";
+        const detail = item.width && item.height ? `${item.width}×${item.height}` : "";
+
+        const cell = document.createElement("li");
+        cell.className = "card";
+
+        if (picture) {
+          const image = document.createElement("img");
+          image.className = "shot";
+          image.src = picture;
+          image.alt = title;
+          image.loading = "lazy";
+          cell.append(image);
+        }
+
+        // The page is where the person goes next; a result without one is still
+        // worth showing, so the caption becomes a plain block.
+        const caption = document.createElement(page ? "a" : "div");
+        caption.className = "caption";
+        if (page) {
+          caption.href = page;
+          caption.target = "_blank";
+          caption.rel = "noopener noreferrer";
+        }
+
+        const heading = document.createElement("span");
+        heading.className = "title";
+        heading.textContent = title;
+        caption.append(heading);
+
+        if (detail) {
+          const meta = document.createElement("span");
+          meta.className = "meta";
+          meta.textContent = detail;
+          caption.append(meta);
+        }
+
+        cell.append(caption);
+        return cell;
+      }
+
+      function render(result) {
+        const items = itemsOf(result);
+        grid.replaceChildren(...items.map(card));
+
+        note.hidden = items.length > 0;
+        if (!items.length) note.textContent = "Nothing in the registry matches that.";
+      }
+
+      const app = new App({ name: "GenBlocks", version: "1.0.0" });
+      app.ontoolresult = render;
+
+      try {
+        await app.connect();
+      } catch (error) {
+        note.hidden = false;
+        note.textContent = "This client cannot render the gallery.";
+        console.error(error);
+      }
+    </script>
+  </body>
+</html>
