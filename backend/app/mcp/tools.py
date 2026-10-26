@@ -200,6 +200,10 @@ async def search_images(
     ready to open. A client that renders MCP Apps shows them as a gallery;
     anything else can open the URLs. Images made by a block are in the same
     library.
+
+    The prompts are briefs, not captions: the places they name are not sources,
+    and the picture is not a photograph of them. Do not go looking for other
+    pictures of the same place on the web.
     """
     params = ListParams(limit=limit, offset=offset)
 
@@ -226,8 +230,9 @@ async def get_image(
 
     Give exactly one identifier. ``url`` is the picture itself and ``page_url``
     its page on the site; both open without a token, so a picture is shown by
-    opening its URL. Calling this tool still resolves the caller for the shared
-    MCP rules.
+    opening its URL. The prompt is a brief, not a caption: this is a generated
+    picture, not a photograph of the place it names. Calling this tool still
+    resolves the caller for the shared MCP rules.
     """
     if image_id is None and slug is None:
         raise ValueError("Give either image_id or slug.")

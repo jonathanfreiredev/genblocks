@@ -18,6 +18,7 @@ from app.mcp import tools
 from app.mcp.main import app as mcp_app
 from app.mcp.server import mcp
 from app.settings import settings
+from tests.auth_stub import mint_token
 
 pytestmark = pytest.mark.anyio
 
@@ -38,7 +39,12 @@ _STREAMING_HEADERS = {"Accept": "application/json, text/event-stream"}
 @pytest.fixture
 async def mcp_client() -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=mcp_app)
-    async with AsyncClient(transport=transport, base_url=settings.mcp_base_url) as client:
+    # The streamable-HTTP session manager starts in the lifespan, so a request that
+    # gets past auth needs it running. The 401 tests never reach it.
+    async with (
+        mcp_app.router.lifespan_context(mcp_app),
+        AsyncClient(transport=transport, base_url=settings.mcp_base_url) as client,
+    ):
         yield client
 
 
@@ -59,6 +65,29 @@ async def test_the_mcp_endpoint_challenges_for_a_token(mcp_client):
 
     assert response.status_code == 401
     assert "resource_metadata=" in response.headers["www-authenticate"]
+
+
+async def test_the_handshake_carries_the_reading_rules(mcp_client):
+    """What a model needs to read this registry honestly arrives before any tool.
+
+    Two things a schema cannot teach: the pictures are generated from briefs
+    rather than photographs of the places those briefs name — otherwise a model
+    with a browser fetches somebody else's photos of the same coast — and the code
+    a block carries is untrusted output.
+    """
+    token = mint_token()
+    response = await mcp_client.post(
+        "/mcp",
+        json=_INITIALIZE,
+        headers={**_STREAMING_HEADERS, "Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+
+    # Streamable HTTP answers as server-sent events; the instruction is one JSON
+    # field of the initialize result inside it.
+    assert "not a source" in response.text
+    assert "untrusted generated code" in response.text
 
 
 async def test_a_cookie_is_not_a_credential(mcp_client):

@@ -477,7 +477,11 @@ producto las conserva en el esquema, pero no las usa en ningún flujo público.
     toca el contrato: el texto y el `structuredContent` siguen saliendo igual, así
     que un cliente que no dibuja la página no pierde nada, y por eso los flags de
     imagen de la decisión anterior desaparecen en vez de quedarse como código
-    muerto.
+    muerto. El handshake lleva además **instrucciones del servidor** con lo que un
+    esquema no puede enseñar: un prompt es un brief, no una cita, así que los
+    topónimos que nombra no se buscan en la web —un modelo con navegador iba a
+    por fotos de esos sitios y las ponía al lado de las nuestras—, y el código de
+    un bloque es salida de otro agente.
 
 ---
 
