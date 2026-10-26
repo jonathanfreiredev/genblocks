@@ -446,15 +446,18 @@ producto las conserva en el esquema, pero no las usa en ningún flujo público.
     tools de lectura devuelven por eso un `ToolResult` con el JSON de siempre
     **más** la imagen, descargada del mismo host de entrega (`app/mcp/assets.py`,
     con timeout, tope de tamaño y tipo de imagen) y sin transformación alguna.
-    Se pide, no se impone: `get_image` la lleva siempre —es la tool de la
-    imagen—, `get_component` solo con `include_image=true` porque el uso
-    principal de esa tool es leer código y una captura en cada lectura la paga
-    todo el que construye, y las dos búsquedas con `include_images=true`, que
-    traen como mucho **tres**: los componentes como miniatura (una lista es una
-    fila de tarjetas) y las imágenes como son. La firma sigue diciendo el modelo
-    de lectura aunque el retorno sea el sobre: de ahí sale el output schema, así
-    que no puede desviarse de lo que la tool devuelve. Bajar una foto que falla
-    no falla la tool: el JSON y las URLs salen igual y el aviso queda en el log.
+    El reparto lo decide el uso de cada tool. `get_image` la lleva siempre —es la
+    tool de la imagen—. `get_component` solo con `include_image=true`: ahí el uso
+    principal es leer código, y una captura en cada lectura la paga todo el que
+    construye. Las dos búsquedas la llevan **por defecto**, porque "muéstrame
+    paisajes" y "muéstrame los de pricing" son peticiones de ver, y un flag que
+    el modelo tiene que recordar es un flag que a veces no pasa: tres como mucho,
+    los componentes con su **render** (el recorte de tarjeta no enseña el layout)
+    y las imágenes tal cual, y `include_images=false` como opt-out para el que
+    pagina o solo quiere ids. La firma sigue diciendo el modelo de lectura aunque
+    el retorno sea el sobre: de ahí sale el output schema, así que no puede
+    desviarse de lo que la tool devuelve. Bajar una foto que falla no falla la
+    tool: el JSON y las URLs salen igual y el aviso queda en el log.
 
 ---
 

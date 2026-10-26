@@ -139,7 +139,7 @@ async def search_components(
     category_id: uuid.UUID | None = None,
     limit: int = DEFAULT_LIMIT,
     offset: int = 0,
-    include_images: bool = False,
+    include_images: bool = True,
 ) -> OffsetPage[ComponentSummary]:
     """Find published blocks to reuse, newest first.
 
@@ -147,11 +147,10 @@ async def search_components(
     one type. ``total`` in the result is the number of matches, so ``limit`` and
     ``offset`` can walk through them. Read one in full with ``get_component``.
 
-    Each result carries ``page_url`` and the two pictures of the block:
-    ``thumbnail_url`` for a list, ``screenshot_url`` to show one block whole.
-    Pass ``include_images=true`` when the person asks to see the blocks — the
-    first three then arrive as pictures instead of just addresses. Leave it off
-    when they only want to know what exists.
+    Each result carries ``page_url`` and the two pictures of the block, and the
+    first three arrive as pictures: what a person means by "show me the pricing
+    blocks" is the blocks, not their titles. Pass ``include_images=false`` when
+    the answer is a list of candidates to choose from, or when walking pages.
     """
     params = ListParams(limit=limit, offset=offset)
 
@@ -168,12 +167,13 @@ async def search_components(
         offset=params.offset,
     )
 
-    # The card crop, not the render: a list is a row of cards, and the render is
-    # a wide screenshot that costs context without adding a comparison.
+    # The render, not the card crop: somebody asking to see blocks wants the
+    # layout, and a 390px crop is a thumbnail of half of it. The crop is the
+    # fallback for blocks published before thumbnails had a render to sit beside.
     content = [_payload(page)]
     if include_images:
         content += await _pictures(
-            [item.thumbnail_path or item.screenshot_path for item in items[:INLINE_LIMIT]]
+            [item.screenshot_path or item.thumbnail_path for item in items[:INLINE_LIMIT]]
         )
 
     return ToolResult(content=content, structured_content=page.model_dump(mode="json"))
@@ -247,7 +247,7 @@ async def search_images(
     category_id: uuid.UUID | None = None,
     limit: int = DEFAULT_LIMIT,
     offset: int = 0,
-    include_images: bool = False,
+    include_images: bool = True,
 ) -> OffsetPage[ImageRead]:
     """Find public stock images, newest first.
 
@@ -255,10 +255,9 @@ async def search_images(
     to one type. Each result carries the image's own judge panel and its ``url``,
     ready to open. Images made by a block are in the same library.
 
-    Pass ``include_images=true`` when the person asks to see pictures — "show me
-    landscapes" — and the first three arrive as pictures, not only as addresses.
-    Leave it off when they are asking what exists or what something was made
-    with.
+    The first three arrive as pictures: "show me landscapes" is a request to see
+    them. Pass ``include_images=false`` when the answer is a list of candidates,
+    or when walking pages.
     """
     params = ListParams(limit=limit, offset=offset)
 

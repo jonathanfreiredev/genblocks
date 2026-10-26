@@ -142,15 +142,16 @@ async def test_search_components_pages_and_returns_the_total(tool_session):
     assert [item["slug"] for item in by_text["items"]] == ["bravo"]
 
 
-async def test_a_search_hands_over_addresses_and_no_pictures_by_default(tool_session):
-    """A list is a list: the model gets ids and links, not a gallery it did not ask for."""
+async def test_a_search_can_be_asked_for_the_list_alone(tool_session, no_cloudinary):
+    """The flag is an opt-out: an agent choosing between candidates pays for no pixels."""
     category = await create_category(tool_session, slug="hero")
     await create_component(tool_session, category_id=category.id, slug="alpha")
 
-    found = await tools.search_components()
+    found = await tools.search_components(include_images=False)
 
     assert pictures(found) == []
     assert payload(found)["items"][0]["page_url"].endswith("/blocks/alpha")
+    assert no_cloudinary == []
 
 
 async def test_search_components_respects_the_page_size_cap(tool_session):
@@ -252,9 +253,10 @@ async def test_get_image_hands_over_the_picture_itself(tool_session, monkeypatch
     assert image.slug in text_of(found)
 
 
-async def test_search_images_shows_pictures_only_when_asked(
+async def test_search_images_shows_the_first_pictures_by_default(
     tool_session, monkeypatch, no_cloudinary
 ):
+    """Show me landscapes is a request to see them, so the pictures come along."""
     monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
     scenes = await create_category(tool_session, slug="photography", kind="image")
     image = await create_image(
@@ -264,11 +266,11 @@ async def test_search_images_shows_pictures_only_when_asked(
         prompt="A quiet harbour at dawn",
     )
 
-    quiet = await tools.search_images(query="harbour")
-    loud = await tools.search_images(query="harbour", include_images=True)
+    shown = await tools.search_images(query="harbour")
+    quiet = await tools.search_images(query="harbour", include_images=False)
 
+    assert len(pictures(shown)) == 1
     assert pictures(quiet) == []
-    assert len(pictures(loud)) == 1
     assert no_cloudinary == [image.path]
 
 
@@ -313,7 +315,7 @@ async def test_get_component_shows_the_render_only_when_asked(
     assert no_cloudinary == ["genblocks/screenshots/alpha"]
 
 
-async def test_search_components_shows_at_most_three_card_crops(
+async def test_search_components_shows_at_most_three_renders(
     tool_session, monkeypatch, no_cloudinary
 ):
     monkeypatch.setattr(settings, "asset_base_url", "https://assets.example.test/upload")
@@ -321,12 +323,13 @@ async def test_search_components_shows_at_most_three_card_crops(
     for slug in ("alpha", "bravo", "charlie", "delta"):
         await with_render(tool_session, category_id=category.id, slug=slug)
 
-    found = await tools.search_components(include_images=True)
+    found = await tools.search_components()
 
     assert len(pictures(found)) == tools.INLINE_LIMIT
-    # A row of cards shows the crop, never the wide screenshot.
+    # The render, not the card crop: the layout is what was asked for. And no
+    # more than the limit is fetched, so the fourth block costs nothing.
     assert len(no_cloudinary) == tools.INLINE_LIMIT
-    assert all(path.endswith("-thumb") for path in no_cloudinary if path)
+    assert all(path and not path.endswith("-thumb") for path in no_cloudinary)
 
 
 async def test_get_component_keeps_the_schema_its_annotation_promises():
